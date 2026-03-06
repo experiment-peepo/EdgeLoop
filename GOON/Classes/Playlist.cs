@@ -2,6 +2,7 @@ using System.Collections.Generic;
 
 namespace GOON.Classes {
     public class Playlist {
+        public int Version { get; set; } = 1;
         public List<PlaylistItem> Items { get; set; } = new List<PlaylistItem>();
     }
 

@@ -19,6 +19,12 @@ namespace GOON.ViewModels {
             get => _filePath;
             set => SetProperty(ref _filePath, value);
         }
+
+        private bool _isPlaying;
+        public bool IsPlaying {
+            get => _isPlaying;
+            set => SetProperty(ref _isPlaying, value);
+        }
         
         /// <summary>
         /// Gets whether this item is a URL (not a local file path)

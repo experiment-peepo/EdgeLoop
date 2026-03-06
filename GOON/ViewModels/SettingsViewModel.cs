@@ -21,9 +21,23 @@ namespace GOON.ViewModels {
         private bool _panicHotkeyShift;
         private bool _panicHotkeyAlt;
         private string _panicHotkeyKey;
+        private bool _clearHotkeyCtrl;
+        private bool _clearHotkeyShift;
+        private bool _clearHotkeyAlt;
+        private string _clearHotkeyKey;
+        private string _skipForwardHotkeyKey;
+        private string _skipBackwardHotkeyKey;
         private string _opaquePanicHotkeyKey;
         private ScreenViewer _selectedDefaultMonitor;
         private bool _alwaysOpaque;
+        
+        private bool _skipForwardHotkeyCtrl;
+        private bool _skipForwardHotkeyShift;
+        private bool _skipForwardHotkeyAlt;
+        
+        private bool _skipBackwardHotkeyCtrl;
+        private bool _skipBackwardHotkeyShift;
+        private bool _skipBackwardHotkeyAlt;
 
         private bool _rememberLastPlaylist;
         private bool _rememberFilePosition;
@@ -134,6 +148,22 @@ namespace GOON.ViewModels {
             _panicHotkeyShift = (settings.PanicHotkeyModifiers & MOD_SHIFT) != 0;
             _panicHotkeyAlt = (settings.PanicHotkeyModifiers & MOD_ALT) != 0;
             _panicHotkeyKey = settings.PanicHotkeyKey ?? "End";
+            
+            _clearHotkeyCtrl = (settings.ClearHotkeyModifiers & MOD_CONTROL) != 0;
+            _clearHotkeyShift = (settings.ClearHotkeyModifiers & MOD_SHIFT) != 0;
+            _clearHotkeyAlt = (settings.ClearHotkeyModifiers & MOD_ALT) != 0;
+            _clearHotkeyKey = settings.ClearHotkeyKey ?? "Delete";
+
+            _skipForwardHotkeyCtrl = (settings.SkipForwardHotkeyModifiers & MOD_CONTROL) != 0;
+            _skipForwardHotkeyShift = (settings.SkipForwardHotkeyModifiers & MOD_SHIFT) != 0;
+            _skipForwardHotkeyAlt = (settings.SkipForwardHotkeyModifiers & MOD_ALT) != 0;
+            _skipForwardHotkeyKey = settings.SkipForwardHotkeyKey ?? "Right";
+
+            _skipBackwardHotkeyCtrl = (settings.SkipBackwardHotkeyModifiers & MOD_CONTROL) != 0;
+            _skipBackwardHotkeyShift = (settings.SkipBackwardHotkeyModifiers & MOD_SHIFT) != 0;
+            _skipBackwardHotkeyAlt = (settings.SkipBackwardHotkeyModifiers & MOD_ALT) != 0;
+            _skipBackwardHotkeyKey = settings.SkipBackwardHotkeyKey ?? "Left";
+
             _opaquePanicHotkeyKey = settings.OpaquePanicHotkeyKey ?? "Escape";
             _alwaysOpaque = settings.AlwaysOpaque;
 
@@ -285,9 +315,63 @@ namespace GOON.ViewModels {
             }
         }
 
+        public bool ClearHotkeyCtrl {
+            get => _clearHotkeyCtrl;
+            set => SetProperty(ref _clearHotkeyCtrl, value);
+        }
+
+        public bool ClearHotkeyShift {
+            get => _clearHotkeyShift;
+            set => SetProperty(ref _clearHotkeyShift, value);
+        }
+
+        public bool ClearHotkeyAlt {
+            get => _clearHotkeyAlt;
+            set => SetProperty(ref _clearHotkeyAlt, value);
+        }
+
+        public string ClearHotkeyKey {
+            get => _clearHotkeyKey;
+            set => SetProperty(ref _clearHotkeyKey, value);
+        }
+
         public string OpaquePanicHotkeyKey {
             get => _opaquePanicHotkeyKey;
             set => SetProperty(ref _opaquePanicHotkeyKey, value);
+        }
+
+        public bool SkipForwardHotkeyCtrl {
+            get => _skipForwardHotkeyCtrl;
+            set => SetProperty(ref _skipForwardHotkeyCtrl, value);
+        }
+        public bool SkipForwardHotkeyShift {
+            get => _skipForwardHotkeyShift;
+            set => SetProperty(ref _skipForwardHotkeyShift, value);
+        }
+        public bool SkipForwardHotkeyAlt {
+            get => _skipForwardHotkeyAlt;
+            set => SetProperty(ref _skipForwardHotkeyAlt, value);
+        }
+        public string SkipForwardHotkeyKey {
+            get => _skipForwardHotkeyKey;
+            set => SetProperty(ref _skipForwardHotkeyKey, value);
+        }
+
+        public bool SkipBackwardHotkeyCtrl {
+            get => _skipBackwardHotkeyCtrl;
+            set => SetProperty(ref _skipBackwardHotkeyCtrl, value);
+        }
+        public bool SkipBackwardHotkeyShift {
+            get => _skipBackwardHotkeyShift;
+            set => SetProperty(ref _skipBackwardHotkeyShift, value);
+        }
+        public bool SkipBackwardHotkeyAlt {
+            get => _skipBackwardHotkeyAlt;
+            set => SetProperty(ref _skipBackwardHotkeyAlt, value);
+        }
+        public string SkipBackwardHotkeyKey {
+            get => _skipBackwardHotkeyKey;
+            set => SetProperty(ref _skipBackwardHotkeyKey, value);
         }
 
         public string PanicHotkeyDisplay {
@@ -351,6 +435,28 @@ namespace GOON.ViewModels {
             if (PanicHotkeyAlt) modifiers |= MOD_ALT;
             settings.PanicHotkeyModifiers = modifiers;
             settings.PanicHotkeyKey = PanicHotkeyKey ?? "End";
+
+            uint clearModifiers = 0;
+            if (ClearHotkeyCtrl) clearModifiers |= MOD_CONTROL;
+            if (ClearHotkeyShift) clearModifiers |= MOD_SHIFT;
+            if (ClearHotkeyAlt) clearModifiers |= MOD_ALT;
+            settings.ClearHotkeyModifiers = clearModifiers;
+            settings.ClearHotkeyKey = ClearHotkeyKey ?? "Delete";
+
+            uint skipForwardModifiers = 0;
+            if (SkipForwardHotkeyCtrl) skipForwardModifiers |= MOD_CONTROL;
+            if (SkipForwardHotkeyShift) skipForwardModifiers |= MOD_SHIFT;
+            if (SkipForwardHotkeyAlt) skipForwardModifiers |= MOD_ALT;
+            settings.SkipForwardHotkeyModifiers = skipForwardModifiers;
+            settings.SkipForwardHotkeyKey = SkipForwardHotkeyKey ?? "Right";
+
+            uint skipBackwardModifiers = 0;
+            if (SkipBackwardHotkeyCtrl) skipBackwardModifiers |= MOD_CONTROL;
+            if (SkipBackwardHotkeyShift) skipBackwardModifiers |= MOD_SHIFT;
+            if (SkipBackwardHotkeyAlt) skipBackwardModifiers |= MOD_ALT;
+            settings.SkipBackwardHotkeyModifiers = skipBackwardModifiers;
+            settings.SkipBackwardHotkeyKey = SkipBackwardHotkeyKey ?? "Left";
+
             settings.OpaquePanicHotkeyKey = OpaquePanicHotkeyKey ?? "Escape";
             settings.AlwaysOpaque = AlwaysOpaque;
 

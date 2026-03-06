@@ -43,6 +43,7 @@ namespace GOON.Classes {
 
         public void Start() {
             if (_isRunning) return;
+            Logger.Debug($"[SharedClock] Starting at {_pausedTicks / 10000}ms");
             _baseSW = Stopwatch.GetTimestamp();
             _baseTicks = _pausedTicks;
             _isRunning = true;
@@ -51,10 +52,12 @@ namespace GOON.Classes {
         public void Pause() {
             if (!_isRunning) return;
             _pausedTicks = Ticks;
+            Logger.Debug($"[SharedClock] Pausing at {_pausedTicks / 10000}ms");
             _isRunning = false;
         }
 
         public void Seek(long ticks) {
+            Logger.Debug($"[SharedClock] Seeking from {Ticks / 10000}ms to {ticks / 10000}ms");
             _baseTicks = ticks;
             _baseSW = Stopwatch.GetTimestamp();
             if (!_isRunning) _pausedTicks = ticks;
@@ -63,6 +66,7 @@ namespace GOON.Classes {
         public bool IsRunning => _isRunning;
 
         public void Reset() {
+            Logger.Debug($"[SharedClock] Resetting (Previous: {Ticks / 10000}ms)");
             _baseSW = Stopwatch.GetTimestamp();
             _baseTicks = 0;
             _pausedTicks = 0;

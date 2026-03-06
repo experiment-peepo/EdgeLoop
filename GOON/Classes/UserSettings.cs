@@ -3,8 +3,16 @@ using System.IO;
 using System.Text.Json;
 
 namespace GOON.Classes {
+    public enum ShuffleMode {
+        Sequential,
+        Simple,
+        Smart,
+        Random
+    }
+
 
     public class UserSettings {
+        public int SettingsVersion { get; set; } = 1;
         public virtual double Opacity { get; set; } = 0.2;
         public virtual double Volume { get; set; } = 0.5;
 
@@ -13,15 +21,25 @@ namespace GOON.Classes {
         public double DefaultOpacity { get; set; } = 0.9;
         public double DefaultVolume { get; set; } = 0.5;
         public string DefaultMonitorDeviceName { get; set; } = null;
-        public string HypnotubeCookies { get; set; } = null;
-        public string UserAgent { get; set; } = null;
-        public string Cookies { get; set; } = null;
+        public virtual string HypnotubeCookies { get; set; } = null;
+        public virtual string UserAgent { get; set; } = null;
+        public virtual string Cookies { get; set; } = null;
         
         
         // Panic hotkey configuration
         // Modifiers: Ctrl=2, Shift=4, Alt=1 (can be combined with bitwise OR)
         public uint PanicHotkeyModifiers { get; set; } = 0x0002 | 0x0004; // Ctrl+Shift (default)
         public string PanicHotkeyKey { get; set; } = "End"; // Default key
+
+        public uint ClearHotkeyModifiers { get; set; } = 0x0002 | 0x0004; // Ctrl+Shift (default)
+        public string ClearHotkeyKey { get; set; } = "Delete"; // Default key
+        
+        // Skip hotkeys
+        public uint SkipForwardHotkeyModifiers { get; set; } = 0;
+        public string SkipForwardHotkeyKey { get; set; } = "Right";
+
+        public uint SkipBackwardHotkeyModifiers { get; set; } = 0;
+        public string SkipBackwardHotkeyKey { get; set; } = "Left";
         
         public string OpaquePanicHotkeyKey { get; set; } = "Escape";
         public uint OpaquePanicHotkeyModifiers { get; set; } = 0; // No modifiers by default
@@ -34,14 +52,28 @@ namespace GOON.Classes {
         public virtual bool RememberLastPlaylist { get; set; } = true;
         public virtual bool RememberFilePosition { get; set; } = true;
         public System.Collections.Generic.List<string> PlayedHistory { get; set; } = new System.Collections.Generic.List<string>();
-        public virtual bool VideoShuffle { get; set; } = true;
+        public virtual bool VideoShuffle { get; set; } = false;
+        public virtual ShuffleMode CurrentShuffleMode { get; set; } = ShuffleMode.Smart;
+        public virtual double ShuffleRecencyWeight { get; set; } = 0.3;
+        public virtual double ShufflePreferenceWeight { get; set; } = 0.3;
+        public virtual double ShuffleVarietyWeight { get; set; } = 0.2;
+        public virtual double ShuffleLengthWeight { get; set; } = 0.2;
+        public virtual bool EnableShuffleDebugLog { get; set; } = false;
         
+        // Logging Settings
+        public LogLevel LogLevel { get; set; } = LogLevel.Info;
 
         // Playlist Import Settings
         public int MaxPlaylistPages { get; set; } = 100; // Maximum pages to fetch for paginated playlists
 
         // UI State
         public string LastExpandedSection { get; set; } = "IsPlaybackExpanded";
+        public bool CompactMode { get; set; } = false;
+
+        public double LauncherWindowWidth { get; set; } = 700;
+        public double LauncherWindowHeight { get; set; } = 750;
+        public double LauncherWindowTop { get; set; } = -1;
+        public double LauncherWindowLeft { get; set; } = -1;
 
 
         public static string SettingsFilePath {
@@ -84,8 +116,17 @@ namespace GOON.Classes {
                     string json = File.ReadAllText(SettingsFilePath);
                     try {
                         var settings = JsonSerializer.Deserialize<UserSettings>(json) ?? new UserSettings();
+                        
+                        // Migration logic
+                        if (settings.SettingsVersion < 1) {
+                            settings.SettingsVersion = 1;
+                            settings.Save();
+                            Logger.Info("Settings migrated to version 1");
+                        }
+
                         // Validate and clamp loaded values
                         settings.ValidateAndClampValues();
+                        Logger.MinimumLevel = settings.LogLevel;
                         Logger.Info($"Loaded settings from {SettingsFilePath}");
                         return settings;
                     } catch (JsonException jex) {
@@ -139,7 +180,27 @@ namespace GOON.Classes {
                 Logger.Warning($"DefaultVolume value {oldValue} was out of range (0.0-1.0), clamped to {DefaultVolume}");
                 valuesCorrected = true;
             }
-            
+
+            // Ensure weights are valid numbers
+            if (double.IsNaN(ShuffleRecencyWeight) || double.IsInfinity(ShuffleRecencyWeight)) { ShuffleRecencyWeight = 0.3; valuesCorrected = true; }
+            if (double.IsNaN(ShufflePreferenceWeight) || double.IsInfinity(ShufflePreferenceWeight)) { ShufflePreferenceWeight = 0.3; valuesCorrected = true; }
+            if (double.IsNaN(ShuffleVarietyWeight) || double.IsInfinity(ShuffleVarietyWeight)) { ShuffleVarietyWeight = 0.2; valuesCorrected = true; }
+            if (double.IsNaN(ShuffleLengthWeight) || double.IsInfinity(ShuffleLengthWeight)) { ShuffleLengthWeight = 0.2; valuesCorrected = true; }
+
+            // Ensure window dimensions are valid
+            if (double.IsNaN(LauncherWindowWidth) || LauncherWindowWidth <= 100) { LauncherWindowWidth = 700; valuesCorrected = true; }
+            if (double.IsNaN(LauncherWindowHeight) || LauncherWindowHeight <= 100) { LauncherWindowHeight = 750; valuesCorrected = true; }
+            if (double.IsNaN(LauncherWindowTop)) { LauncherWindowTop = -1; valuesCorrected = true; }
+            if (double.IsNaN(LauncherWindowLeft)) { LauncherWindowLeft = -1; valuesCorrected = true; }
+
+            // Validate PlaybackState
+            if (LastPlaybackState != null) {
+                if (double.IsNaN(LastPlaybackState.SpeedRatio) || double.IsInfinity(LastPlaybackState.SpeedRatio)) {
+                    LastPlaybackState.SpeedRatio = 1.0;
+                    valuesCorrected = true;
+                }
+            }
+
             if (valuesCorrected) {
                 // Save corrected values back to file
                 try {
@@ -152,7 +213,9 @@ namespace GOON.Classes {
 
         private static readonly JsonSerializerOptions _jsonOptions = new JsonSerializerOptions { 
             WriteIndented = true,
-            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+            Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
+            NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.AllowNamedFloatingPointLiterals | 
+                             System.Text.Json.Serialization.JsonNumberHandling.AllowReadingFromString
         };
         private readonly System.Threading.SemaphoreSlim _saveLock = new System.Threading.SemaphoreSlim(1, 1);
 
@@ -242,6 +305,14 @@ namespace GOON.Classes {
                 if (File.Exists(SessionFilePath)) {
                     string json = File.ReadAllText(SessionFilePath);
                     CurrentSessionPlaylist = JsonSerializer.Deserialize<Playlist>(json) ?? new Playlist();
+                    
+                    // Migration logic
+                    if (CurrentSessionPlaylist.Version < 1) {
+                        CurrentSessionPlaylist.Version = 1;
+                        SaveSession();
+                        Logger.Info("Session playlist migrated to version 1");
+                    }
+
                     Logger.Info("Loaded previous session playlist");
                 }
             } catch (Exception ex) {

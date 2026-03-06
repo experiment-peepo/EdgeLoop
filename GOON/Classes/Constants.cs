@@ -11,7 +11,8 @@ namespace GOON.Classes {
         public static readonly string[] VideoExtensions = { 
             ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".m4v", ".webm",  // Modern formats
             ".mpg", ".mpeg",  // MPEG-1/2 - DVD/broadcast content
-            ".ts", ".m2ts"    // MPEG transport streams - Blu-ray content
+            ".ts", ".m2ts",   // MPEG transport streams - Blu-ray content
+            ".m3u8", ".mpd"   // Streaming protocols (HLS/DASH)
         };
 
         /// <summary>
@@ -21,8 +22,7 @@ namespace GOON.Classes {
             // Video sites with specialized extractors
             "rule34video.com",
             "pmvhaven.com",
-            "hypnotube.com",
-            "redgifs.com"
+            "hypnotube.com"
         };
 
         /// <summary>

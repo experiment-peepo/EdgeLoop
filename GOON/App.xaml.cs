@@ -54,7 +54,11 @@ namespace GOON {
             // 1.5. Rotate logs if too large (20MB)
             Classes.Logger.CheckAndRotateLogFile(20 * 1024 * 1024);
 
-            // 2. Initialize Flyleaf Engine with robust paths and detailed logging
+            // 2. Resolve Log Level (Command Line > Env Var > Settings)
+            var resolvedLogLevel = ResolveLogLevel(e.Args);
+            Classes.Logger.MinimumLevel = resolvedLogLevel;
+
+            // 3. Initialize Flyleaf Engine with robust paths and detailed logging
             try {
                 string baseDir = AppDomain.CurrentDomain.BaseDirectory;
                 string ffmpegPath = System.IO.Path.Combine(baseDir, "FFmpeg");
@@ -69,9 +73,9 @@ namespace GOON {
                     FFmpegPath = ffmpegPath,
                     PluginsPath = pluginsPath,
                     UIRefresh = true,
-                    LogLevel = FlyleafLib.LogLevel.Info,
+                    LogLevel = resolvedLogLevel == Classes.LogLevel.Debug ? FlyleafLib.LogLevel.Debug : FlyleafLib.LogLevel.Info,
                     LogOutput = ":custom",
-                    FFmpegLogLevel = Flyleaf.FFmpeg.LogLevel.Warn
+                    FFmpegLogLevel = resolvedLogLevel == Classes.LogLevel.Debug ? Flyleaf.FFmpeg.LogLevel.Info : Flyleaf.FFmpeg.LogLevel.Warn
                 });
             } catch (Exception ex) {
                 Logger.Error("Failed to initialize Flyleaf Engine", ex);
@@ -82,7 +86,12 @@ namespace GOON {
             }
             
             // Register Services
-            ServiceContainer.Register(UserSettings.Load());
+            var settings = UserSettings.Load();
+            // Apply settings log level only if not overridden by CLI/Env
+            if (resolvedLogLevel == Classes.LogLevel.Info && settings.LogLevel != Classes.LogLevel.Info) {
+                Classes.Logger.MinimumLevel = settings.LogLevel;
+            }
+            ServiceContainer.Register(settings);
 
             // Ensure Playlists directory exists
             try {
@@ -93,7 +102,9 @@ namespace GOON {
                 Logger.Warning($"Failed to create Playlists directory: {ex.Message}");
             }
 
-            ServiceContainer.Register(new VideoPlayerService());
+            var videoService = new VideoPlayerService();
+            ServiceContainer.Register<IVideoPlayerService>(videoService);
+            ServiceContainer.Register(videoService);
             ServiceContainer.Register(new HotkeyService());
             var ytDlpService = new YtDlpService();
             ServiceContainer.Register(ytDlpService);
@@ -101,6 +112,12 @@ namespace GOON {
             ServiceContainer.Register<IVideoUrlExtractor>(new VideoUrlExtractor(null, ytDlpService));
 
             ServiceContainer.Register(new TelemetryService());
+            var historyService = new PlayHistoryService();
+            ServiceContainer.Register(historyService);
+            ServiceContainer.Register(new ShuffleScoringEngine(historyService));
+            
+            // Prune old history records in background
+            System.Threading.Tasks.Task.Run(() => historyService.PruneOldRecords());
 
             // Cleanup old cached videos (10+ days old) in background
             System.Threading.Tasks.Task.Run(() => {
@@ -117,20 +134,78 @@ namespace GOON {
         }
 
         protected override void OnExit(ExitEventArgs e) {
-            // Ensure all video players are stopped and disposed
-            if (ServiceContainer.TryGet<VideoPlayerService>(out var videoService)) {
-                videoService.StopAll();
+            Logger.Info("Application exiting - starting shutdown sequence...");
+
+            // Start a watchdog timer to force exit if shutdown hangs (e.g., due to lingering FFmpeg or Flyleaf threads)
+            System.Threading.Tasks.Task.Run(async () => {
+                await System.Threading.Tasks.Task.Delay(5000);
+                Logger.Warning("Shutdown is taking too long (5s). Force exiting process to prevent background lingering.");
+                Environment.Exit(0);
+            });
+
+            try {
+                // 1. Stop all video players and close windows (this also saves per-item positions)
+                if (VideoService != null) {
+                    Logger.Info("Stopping all video players...");
+                    VideoService.StopAll();
+                }
+
+                // 2. Explicitly save play history on exit (synchronous to avoid deadlocks)
+                if (ServiceContainer.TryGet<PlayHistoryService>(out var historyService)) {
+                    Logger.Info("Saving play history...");
+                    historyService.SaveHistorySync();
+                }
+
+                // SESSION RESUME: Final save of positions
+                Logger.Info("Saving playback positions...");
+                PlaybackPositionTracker.Instance.SaveSync();
+
+                // Ensure hotkeys are unregistered
+                if (ServiceContainer.TryGet<HotkeyService>(out var hotkeyService)) {
+                    hotkeyService.Dispose();
+                }
+
+                // Final save of settings (ensure window bounds etc are preserved)
+                Settings?.Save();
+
+                Logger.Info("Shutdown sequence complete.");
+            } catch (Exception ex) {
+                Logger.Error("Error during shutdown sequence", ex);
+            } finally {
+                base.OnExit(e);
+                
+                // Final failsafe: force exit if we reached here but process is still alive
+                Logger.Info("Application exiting normally via Environment.Exit.");
+                Environment.Exit(0);
+            }
+        }
+
+        private Classes.LogLevel ResolveLogLevel(string[] args) {
+            // 1. Check Command Line
+            if (args != null) {
+                for (int i = 0; i < args.Length; i++) {
+                    var arg = args[i].ToLowerInvariant();
+                    if (arg == "--debug" || arg == "-d") return Classes.LogLevel.Debug;
+                    if (arg == "--verbose" || arg == "-v") return Classes.LogLevel.Info;
+                    if (arg == "--loglevel" && i + 1 < args.Length) {
+                        if (Enum.TryParse<Classes.LogLevel>(args[i + 1], true, out var level)) return level;
+                    }
+                }
             }
 
-            // SESSION RESUME: Final save of positions
-            PlaybackPositionTracker.Instance.SaveSync();
-
-            // Ensure hotkeys are unregistered
-            if (ServiceContainer.TryGet<HotkeyService>(out var hotkeyService)) {
-                hotkeyService.Dispose();
+            // 2. Check Environment Variable
+            var envLevel = Environment.GetEnvironmentVariable("GOON_LOG_LEVEL");
+            if (!string.IsNullOrEmpty(envLevel) && Enum.TryParse<Classes.LogLevel>(envLevel, true, out var eLevel)) {
+                return eLevel;
             }
 
-            base.OnExit(e);
+            // 3. Check for debug.enabled trigger file
+            if (System.IO.File.Exists(System.IO.Path.Combine(AppPaths.DataDirectory, "debug.enabled"))) {
+                return Classes.LogLevel.Debug;
+            }
+
+            // Default to Info (will be overridden by settings if found)
+            return Classes.LogLevel.Info;
         }
     }
 }

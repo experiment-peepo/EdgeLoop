@@ -115,6 +115,46 @@ namespace GOON.Classes {
         }
 
         /// <summary>
+        /// Compares the first few bytes of a file to detect if it's a text manifest (HLS/DASH)
+        /// disguised as a video file (common in partial/failed downloads).
+        /// </summary>
+        public static bool IsCorruptedCacheFile(string filePath) {
+            try {
+                if (!File.Exists(filePath)) return false;
+                
+                var extension = Path.GetExtension(filePath)?.ToLowerInvariant();
+                bool isManifestExtension = extension == ".m3u8" || extension == ".mpd";
+
+                var info = new FileInfo(filePath);
+                if (info.Length == 0) return true; // Empty file is useless
+                if (info.Length < 10) return false;
+
+                using (var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                using (var reader = new StreamReader(stream)) {
+                    // Try to read first few characters
+                    char[] buffer = new char[10];
+                    int read = reader.Read(buffer, 0, 10);
+                    if (read < 7) return false;
+                    
+                    string header = new string(buffer, 0, read).TrimStart();
+                    
+                    // IF it's a manifest header...
+                    bool isManifestHeader = header.StartsWith("#EXTM3U", StringComparison.OrdinalIgnoreCase) || 
+                                           header.StartsWith("<?xml", StringComparison.OrdinalIgnoreCase);
+                    
+                    if (isManifestHeader) {
+                        // It's only "corrupted" if it's NOT a manifest extension
+                        // (e.g. an HLS manifest saved with an .mp4 extension)
+                        return !isManifestExtension;
+                    }
+                }
+            } catch {
+                // Ignore errors reading file
+            }
+            return false;
+        }
+
+        /// <summary>
         /// Comprehensive validation of a video file
         /// </summary>
         /// <param name="filePath">The file path to validate</param>
@@ -137,6 +177,11 @@ namespace GOON.Classes {
             
             if (!File.Exists(filePath)) {
                 errorMessage = "File does not exist. The file may have been moved or deleted.";
+                return false;
+            }
+
+            if (IsCorruptedCacheFile(filePath)) {
+                errorMessage = "The cached video file appears to be a stream manifest (HLS/DASH) or is corrupted. It cannot be played as a local file.";
                 return false;
             }
             
@@ -188,12 +233,23 @@ namespace GOON.Classes {
                 if (!isSupportedDomain) return false;
                 
                 // Check if URL has a video file extension (direct video URL)
-                var path = uri.AbsolutePath.ToLowerInvariant();
+                var path = uri.AbsolutePath.ToLowerInvariant().TrimEnd('/');
+                
+                // EXPLICIT CHECK for streaming protocols to avoid extraction loop (redundant with Constants but safe)
+                if (path.EndsWith(".m3u8") || path.EndsWith(".mpd")) return false;
+
                 bool hasVideoExtension = Constants.VideoExtensions.Any(ext => 
                     path.EndsWith(ext, StringComparison.OrdinalIgnoreCase));
                 
-                // If it has a video extension, it's a direct URL, not a page URL
-                return !hasVideoExtension;
+                if (hasVideoExtension) return false;
+
+                // Exclude common web assets from being treated as page URLs
+                var assetExtensions = new[] { 
+                    ".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".woff", ".woff2", ".ttf", ".eot", ".json", ".xml" 
+                };
+                if (assetExtensions.Any(ext => path.EndsWith(ext, StringComparison.OrdinalIgnoreCase))) return false;
+                
+                return true;
             } catch {
                 return false;
             }

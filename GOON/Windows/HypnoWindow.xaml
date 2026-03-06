@@ -23,7 +23,7 @@
         WindowStartupLocation="Manual"
         Background="Black"
         AllowsTransparency="True"
-        Opacity="{Binding Opacity}" 
+        Opacity="{Binding EffectiveOpacity}" 
         Icon="pack://application:,,,/Images/icon.ico"
         SourceInitialized="Window_SourceInitialized">
     <Window.Resources>

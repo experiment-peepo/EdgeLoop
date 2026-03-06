@@ -9,6 +9,8 @@ using System.Windows;
 using System.Windows.Input;
 using GOON.Classes;
 using GOON.Windows;
+using System.IO;
+using System.Text.Json;
 using Microsoft.Win32;
 
 namespace GOON.ViewModels {
@@ -75,10 +77,22 @@ namespace GOON.ViewModels {
         private string _statusMessage;
         private StatusMessageType _statusMessageType = StatusMessageType.Info;
         private bool _isLoading;
+        private double _importProgressValue;
+        private string _importProgressText;
 
         public string StatusMessage {
             get => _statusMessage;
             set => SetProperty(ref _statusMessage, value);
+        }
+
+        public double ImportProgressValue {
+            get => _importProgressValue;
+            set => SetProperty(ref _importProgressValue, value);
+        }
+
+        public string ImportProgressText {
+            get => _importProgressText;
+            set => SetProperty(ref _importProgressText, value);
         }
 
         public StatusMessageType StatusMessageType {
@@ -89,7 +103,10 @@ namespace GOON.ViewModels {
         /// <summary>
         /// Helper method to set status message with type
         /// </summary>
-        private void SetStatusMessage(string message, StatusMessageType type = StatusMessageType.Info) {
+        public void SetStatusMessage(string message, StatusMessageType type = StatusMessageType.Info) {
+            if (!string.IsNullOrEmpty(message)) {
+                Logger.Info($"[Launcher] Status: {message} ({type})");
+            }
             StatusMessage = message;
             StatusMessageType = type;
         }
@@ -142,8 +159,9 @@ namespace GOON.ViewModels {
             MinimizeCommand = new RelayCommand(Minimize);
             CancelImportCommand = new RelayCommand(CancelImport);
 
-            // Subscribe to media error events
+            // Subscribe to media events
             App.VideoService.MediaErrorOccurred += VideoService_MediaErrorOccurred;
+            App.VideoService.MediaOpened += VideoService_MediaOpened;
 
             UpdateButtons();
 
@@ -232,6 +250,10 @@ namespace GOON.ViewModels {
         private void RemoveItem(object parameter) {
             if (parameter is VideoItem item) {
                 AddedFiles.Remove(item);
+                
+                // CRITICAL: Notify active players to remove this from their queues
+                App.VideoService.RemoveItemsFromAllPlayers(new[] { item });
+                
                 UpdateButtons();
                 SaveSession();
             }
@@ -318,9 +340,12 @@ namespace GOON.ViewModels {
                 ?? AvailableScreens.FirstOrDefault(v => !v.IsAllScreens);
         }
 
-        private void UpdateButtons() {
+        public void UpdateButtons() {
             bool hasFiles = AddedFiles.Count > 0;
             IsHypnotizeEnabled = hasFiles && _allFilesAssigned;
+            
+            // Force re-evaluation of command CanExecute states
+            System.Windows.Input.CommandManager.InvalidateRequerySuggested();
         }
 
         private void UpdateAllFilesAssigned() {
@@ -331,6 +356,9 @@ namespace GOON.ViewModels {
         private void Hypnotize(object parameter) {
             if (_isHypnotizing) return;
             _isHypnotizing = true;
+
+            // Clear any previous error/status message ONLY when starting a new session manually
+            SetStatusMessage(null);
 
             try {
                 var selectedItems = parameter as System.Collections.IList;
@@ -373,7 +401,7 @@ namespace GOON.ViewModels {
         }
 
         private async Task PlayPerMonitorAsync(IDictionary<ScreenViewer, IEnumerable<VideoItem>> assignments, bool showGroupControl) {
-            await App.VideoService.PlayPerMonitorAsync(assignments, showGroupControl).ConfigureAwait(false);
+            await App.VideoService.PlayPerMonitorAsync(assignments, showGroupControl, null, _cancellationTokenSource.Token).ConfigureAwait(false);
         }
 
         private (Dictionary<ScreenViewer, IEnumerable<VideoItem>> Assignments, bool HasAllMonitors) BuildAssignmentsFromSelection(System.Collections.IList selectedItems) {
@@ -584,6 +612,126 @@ namespace GOON.ViewModels {
             } catch (Exception ex) {
                 Logger.Error("Error processing URL", ex);
                 SetStatusMessage($"Error processing URL: {ex.Message}", StatusMessageType.Error);
+            }
+        }
+
+
+        private void SavePlaylist(object parameter) {
+            var sfd = new Microsoft.Win32.SaveFileDialog {
+                Filter = "M3U Playlist (*.m3u)|*.m3u|JSON Playlist (*.json)|*.json",
+                FileName = $"Playlist_{DateTime.Now:yyyyMMdd_HHmm}.m3u"
+            };
+
+            if (sfd.ShowDialog() == true) {
+                _ = SavePlaylistAsync(sfd.FileName);
+            }
+        }
+
+        private async Task SavePlaylistAsync(string filePath) {
+            try {
+                if (filePath.EndsWith(".m3u", StringComparison.OrdinalIgnoreCase)) {
+                    using (var writer = new StreamWriter(filePath)) {
+                        await writer.WriteLineAsync("#EXTM3U");
+                        foreach (var item in AddedFiles) {
+                            var title = item.FileName;
+                            // Prefer OriginalPageUrl for compatibility if it's a resolved expiring link
+                            var path = !string.IsNullOrEmpty(item.OriginalPageUrl) ? item.OriginalPageUrl : item.FilePath;
+                            await writer.WriteLineAsync($"#EXTINF:0,{title}");
+                            await writer.WriteLineAsync(path);
+                        }
+                    }
+                } else {
+                    // Save as JSON (Full session compatibility)
+                    var playlist = new Playlist {
+                        Items = AddedFiles.Select(item => new PlaylistItem {
+                            FilePath = item.FilePath,
+                            Title = item.Title,
+                            OriginalPageUrl = item.OriginalPageUrl,
+                            Opacity = item.Opacity,
+                            Volume = item.Volume,
+                            ScreenDeviceName = item.AssignedScreen?.Screen?.DeviceName
+                        }).ToList()
+                    };
+                    var json = JsonSerializer.Serialize(playlist, new JsonSerializerOptions { WriteIndented = true });
+                    await File.WriteAllTextAsync(filePath, json);
+                }
+                SetStatusMessage($"Playlist saved to {Path.GetFileName(filePath)}", StatusMessageType.Success);
+            } catch (Exception ex) {
+                Logger.Error("Failed to save playlist", ex);
+                SetStatusMessage($"Error saving playlist: {ex.Message}", StatusMessageType.Error);
+            }
+        }
+
+        private void LoadPlaylist(object parameter) {
+            var ofd = new Microsoft.Win32.OpenFileDialog {
+                Filter = "Playlist Files (*.m3u;*.json)|*.m3u;*.json|M3U Playlist (*.m3u)|*.m3u|JSON Playlist (*.json)|*.json|All Files (*.*)|*.*",
+                Title = "Select Playlist File"
+            };
+
+            if (ofd.ShowDialog() == true) {
+                _ = LoadPlaylistContentAsync(ofd.FileName);
+            }
+        }
+
+        private async Task LoadPlaylistContentAsync(string filePath) {
+            IsLoading = true;
+            SetStatusMessage($"Loading playlist: {Path.GetFileName(filePath)}...", StatusMessageType.Info);
+
+            try {
+                List<VideoItem> itemsToLoad = new List<VideoItem>();
+
+                if (filePath.EndsWith(".m3u", StringComparison.OrdinalIgnoreCase)) {
+                    // Basic M3U Parser
+                    var lines = await File.ReadAllLinesAsync(filePath);
+                    foreach (var line in lines) {
+                        var trimmed = line.Trim();
+                        if (string.IsNullOrEmpty(trimmed) || trimmed.StartsWith("#")) continue;
+                        
+                        // Treat line as a URL or FilePath
+                        var item = new VideoItem(trimmed, GetDefaultScreen());
+                        item.Validate();
+                        itemsToLoad.Add(item);
+                    }
+                } else {
+                    // JSON Loader
+                    var json = await File.ReadAllTextAsync(filePath);
+                    var playlist = JsonSerializer.Deserialize<Playlist>(json);
+                    if (playlist?.Items != null) {
+                        foreach (var pi in playlist.Items) {
+                            var item = new VideoItem(pi.FilePath) {
+                                Title = pi.Title,
+                                OriginalPageUrl = pi.OriginalPageUrl,
+                                Opacity = pi.Opacity,
+                                Volume = pi.Volume
+                            };
+                            
+                            if (!string.IsNullOrEmpty(pi.ScreenDeviceName)) {
+                                item.AssignedScreen = AvailableScreens.FirstOrDefault(s => s.Screen?.DeviceName == pi.ScreenDeviceName);
+                            }
+                            
+                            if (item.AssignedScreen == null) item.AssignedScreen = GetDefaultScreen();
+                            
+                            item.Validate();
+                            itemsToLoad.Add(item);
+                        }
+                    }
+                }
+
+                if (itemsToLoad.Count > 0) {
+                    foreach (var item in itemsToLoad) {
+                        AddedFiles.Add(item);
+                    }
+                    SetStatusMessage($"Loaded {itemsToLoad.Count} items from playlist", StatusMessageType.Success);
+                    UpdateButtons();
+                    SaveSession();
+                } else {
+                    SetStatusMessage("No valid videos found in playlist file", StatusMessageType.Warning);
+                }
+            } catch (Exception ex) {
+                Logger.Error("Failed to load playlist file", ex);
+                SetStatusMessage($"Error loading playlist: {ex.Message}", StatusMessageType.Error);
+            } finally {
+                IsLoading = false;
             }
         }
 
@@ -815,6 +963,8 @@ namespace GOON.ViewModels {
 
         private async System.Threading.Tasks.Task AddFilesAsync(string[] filePaths, CancellationToken cancellationToken = default) {
             IsLoading = true;
+            ImportProgressValue = 0;
+            ImportProgressText = "Preparing import...";
             SetStatusMessage("Validating files...", StatusMessageType.Info);
             
             try {
@@ -852,12 +1002,18 @@ namespace GOON.ViewModels {
             
                 cancellationToken.ThrowIfCancellationRequested();
             var settings = App.Settings;
+            int total = results.Length;
             int addedCount = 0;
             int skippedCount = 0;
             
             var failedFiles = new List<(string name, string error)>();
             
-            foreach (var (filePath, isValid, errorMessage) in results) {
+            for (int i = 0; i < results.Length; i++) {
+                var (filePath, isValid, errorMessage) = results[i];
+                
+                // Update progress
+                ImportProgressValue = (double)(i + 1) / total * 100;
+                ImportProgressText = $"Importing {i + 1} of {total}...";
                 cancellationToken.ThrowIfCancellationRequested();
                 if (isValid) {
                     var sanitizedPath = FileValidator.SanitizePath(filePath);
@@ -905,6 +1061,8 @@ namespace GOON.ViewModels {
                 SetStatusMessage($"Error adding files: {ex.Message}", StatusMessageType.Error);
             } finally {
                 IsLoading = false;
+                ImportProgressValue = 0;
+                ImportProgressText = string.Empty;
             }
         }
         
@@ -914,15 +1072,24 @@ namespace GOON.ViewModels {
             
             var toRemove = new List<VideoItem>();
             foreach (VideoItem f in selectedItems) toRemove.Add(f);
+            
             foreach (var f in toRemove) {
                 AddedFiles.Remove(f);
             }
+
+            // CRITICAL: Notify active players to remove these from their queues
+            App.VideoService.RemoveItemsFromAllPlayers(toRemove);
+
             UpdateButtons();
             SaveSession();
         }
 
         private void ClearAll(object obj) {
+            var itemsToRemove = AddedFiles.ToList();
             AddedFiles.Clear();
+            
+            App.VideoService.RemoveItemsFromAllPlayers(itemsToRemove);
+            
             UpdateButtons();
             SaveSession();
         }
@@ -954,14 +1121,52 @@ namespace GOON.ViewModels {
         }
 
         private async Task AddDroppedFilesAsync(string[] files) {
-            // Filter to only video files
-            var videoFiles = files.Where(f => {
-                var ext = System.IO.Path.GetExtension(f)?.ToLowerInvariant();
-                return Constants.VideoExtensions.Contains(ext);
-            }).ToArray();
+            IsLoading = true;
+            SetStatusMessage("Scanning dropped items...", StatusMessageType.Info);
             
-            if (videoFiles.Length > 0) {
-                await AddFilesAsync(videoFiles, _cancellationTokenSource.Token);
+            var allVideoFiles = new List<string>();
+            int folderCount = 0;
+            
+            try {
+                await Task.Run(() => {
+                    foreach (var path in files) {
+                        if (Directory.Exists(path)) {
+                            folderCount++;
+                            // Recursively get all video files from folder
+                            try {
+                                var folderVideos = Directory.EnumerateFiles(path, "*.*", SearchOption.AllDirectories)
+                                    .Where(f => Constants.VideoExtensions.Contains(System.IO.Path.GetExtension(f)?.ToLowerInvariant()));
+                                
+                                foreach (var video in folderVideos) {
+                                    allVideoFiles.Add(video);
+                                }
+                            } catch (UnauthorizedAccessException ex) {
+                                Logger.Warning($"Access denied to folder: {path}", ex);
+                            } catch (Exception ex) {
+                                Logger.Error($"Error scanning folder: {path}", ex);
+                            }
+                        } else {
+                            var ext = System.IO.Path.GetExtension(path)?.ToLowerInvariant();
+                            if (Constants.VideoExtensions.Contains(ext)) {
+                                allVideoFiles.Add(path);
+                            }
+                        }
+                    }
+                }, _cancellationTokenSource.Token);
+            } catch (OperationCanceledException) {
+                SetStatusMessage("Scanning cancelled", StatusMessageType.Warning);
+                IsLoading = false;
+                return;
+            }
+            
+            if (allVideoFiles.Count > 0) {
+                if (folderCount > 0) {
+                    SetStatusMessage($"Found {allVideoFiles.Count} videos in {folderCount} folder(s). Validating...", StatusMessageType.Info);
+                }
+                await AddFilesAsync(allVideoFiles.ToArray(), _cancellationTokenSource.Token);
+            } else {
+                SetStatusMessage("No supported video files found in dropped items.", StatusMessageType.Warning);
+                IsLoading = false;
             }
         }
 
@@ -974,149 +1179,23 @@ namespace GOON.ViewModels {
             SaveSession();
         }
 
-        private void SavePlaylist(object obj) {
-            // Ensure Playlists directory exists
-            var playlistsDir = AppPaths.PlaylistsDirectory;
-            if (!System.IO.Directory.Exists(playlistsDir)) {
-                System.IO.Directory.CreateDirectory(playlistsDir);
-            }
-
-            var dlg = new SaveFileDialog {
-                Filter = "GOON Playlist|*.json",
-                FileName = "playlist.json",
-                InitialDirectory = playlistsDir
-            };
-            if (dlg.ShowDialog() == true) {
-                var playlist = new Playlist();
-                foreach (var item in AddedFiles) {
-                    playlist.Items.Add(new PlaylistItem {
-                        FilePath = item.FilePath,
-                        ScreenDeviceName = item.AssignedScreen?.DeviceName,
-                        Opacity = item.Opacity,
-                        Volume = item.Volume,
-                        Title = item.Title,
-                        OriginalPageUrl = item.OriginalPageUrl // Store for re-extraction when URLs expire
-                    });
-                }
-                
-                var json = System.Text.Json.JsonSerializer.Serialize(playlist);
-                System.IO.File.WriteAllText(dlg.FileName, json);
-            }
-        }
-
-        private void LoadPlaylist(object obj) {
-             // Ensure Playlists directory exists for initial directory
-            var playlistsDir = AppPaths.PlaylistsDirectory;
-            if (!System.IO.Directory.Exists(playlistsDir)) {
-                System.IO.Directory.CreateDirectory(playlistsDir);
-            }
-
-            var dlg = new OpenFileDialog {
-                Filter = "GOON Playlist|*.json",
-                InitialDirectory = playlistsDir
-            };
-            if (dlg.ShowDialog() == true) {
-                _ = LoadPlaylistAsync(dlg.FileName).ContinueWith(task => {
-                    if (task.IsFaulted) {
-                        var ex = task.Exception?.GetBaseException() ?? task.Exception;
-                        Logger.Error("Error loading playlist", ex);
-                        Application.Current?.Dispatcher.InvokeAsync(() => {
-                            SetStatusMessage($"Failed to load playlist: {ex?.Message ?? "Unknown error"}", StatusMessageType.Error);
-                        });
-                    }
-                }, TaskContinuationOptions.OnlyOnFaulted);
-            }
-        }
-
-        private async Task LoadPlaylistAsync(string fileName) {
-            IsLoading = true;
-            SetStatusMessage("Loading playlist...", StatusMessageType.Info);
+        public void AddDroppedUrl(string url) {
+            if (string.IsNullOrWhiteSpace(url)) return;
             
-            try {
-                var json = await System.IO.File.ReadAllTextAsync(fileName);
-                var playlist = System.Text.Json.JsonSerializer.Deserialize<Playlist>(json);
-                
-                if (playlist != null) {
-                    await Application.Current.Dispatcher.InvokeAsync(() => {
-                        AddedFiles.Clear();
-                        if (AvailableScreens.Count == 0) RefreshScreens();
-                    });
-                    
-                    var validItems = new List<VideoItem>();
-                    var missingFiles = new List<string>();
-                    var invalidFiles = new List<(string path, string error)>();
-                    
-                    foreach (var item in playlist.Items) {
-                        await Application.Current.Dispatcher.InvokeAsync(() => {
-                            var screen = AvailableScreens.FirstOrDefault(s => s.DeviceName == item.ScreenDeviceName) ?? AvailableScreens.FirstOrDefault();
-                            var videoItem = new VideoItem(item.FilePath, screen);
-                            videoItem.Opacity = item.Opacity;
-                            videoItem.Volume = item.Volume;
-                            videoItem.OriginalPageUrl = item.OriginalPageUrl; // Restore for re-extraction
-                            
-                            // Set title if available (backward compatible - Title may be null for old playlists)
-                            if (!string.IsNullOrWhiteSpace(item.Title)) {
-                                videoItem.Title = item.Title;
-                            }
-                            
-                            // Validate the file
-                            videoItem.Validate();
-                            
-                            if (videoItem.ValidationStatus == FileValidationStatus.Valid) {
-                                validItems.Add(videoItem);
-                            } else if (videoItem.ValidationStatus == FileValidationStatus.Missing) {
-                                missingFiles.Add(System.IO.Path.GetFileName(videoItem.FilePath));
-                            } else {
-                                invalidFiles.Add((System.IO.Path.GetFileName(videoItem.FilePath), videoItem.ValidationError ?? "Invalid file"));
-                            }
-                            
-                            // Always add to collection so user can see all files, including invalid ones
-                            AddedFiles.Add(videoItem);
-                        });
-                    }
-                    
-                    await Application.Current.Dispatcher.InvokeAsync(() => {
-                        UpdateButtons();
-                        
-                        // Show summary message
-                        if (missingFiles.Count > 0 || invalidFiles.Count > 0) {
-                            var messageParts = new List<string> { $"Loaded {validItems.Count} valid file(s)" };
-                            if (missingFiles.Count > 0) {
-                                messageParts.Add($"{missingFiles.Count} missing");
-                            }
-                            if (invalidFiles.Count > 0) {
-                                messageParts.Add($"{invalidFiles.Count} invalid");
-                            }
-                            
-                            var fileList = new List<string>();
-                            fileList.AddRange(missingFiles);
-                            fileList.AddRange(invalidFiles.Select(f => $"{f.path} ({f.error})"));
-                            
-                            var message = string.Join(", ", messageParts) + ".";
-                            if (fileList.Count <= 5) {
-                                message += "\n" + string.Join("\n", fileList);
-                            } else {
-                                message += $"\n{string.Join("\n", fileList.Take(5))}\n... and {fileList.Count - 5} more";
-                            }
-                            
-                            SetStatusMessage(message, StatusMessageType.Warning);
-                        } else {
-                            SetStatusMessage($"Loaded {validItems.Count} file(s) from playlist", StatusMessageType.Success);
-                        }
-                    });
-                }
-            } catch (Exception ex) {
-                Logger.Error("Error loading playlist", ex);
-                await Application.Current.Dispatcher.InvokeAsync(() => {
-                    SetStatusMessage($"Failed to load playlist: {ex.Message}", StatusMessageType.Error);
-                });
-            } finally {
-                await Application.Current.Dispatcher.InvokeAsync(() => {
-                    IsLoading = false;
-                });
+            // Validate URL
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)) {
+                SetStatusMessage("Invalid URL dropped", StatusMessageType.Warning);
+                return;
             }
+            
+            _ = ProcessUrlAsync(url, _cancellationTokenSource.Token);
         }
-        private void SaveSession(bool runInBackground = true) {
+
+
+
+                    
+        public void SaveSession(bool runInBackground = true) {
             try {
                 // Only save session if user wants to remember playlist
                 if (App.Settings == null || !App.Settings.RememberLastPlaylist) {
@@ -1305,10 +1384,53 @@ namespace GOON.ViewModels {
 
         private bool _disposed = false;
 
-        private void VideoService_MediaErrorOccurred(object sender, string errorMessage) {
+        private void VideoService_MediaErrorOccurred(object sender, MediaErrorEventArgs e) {
             Application.Current?.Dispatcher.InvokeAsync(() => {
-                SetStatusMessage(errorMessage, StatusMessageType.Error);
+                Logger.Info($"[Launcher] Media error received: {e.ErrorMessage} (Item: {e.Item?.FileName ?? "null"})");
+                SetStatusMessage(e.ErrorMessage, StatusMessageType.Error);
+                
+                // Automatically remove failing items from the playlist
+                if (e.Item != null) {
+                    var failingPath = e.Item.FilePath;
+                    var failingOriginalUrl = e.Item.OriginalPageUrl;
+
+                    // Match by reference OR by path (case-insensitive) to ensure robust removal
+                    var itemsToRemove = AddedFiles.Where(x => 
+                        ReferenceEquals(x, e.Item) || 
+                        string.Equals(x.FilePath, failingPath, StringComparison.OrdinalIgnoreCase) || 
+                        (!string.IsNullOrEmpty(failingOriginalUrl) && string.Equals(x.OriginalPageUrl, failingOriginalUrl, StringComparison.OrdinalIgnoreCase))
+                    ).ToList();
+
+                    if (itemsToRemove.Any()) {
+                        Logger.Info($"[Launcher] Automatically removing {itemsToRemove.Count} dead link(s) from playlist.");
+                        foreach (var item in itemsToRemove) {
+                            AddedFiles.Remove(item);
+                        }
+                        
+                        // Also notify other players/monitors to stop trying to play this item
+                        App.VideoService.RemoveItemsFromAllPlayers(itemsToRemove);
+                        
+                        UpdateButtons();
+                        SaveSession();
+                    } else {
+                        Logger.Warning($"[Launcher] Media error for '{e.Item.FileName}' but could not find a matching item in AddedFiles to remove. Path: {failingPath}");
+                    }
+                }
             });
+        }
+
+        private void VideoService_MediaOpened(object sender, EventArgs e) {
+            // REQUEST: "keep showing the error till user presses the button another time."
+            // We no longer automatically clear the error when a DIFFERENT video succeeds.
+            // The status bar will only be cleared when the user clicks "Start Gooning" again.
+            
+            /* Old behavior:
+            Application.Current?.Dispatcher.InvokeAsync(() => {
+                if (!string.IsNullOrEmpty(StatusMessage)) {
+                    SetStatusMessage(null);
+                }
+            });
+            */
         }
 
         /// <summary>
@@ -1320,6 +1442,7 @@ namespace GOON.ViewModels {
                 _cancellationTokenSource?.Dispose();
                 SystemEvents.DisplaySettingsChanged -= SystemEvents_DisplaySettingsChanged;
                 App.VideoService.MediaErrorOccurred -= VideoService_MediaErrorOccurred;
+                App.VideoService.MediaOpened -= VideoService_MediaOpened;
                 _saveTimer?.Stop();
                 _disposed = true;
             }

@@ -30,6 +30,7 @@ namespace GOON.Windows {
             InitializeComponent();
             _targetScreen = screen;
             _viewModel = new HypnoViewModel(App.UrlExtractor);
+            _viewModel.MonitorName = screen?.DeviceName ?? "Default";
             this.DataContext = _viewModel;
             
             if (screen != null) {
@@ -45,6 +46,7 @@ namespace GOON.Windows {
             }
             // ... (keep event subscriptions)
             _viewModel.MediaErrorOccurred += ViewModel_MediaErrorOccurred;
+            _viewModel.MediaOpened += ViewModel_MediaOpened;
             _viewModel.TerminalFailure += ViewModel_TerminalFailure;
             
 
@@ -78,6 +80,7 @@ namespace GOON.Windows {
                     // Unsubscribe from events
                     if (_viewModel != null) {
                         _viewModel.MediaErrorOccurred -= ViewModel_MediaErrorOccurred;
+                        _viewModel.MediaOpened -= ViewModel_MediaOpened;
                         _viewModel.TerminalFailure -= ViewModel_TerminalFailure;
                         _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
                         _viewModel.Dispose();
@@ -121,7 +124,7 @@ namespace GOON.Windows {
             
             try {
                 // Forward the error to the VideoPlayerService so it can notify subscribers
-                App.VideoService?.OnMediaError(e.ErrorMessage);
+                App.VideoService?.OnMediaError(e);
             } catch (Exception ex) {
                 Logger.Error("Error in ViewModel_MediaErrorOccurred", ex);
             }
@@ -138,6 +141,17 @@ namespace GOON.Windows {
                     this.Close();
                 }
             });
+        }
+
+        private void ViewModel_MediaOpened(object sender, EventArgs e) {
+            if (_disposed) return;
+            
+            try {
+                // Forward the event to the VideoPlayerService
+                App.VideoService?.OnMediaOpened();
+            } catch (Exception ex) {
+                Logger.Error("Error in ViewModel_MediaOpened", ex);
+            }
         }
 
         // Removed FirstVideo_MediaOpened as it's now handled by ViewModel's Player.OpenCompleted

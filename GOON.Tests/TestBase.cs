@@ -10,6 +10,7 @@ namespace GOON.Tests {
         
         protected TestBase() {
             ServiceContainer.Clear();
+            Logger.MinimumLevel = LogLevel.Debug;
             
             // Register mock settings
             ServiceContainer.Register(MockSettings.Object);
@@ -17,6 +18,8 @@ namespace GOON.Tests {
         }
 
         public virtual void Dispose() {
+            // Signal logger to flush if possible (though background thread is tricky)
+            Thread.Sleep(500); // Give time to flush
             ServiceContainer.Clear();
         }
     }

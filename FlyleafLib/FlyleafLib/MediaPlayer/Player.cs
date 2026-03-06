@@ -162,7 +162,7 @@ public unsafe partial class Player : NotifyPropertyChanged, IDisposable
     public Status       Status
     {
         get => status;
-        private set
+        internal set
         {
             if (Set(ref _Status, value))
             {

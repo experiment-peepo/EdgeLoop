@@ -4,10 +4,19 @@ using System.IO;
 using System.Threading;
 
 namespace GOON.Classes {
+    public enum LogLevel {
+        Debug = 0,
+        Info = 1,
+        Warning = 2,
+        Error = 3,
+        None = 4
+    }
+
     /// <summary>
     /// Simple file-based logger with different log levels
     /// </summary>
     public static class Logger {
+        public static LogLevel MinimumLevel { get; set; } = LogLevel.Info;
         internal static readonly object _lock = new object();
         internal static string _logFilePath;
         internal static int _consecutiveFailures = 0;
@@ -45,35 +54,36 @@ namespace GOON.Classes {
         /// <summary>
         /// Log an error message
         /// </summary>
-        public static void Error(string message, Exception exception = null) {
-            Log("ERROR", message, exception);
-        }
+        public static void Error(string message, Exception exception = null) => Log(LogLevel.Error, null, message, exception);
+        public static void Error(string context, string message, Exception exception = null) => Log(LogLevel.Error, context, message, exception);
 
         /// <summary>
         /// Log a warning message
         /// </summary>
-        public static void Warning(string message, Exception exception = null) {
-            Log("WARNING", message, exception);
-        }
+        public static void Warning(string message, Exception exception = null) => Log(LogLevel.Warning, null, message, exception);
+        public static void Warning(string context, string message, Exception exception = null) => Log(LogLevel.Warning, context, message, exception);
 
         /// <summary>
         /// Log an info message
         /// </summary>
-        public static void Info(string message) {
-            Log("INFO", message, null);
-        }
+        public static void Info(string message) => Log(LogLevel.Info, null, message, null);
+        public static void Info(string context, string message) => Log(LogLevel.Info, context, message, null);
 
         /// <summary>
         /// Log a debug message
         /// </summary>
-        public static void Debug(string message) {
-            Log("DEBUG", message, null);
-        }
+        public static void Debug(string message) => Log(LogLevel.Debug, null, message, null);
+        public static void Debug(string context, string message) => Log(LogLevel.Debug, context, message, null);
 
-        private static void Log(string level, string message, Exception exception) {
+        private static void Log(LogLevel level, string context, string message, Exception exception) {
+            if (level < MinimumLevel) return;
+
             try {
+                var levelStr = level.ToString().ToUpper();
                 var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-                var logEntry = $"[{timestamp}] [{level}] {message}";
+                var logEntry = string.IsNullOrEmpty(context) 
+                    ? $"[{timestamp}] [{levelStr}] {message}"
+                    : $"[{timestamp}] [{levelStr}] [{context}] {message}";
                 
                 if (exception != null) {
                     logEntry += $"\nException: {exception.GetType().Name}: {exception.Message}";
@@ -120,7 +130,7 @@ namespace GOON.Classes {
                             logFile.MoveTo(oldLogPath);
 
                             // Initial log entry in new file
-                            Log("INFO", $"Log file rotated. Previous log moved to {oldLogPath}", null);
+                            Log(LogLevel.Info, null, $"Log file rotated. Previous log moved to {oldLogPath}", null);
                         } catch (Exception ex) {
                             System.Diagnostics.Debug.WriteLine($"[LOGGER ROTATION ERROR] Failed to rotate log file: {ex.Message}");
                         }

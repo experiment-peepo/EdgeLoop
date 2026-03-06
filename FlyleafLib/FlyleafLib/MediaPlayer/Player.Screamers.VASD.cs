@@ -1,4 +1,4 @@
-﻿using Vortice.Direct3D11;
+using Vortice.Direct3D11;
 
 using FlyleafLib.MediaFramework.MediaDecoder;
 
@@ -791,8 +791,16 @@ unsafe partial class Player
 
                 if (CanInfo)
                 {
-                    long streamTime = ExternalClock.Ticks - startClockTicks + startTicks;
-                    long diff = (Config.Player.MasterClock == MasterClock.External && ExternalClock != null) ? (long)((aFrame.Timestamp - streamTime) / speed - delayTicks) : ((long)((aFrame.Timestamp - startTicks) / speed) - (long)(sw.ElapsedTicks * SWFREQ_TO_TICKS) - delayTicks);
+                    long diff;
+                    if (Config.Player.MasterClock == MasterClock.External && ExternalClock != null)
+                    {
+                        long streamTime = ExternalClock.Ticks - startClockTicks + startTicks;
+                        diff = (long)((aFrame.Timestamp - streamTime) / speed - delayTicks);
+                    }
+                    else
+                    {
+                        diff = ((long)((aFrame.Timestamp - startTicks) / speed) - (long)(sw.ElapsedTicks * SWFREQ_TO_TICKS) - delayTicks);
+                    }
                     Log.Info($"[A] Resynced at {TicksToTimeMini(aFrame.Timestamp)} [Diff: {TicksToTimeMini(diff)}]");
                 }
                 

@@ -58,6 +58,10 @@
             <sys:String>NumPad7</sys:String>
             <sys:String>NumPad8</sys:String>
             <sys:String>NumPad9</sys:String>
+            <sys:String>Left</sys:String>
+            <sys:String>Right</sys:String>
+            <sys:String>Up</sys:String>
+            <sys:String>Down</sys:String>
         </x:Array>
 
         <!-- Modern Collapsible Section Style -->
@@ -264,8 +268,8 @@
 
                             <!-- Super Resolution (AI Upscaling) -->
                             <StackPanel Grid.Row="4" Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
-                                <TextBlock Text="Super Resolution (AI Upscaling)" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                                <TextBlock Text="AI upscaling for Nvidia RTX or Intel 10th+ Gen GPUs" Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
+                                <TextBlock Text="AI Upscaling" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
+                                <TextBlock Text="Enhance video quality using Nvidia RTX or Intel XeSS" Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
                             </StackPanel>
                             <CheckBox Grid.Row="4" Grid.Column="1" 
                                       IsChecked="{Binding EnableSuperResolution}"
@@ -289,8 +293,8 @@
 
                             <!-- Always on Top -->
                             <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,16,20" VerticalAlignment="Center">
-                                <TextBlock Text="Always on Top (Launcher)" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                                <TextBlock Text="Keep the launcher window above others" Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
+                                <TextBlock Text="Keep Launcher on Top" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
+                                <TextBlock Text="This window stays above other windows" Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
                             </StackPanel>
                             <CheckBox Grid.Row="0" Grid.Column="1" 
                                       IsChecked="{Binding LauncherAlwaysOnTop}"
@@ -306,7 +310,8 @@
                             <CheckBox Grid.Row="1" Grid.Column="1" 
                                       IsChecked="{Binding StartWithWindows}"
                                       Style="{StaticResource ModernCheckBoxStyle}"
-                                      VerticalAlignment="Center"/>
+                                      VerticalAlignment="Center"
+                                      Margin="0,0,0,20"/>
                         </Grid>
                     </Expander>
 
@@ -398,7 +403,7 @@
                                         Height="28">
                                     <StackPanel Orientation="Horizontal">
                                         <Path Data="M14.6,16.6L19.2,12L14.6,7.4L16,6L22,12L16,18L14.6,16.6M9.4,16.6L4.8,12L9.4,7.4L8,6L2,12L8,18L9.4,16.6Z" Fill="{StaticResource AccentPrimary}" Stretch="Uniform" Width="12" Height="12" Margin="0,0,8,0"/>
-                                        <TextBlock Text="Copy Browser Helper Script" FontSize="11"/>
+                                        <TextBlock Text="Copy Cookie Script" FontSize="11"/>
                                     </StackPanel>
                                 </Button>
                             </StackPanel>
@@ -407,18 +412,12 @@
 
                     <!-- Hotkeys -->
                     <Expander Header="Hotkeys" Style="{StaticResource SettingsExpanderStyle}" IsExpanded="{Binding IsHotkeysExpanded}">
-                        <Grid>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-                            <StackPanel Grid.Row="0" Margin="0,0,0,16">
-                                <TextBlock Text="Panic Hotkey" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                                <TextBlock Text="Global hotkey to stop all playback immediately" Foreground="{StaticResource TextTertiary}" FontSize="11" Margin="0,4,0,0"/>
+                        <StackPanel>
+                            <StackPanel Margin="0,0,0,16">
+                                <TextBlock Text="Panic Hotkey" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock Text="Global hotkey to stop all playback immediately" Foreground="{StaticResource TextTertiary}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
-                            <Grid Grid.Row="1" Margin="0,0,0,24">
+                            <Grid Margin="0,0,0,24">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
@@ -433,12 +432,32 @@
                                 <ComboBox Grid.Column="2" Width="100" ItemsSource="{StaticResource KeyList}" SelectedItem="{Binding PanicHotkeyKey}" Style="{StaticResource PinkComboBoxStyle}"/>
                             </Grid>
 
-                            <!-- Triple-Press Emergency Stop (Opaque Mode) -->
-                            <StackPanel Grid.Row="2" Margin="0,0,0,16">
-                                <TextBlock Text="Triple-Press Emergency Stop (Opaque Mode)" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                                <TextBlock Text="Press this key 3 times quickly to close all videos (Only works in Opaque Mode)" Foreground="{StaticResource TextTertiary}" FontSize="11" Margin="0,4,0,0"/>
+                            <!-- Clear Playlist Hotkey -->
+                            <StackPanel Margin="0,0,0,16">
+                                <TextBlock Text="Wipe &amp; Exit Hotkey" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock Text="Clear session, close all videos, and exit the application" Foreground="{StaticResource TextTertiary}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"/>
                             </StackPanel>
-                            <Grid Grid.Row="3">
+                            <Grid Margin="0,0,0,24">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal" Grid.Column="0" VerticalAlignment="Center">
+                                    <CheckBox Content="Ctrl" IsChecked="{Binding ClearHotkeyCtrl}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="12" Margin="0,0,10,0" Foreground="{StaticResource TextPrimary}"/>
+                                    <CheckBox Content="Shift" IsChecked="{Binding ClearHotkeyShift}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="12" Margin="0,0,10,0" Foreground="{StaticResource TextPrimary}"/>
+                                    <CheckBox Content="Alt" IsChecked="{Binding ClearHotkeyAlt}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="12" Margin="0,0,10,0" Foreground="{StaticResource TextPrimary}"/>
+                                </StackPanel>
+                                <TextBlock Text="+" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{StaticResource TextSecondary}" Margin="5,0"/>
+                                <ComboBox Grid.Column="2" Width="100" ItemsSource="{StaticResource KeyList}" SelectedItem="{Binding ClearHotkeyKey}" Style="{StaticResource PinkComboBoxStyle}"/>
+                            </Grid>
+
+                            <!-- Triple-Press Emergency Stop (Opaque Mode) -->
+                            <StackPanel Margin="0,0,0,16">
+                                <TextBlock Text="Fullscreen Escape Hotkey (Opaque Mode)" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock Text="Press 3 times quickly to exit (only works in Opaque Mode)" Foreground="{StaticResource TextTertiary}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <Grid Margin="0,0,0,24">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
@@ -446,7 +465,47 @@
                                 <TextBlock Text="Emergency Key" VerticalAlignment="Center" Foreground="{StaticResource TextSecondary}" Margin="0,0,20,0"/>
                                 <ComboBox Grid.Column="1" Width="100" ItemsSource="{StaticResource KeyList}" SelectedItem="{Binding OpaquePanicHotkeyKey}" Style="{StaticResource PinkComboBoxStyle}"/>
                             </Grid>
-                        </Grid>
+
+                            <!-- Skip Forward Hotkey -->
+                            <StackPanel Margin="0,0,0,16">
+                                <TextBlock Text="Skip Forward Hotkey" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock Text="Skip to the next video in the queue" Foreground="{StaticResource TextTertiary}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <Grid Margin="0,0,0,24">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal" Grid.Column="0" VerticalAlignment="Center">
+                                    <CheckBox Content="Ctrl" IsChecked="{Binding SkipForwardHotkeyCtrl}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="12" Margin="0,0,10,0" Foreground="{StaticResource TextPrimary}"/>
+                                    <CheckBox Content="Shift" IsChecked="{Binding SkipForwardHotkeyShift}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="12" Margin="0,0,10,0" Foreground="{StaticResource TextPrimary}"/>
+                                    <CheckBox Content="Alt" IsChecked="{Binding SkipForwardHotkeyAlt}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="12" Margin="0,0,10,0" Foreground="{StaticResource TextPrimary}"/>
+                                </StackPanel>
+                                <TextBlock Text="+" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{StaticResource TextSecondary}" Margin="5,0"/>
+                                <ComboBox Grid.Column="2" Width="100" ItemsSource="{StaticResource KeyList}" SelectedItem="{Binding SkipForwardHotkeyKey}" Style="{StaticResource PinkComboBoxStyle}"/>
+                            </Grid>
+
+                            <!-- Skip Backward Hotkey -->
+                            <StackPanel Margin="0,0,0,16">
+                                <TextBlock Text="Skip Backward Hotkey" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                                <TextBlock Text="Go back to the previous video" Foreground="{StaticResource TextTertiary}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"/>
+                            </StackPanel>
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Orientation="Horizontal" Grid.Column="0" VerticalAlignment="Center">
+                                    <CheckBox Content="Ctrl" IsChecked="{Binding SkipBackwardHotkeyCtrl}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="12" Margin="0,0,10,0" Foreground="{StaticResource TextPrimary}"/>
+                                    <CheckBox Content="Shift" IsChecked="{Binding SkipBackwardHotkeyShift}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="12" Margin="0,0,10,0" Foreground="{StaticResource TextPrimary}"/>
+                                    <CheckBox Content="Alt" IsChecked="{Binding SkipBackwardHotkeyAlt}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="12" Margin="0,0,10,0" Foreground="{StaticResource TextPrimary}"/>
+                                </StackPanel>
+                                <TextBlock Text="+" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{StaticResource TextSecondary}" Margin="5,0"/>
+                                <ComboBox Grid.Column="2" Width="100" ItemsSource="{StaticResource KeyList}" SelectedItem="{Binding SkipBackwardHotkeyKey}" Style="{StaticResource PinkComboBoxStyle}"/>
+                            </Grid>
+                        </StackPanel>
                     </Expander>
                 </StackPanel>
             </ScrollViewer>

@@ -7,7 +7,7 @@ using System.Windows.Interop;
 namespace GOON.Classes {
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
     public class HotkeyService : IDisposable {
-        [DllImport("user32.dll")]
+        [DllImport("user32.dll", SetLastError = true)]
         private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
 
         [DllImport("user32.dll")]

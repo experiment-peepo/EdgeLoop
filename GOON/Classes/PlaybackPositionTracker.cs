@@ -324,7 +324,11 @@ namespace GOON.Classes {
             }
             
             if (_saveTimer != null && _saveTimer.IsEnabled) {
-                System.Windows.Application.Current?.Dispatcher?.Invoke(() => _saveTimer.Stop());
+                if (System.Windows.Application.Current?.Dispatcher?.CheckAccess() == true) {
+                    _saveTimer.Stop();
+                } else {
+                    System.Windows.Application.Current?.Dispatcher?.Invoke(() => _saveTimer.Stop());
+                }
             }
         }
 

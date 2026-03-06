@@ -1,0 +1,127 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<TestRun id="010b37b1-235b-44f0-b091-3bcc903b49ce" name="SD@SD 2026-01-24 18:57:43" runUser="SD\SD" xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010">
+  <Times creation="2026-01-24T18:57:43.0727467+05:30" queuing="2026-01-24T18:57:43.0727471+05:30" start="2026-01-24T18:57:41.0848193+05:30" finish="2026-01-24T18:58:51.4283070+05:30" />
+  <TestSettings name="default" id="7f3f2f73-7976-4c01-b4c6-cbd135fcc28e">
+    <Deployment runDeploymentRoot="SD_SD_2026-01-24_18_57_43" />
+  </TestSettings>
+  <Results>
+    <UnitTestResult executionId="8a98b979-913a-42e6-9249-a20fe723a555" testId="0b91d888-2f75-63af-d9dd-cf26af370c23" testName="GOON.Tests.Stability.PlaybackStabilityTests.ConcurrentDisposeTest_ShouldCancelGracefully" computerName="SD" duration="00:00:02.2486218" startTime="2026-01-24T18:57:43.9926955+05:30" endTime="2026-01-24T18:57:43.9926955+05:30" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8a98b979-913a-42e6-9249-a20fe723a555" />
+    <UnitTestResult executionId="cb3fb0da-6526-4472-8395-218acb25688b" testId="1f49ff20-6882-a497-3e64-045db8ff3fd9" testName="GOON.Tests.Stability.PlaybackStabilityTests.SetQueue_WhileDisposed_ShouldReturnEarly" computerName="SD" duration="00:00:00.5573734" startTime="2026-01-24T18:57:44.5504503+05:30" endTime="2026-01-24T18:57:44.5504508+05:30" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="cb3fb0da-6526-4472-8395-218acb25688b" />
+    <UnitTestResult executionId="6cfc95ff-a9da-4ee1-9f14-651550f80eff" testId="78aa9676-a82b-1370-cff9-d9e0310594cc" testName="GOON.Tests.Stability.PreBufferingTests.StartPreBuffer_Rule34Video_ShouldIncludeRefererHeader" computerName="SD" duration="00:00:02.2508220" startTime="2026-01-24T18:57:43.9926341+05:30" endTime="2026-01-24T18:57:43.9926344+05:30" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="6cfc95ff-a9da-4ee1-9f14-651550f80eff" />
+    <UnitTestResult executionId="d1e56a63-afc1-4df4-a0fe-2121287554d5" testId="1259121a-9d80-578a-a4e0-ba56d1c66b2a" testName="GOON.Tests.Stability.PlaybackStabilityTests.RapidSkipStressTest_ShouldNotCrash" computerName="SD" duration="00:00:00.6382267" startTime="2026-01-24T18:57:45.1887409+05:30" endTime="2026-01-24T18:57:45.1887413+05:30" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="d1e56a63-afc1-4df4-a0fe-2121287554d5" />
+    <UnitTestResult executionId="815ed928-f62a-495e-9ebd-f8c62d281a73" testId="a95055be-b063-7fa2-be59-dac4ce7685f1" testName="GOON.Tests.Stability.NicheSiteBugsTests.Rule34Video_DirectDownloadPriority_ShouldSelectHighestQuality" computerName="SD" duration="00:00:00.5093812" startTime="2026-01-24T18:57:44.1170179+05:30" endTime="2026-01-24T18:57:44.1170181+05:30" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="815ed928-f62a-495e-9ebd-f8c62d281a73" />
+    <UnitTestResult executionId="26c09289-ef48-48d0-b1aa-da5256963179" testId="06424359-ab9b-f5c3-d7a7-a6effa467c01" testName="GOON.Tests.Stability.ConfigVarietyTests.CoordinatedStart_MasterFollower_ShouldSyncIndex" computerName="SD" duration="00:00:01.1481075" startTime="2026-01-24T18:57:42.8921724+05:30" endTime="2026-01-24T18:57:42.8921728+05:30" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="26c09289-ef48-48d0-b1aa-da5256963179" />
+    <UnitTestResult executionId="8103fbd8-f2cd-4a65-a557-245c2f739876" testId="4a850088-c97b-bc1a-42b9-4cb7cfc23722" testName="GOON.Tests.Stability.ConfigVarietyTests.VideoShuffle_WhenEnabled_ShouldRandomizeSelection" computerName="SD" duration="00:00:00.6059004" startTime="2026-01-24T18:57:44.0706049+05:30" endTime="2026-01-24T18:57:44.0706051+05:30" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="8103fbd8-f2cd-4a65-a557-245c2f739876" />
+    <UnitTestResult executionId="0bfa59b5-9bcf-453e-a6aa-10d77df8f9ef" testId="7955554f-f24d-8bb7-070b-d4e040fbf938" testName="GOON.Tests.Stability.ConfigVarietyTests.HypnotubeCookies_ShouldBeInjectedIntoHeaders" computerName="SD" duration="00:00:00.5721515" startTime="2026-01-24T18:57:43.4645135+05:30" endTime="2026-01-24T18:57:43.4645141+05:30" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="0bfa59b5-9bcf-453e-a6aa-10d77df8f9ef" />
+    <UnitTestResult executionId="22792a1c-e73d-4244-b82d-cde1fb04dfba" testId="d63ecb5e-edc7-8b86-1b96-25a11b92eee9" testName="GOON.Tests.Stability.NicheSiteBugsTests.Rule34Video_TokenInjection_ShouldMaintainExistingParams" computerName="SD" duration="00:00:00.5081186" startTime="2026-01-24T18:58:51.2543803+05:30" endTime="2026-01-24T18:58:51.2543806+05:30" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="22792a1c-e73d-4244-b82d-cde1fb04dfba" />
+    <UnitTestResult executionId="76891108-7bdd-4a3c-8364-0865e9569381" testId="eb395f3f-d0f7-d150-5535-70b8a15d5eb1" testName="GOON.Tests.Stability.PreBufferingTests.Skip_ShouldCancelOngoingPreBuffer" computerName="SD" duration="00:00:00.6997279" startTime="2026-01-24T18:57:44.6927593+05:30" endTime="2026-01-24T18:57:44.6927597+05:30" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="76891108-7bdd-4a3c-8364-0865e9569381" />
+    <UnitTestResult executionId="f99a00be-46bc-43d5-8b86-19a1fc48e85f" testId="22f8746f-059e-6155-683f-d49a1c711169" testName="GOON.Tests.Stability.NicheSiteBugsTests.Hypnotube_PlayerConfigFallback_ShouldWorkWhenTagsFail" computerName="SD" duration="00:00:00.7093434" startTime="2026-01-24T18:57:42.4575645+05:30" endTime="2026-01-24T18:57:42.4575865+05:30" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f99a00be-46bc-43d5-8b86-19a1fc48e85f" />
+    <UnitTestResult executionId="f79b0db9-9fc3-4bc5-a02f-3d0a9f88ba0d" testId="de1a286c-f15d-1778-8880-5729d299f0c4" testName="GOON.Tests.Stability.NicheSiteBugsTests.PMVHaven_NestedLDJSON_ShouldExtractCorrectUrl" computerName="SD" duration="00:00:00.5124166" startTime="2026-01-24T18:57:42.9699993+05:30" endTime="2026-01-24T18:57:42.9699997+05:30" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="f79b0db9-9fc3-4bc5-a02f-3d0a9f88ba0d" />
+    <UnitTestResult executionId="deda83de-8017-4680-8481-0231e1d14bc0" testId="54a4cd90-42b7-847c-5b77-3777bc3f07e8" testName="GOON.Tests.Stability.NicheSiteBugsTests.OpeningStall_RemoteUrl_ShouldUse60sTimeout" computerName="SD" duration="00:01:06.6286860" startTime="2026-01-24T18:58:50.7459016+05:30" endTime="2026-01-24T18:58:50.7459019+05:30" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="deda83de-8017-4680-8481-0231e1d14bc0" />
+    <UnitTestResult executionId="b23beb80-acf3-45f4-9484-c0f815062a66" testId="1f662c51-ebdd-ff1a-b50b-770f0396e0c5" testName="GOON.Tests.Stability.ConfigVarietyTests.RememberFilePosition_WhenEnabled_ShouldSeekOnLoad" computerName="SD" duration="00:00:00.7622449" startTime="2026-01-24T18:57:44.8331736+05:30" endTime="2026-01-24T18:57:44.8331742+05:30" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="b23beb80-acf3-45f4-9484-c0f815062a66" />
+    <UnitTestResult executionId="84a35e1c-47f0-4920-be97-6c09ceb29eac" testId="591e1515-74a9-7cb2-362c-e76fa450811c" testName="GOON.Tests.Stability.NicheSiteBugsTests.ConcurrentExtraction_ShouldCoalesceCalls" computerName="SD" duration="00:00:00.6332732" startTime="2026-01-24T18:57:43.6061326+05:30" endTime="2026-01-24T18:57:43.6061330+05:30" testType="13cdc9d9-ddb5-4fa4-a97d-d965ccfc6d4b" outcome="Passed" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" relativeResultsDirectory="84a35e1c-47f0-4920-be97-6c09ceb29eac" />
+  </Results>
+  <TestDefinitions>
+    <UnitTest name="GOON.Tests.Stability.NicheSiteBugsTests.Rule34Video_TokenInjection_ShouldMaintainExistingParams" storage="d:\projects\goon-final\goon\goon.tests\bin\debug\net10.0-windows\goon.tests.dll" id="d63ecb5e-edc7-8b86-1b96-25a11b92eee9">
+      <Execution id="22792a1c-e73d-4244-b82d-cde1fb04dfba" />
+      <TestMethod codeBase="d:\Projects\Goon-Final\GOON\GOON.Tests\bin\Debug\net10.0-windows\GOON.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="GOON.Tests.Stability.NicheSiteBugsTests" name="Rule34Video_TokenInjection_ShouldMaintainExistingParams" />
+    </UnitTest>
+    <UnitTest name="GOON.Tests.Stability.ConfigVarietyTests.VideoShuffle_WhenEnabled_ShouldRandomizeSelection" storage="d:\projects\goon-final\goon\goon.tests\bin\debug\net10.0-windows\goon.tests.dll" id="4a850088-c97b-bc1a-42b9-4cb7cfc23722">
+      <Execution id="8103fbd8-f2cd-4a65-a557-245c2f739876" />
+      <TestMethod codeBase="d:\Projects\Goon-Final\GOON\GOON.Tests\bin\Debug\net10.0-windows\GOON.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="GOON.Tests.Stability.ConfigVarietyTests" name="VideoShuffle_WhenEnabled_ShouldRandomizeSelection" />
+    </UnitTest>
+    <UnitTest name="GOON.Tests.Stability.NicheSiteBugsTests.ConcurrentExtraction_ShouldCoalesceCalls" storage="d:\projects\goon-final\goon\goon.tests\bin\debug\net10.0-windows\goon.tests.dll" id="591e1515-74a9-7cb2-362c-e76fa450811c">
+      <Execution id="84a35e1c-47f0-4920-be97-6c09ceb29eac" />
+      <TestMethod codeBase="d:\Projects\Goon-Final\GOON\GOON.Tests\bin\Debug\net10.0-windows\GOON.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="GOON.Tests.Stability.NicheSiteBugsTests" name="ConcurrentExtraction_ShouldCoalesceCalls" />
+    </UnitTest>
+    <UnitTest name="GOON.Tests.Stability.NicheSiteBugsTests.Hypnotube_PlayerConfigFallback_ShouldWorkWhenTagsFail" storage="d:\projects\goon-final\goon\goon.tests\bin\debug\net10.0-windows\goon.tests.dll" id="22f8746f-059e-6155-683f-d49a1c711169">
+      <Execution id="f99a00be-46bc-43d5-8b86-19a1fc48e85f" />
+      <TestMethod codeBase="d:\Projects\Goon-Final\GOON\GOON.Tests\bin\Debug\net10.0-windows\GOON.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="GOON.Tests.Stability.NicheSiteBugsTests" name="Hypnotube_PlayerConfigFallback_ShouldWorkWhenTagsFail" />
+    </UnitTest>
+    <UnitTest name="GOON.Tests.Stability.PlaybackStabilityTests.ConcurrentDisposeTest_ShouldCancelGracefully" storage="d:\projects\goon-final\goon\goon.tests\bin\debug\net10.0-windows\goon.tests.dll" id="0b91d888-2f75-63af-d9dd-cf26af370c23">
+      <Execution id="8a98b979-913a-42e6-9249-a20fe723a555" />
+      <TestMethod codeBase="d:\Projects\Goon-Final\GOON\GOON.Tests\bin\Debug\net10.0-windows\GOON.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="GOON.Tests.Stability.PlaybackStabilityTests" name="ConcurrentDisposeTest_ShouldCancelGracefully" />
+    </UnitTest>
+    <UnitTest name="GOON.Tests.Stability.ConfigVarietyTests.HypnotubeCookies_ShouldBeInjectedIntoHeaders" storage="d:\projects\goon-final\goon\goon.tests\bin\debug\net10.0-windows\goon.tests.dll" id="7955554f-f24d-8bb7-070b-d4e040fbf938">
+      <Execution id="0bfa59b5-9bcf-453e-a6aa-10d77df8f9ef" />
+      <TestMethod codeBase="d:\Projects\Goon-Final\GOON\GOON.Tests\bin\Debug\net10.0-windows\GOON.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="GOON.Tests.Stability.ConfigVarietyTests" name="HypnotubeCookies_ShouldBeInjectedIntoHeaders" />
+    </UnitTest>
+    <UnitTest name="GOON.Tests.Stability.PreBufferingTests.StartPreBuffer_Rule34Video_ShouldIncludeRefererHeader" storage="d:\projects\goon-final\goon\goon.tests\bin\debug\net10.0-windows\goon.tests.dll" id="78aa9676-a82b-1370-cff9-d9e0310594cc">
+      <Execution id="6cfc95ff-a9da-4ee1-9f14-651550f80eff" />
+      <TestMethod codeBase="d:\Projects\Goon-Final\GOON\GOON.Tests\bin\Debug\net10.0-windows\GOON.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="GOON.Tests.Stability.PreBufferingTests" name="StartPreBuffer_Rule34Video_ShouldIncludeRefererHeader" />
+    </UnitTest>
+    <UnitTest name="GOON.Tests.Stability.PlaybackStabilityTests.RapidSkipStressTest_ShouldNotCrash" storage="d:\projects\goon-final\goon\goon.tests\bin\debug\net10.0-windows\goon.tests.dll" id="1259121a-9d80-578a-a4e0-ba56d1c66b2a">
+      <Execution id="d1e56a63-afc1-4df4-a0fe-2121287554d5" />
+      <TestMethod codeBase="d:\Projects\Goon-Final\GOON\GOON.Tests\bin\Debug\net10.0-windows\GOON.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="GOON.Tests.Stability.PlaybackStabilityTests" name="RapidSkipStressTest_ShouldNotCrash" />
+    </UnitTest>
+    <UnitTest name="GOON.Tests.Stability.ConfigVarietyTests.CoordinatedStart_MasterFollower_ShouldSyncIndex" storage="d:\projects\goon-final\goon\goon.tests\bin\debug\net10.0-windows\goon.tests.dll" id="06424359-ab9b-f5c3-d7a7-a6effa467c01">
+      <Execution id="26c09289-ef48-48d0-b1aa-da5256963179" />
+      <TestMethod codeBase="d:\Projects\Goon-Final\GOON\GOON.Tests\bin\Debug\net10.0-windows\GOON.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="GOON.Tests.Stability.ConfigVarietyTests" name="CoordinatedStart_MasterFollower_ShouldSyncIndex" />
+    </UnitTest>
+    <UnitTest name="GOON.Tests.Stability.PlaybackStabilityTests.SetQueue_WhileDisposed_ShouldReturnEarly" storage="d:\projects\goon-final\goon\goon.tests\bin\debug\net10.0-windows\goon.tests.dll" id="1f49ff20-6882-a497-3e64-045db8ff3fd9">
+      <Execution id="cb3fb0da-6526-4472-8395-218acb25688b" />
+      <TestMethod codeBase="d:\Projects\Goon-Final\GOON\GOON.Tests\bin\Debug\net10.0-windows\GOON.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="GOON.Tests.Stability.PlaybackStabilityTests" name="SetQueue_WhileDisposed_ShouldReturnEarly" />
+    </UnitTest>
+    <UnitTest name="GOON.Tests.Stability.NicheSiteBugsTests.Rule34Video_DirectDownloadPriority_ShouldSelectHighestQuality" storage="d:\projects\goon-final\goon\goon.tests\bin\debug\net10.0-windows\goon.tests.dll" id="a95055be-b063-7fa2-be59-dac4ce7685f1">
+      <Execution id="815ed928-f62a-495e-9ebd-f8c62d281a73" />
+      <TestMethod codeBase="d:\Projects\Goon-Final\GOON\GOON.Tests\bin\Debug\net10.0-windows\GOON.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="GOON.Tests.Stability.NicheSiteBugsTests" name="Rule34Video_DirectDownloadPriority_ShouldSelectHighestQuality" />
+    </UnitTest>
+    <UnitTest name="GOON.Tests.Stability.ConfigVarietyTests.RememberFilePosition_WhenEnabled_ShouldSeekOnLoad" storage="d:\projects\goon-final\goon\goon.tests\bin\debug\net10.0-windows\goon.tests.dll" id="1f662c51-ebdd-ff1a-b50b-770f0396e0c5">
+      <Execution id="b23beb80-acf3-45f4-9484-c0f815062a66" />
+      <TestMethod codeBase="d:\Projects\Goon-Final\GOON\GOON.Tests\bin\Debug\net10.0-windows\GOON.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="GOON.Tests.Stability.ConfigVarietyTests" name="RememberFilePosition_WhenEnabled_ShouldSeekOnLoad" />
+    </UnitTest>
+    <UnitTest name="GOON.Tests.Stability.NicheSiteBugsTests.OpeningStall_RemoteUrl_ShouldUse60sTimeout" storage="d:\projects\goon-final\goon\goon.tests\bin\debug\net10.0-windows\goon.tests.dll" id="54a4cd90-42b7-847c-5b77-3777bc3f07e8">
+      <Execution id="deda83de-8017-4680-8481-0231e1d14bc0" />
+      <TestMethod codeBase="d:\Projects\Goon-Final\GOON\GOON.Tests\bin\Debug\net10.0-windows\GOON.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="GOON.Tests.Stability.NicheSiteBugsTests" name="OpeningStall_RemoteUrl_ShouldUse60sTimeout" />
+    </UnitTest>
+    <UnitTest name="GOON.Tests.Stability.PreBufferingTests.Skip_ShouldCancelOngoingPreBuffer" storage="d:\projects\goon-final\goon\goon.tests\bin\debug\net10.0-windows\goon.tests.dll" id="eb395f3f-d0f7-d150-5535-70b8a15d5eb1">
+      <Execution id="76891108-7bdd-4a3c-8364-0865e9569381" />
+      <TestMethod codeBase="d:\Projects\Goon-Final\GOON\GOON.Tests\bin\Debug\net10.0-windows\GOON.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="GOON.Tests.Stability.PreBufferingTests" name="Skip_ShouldCancelOngoingPreBuffer" />
+    </UnitTest>
+    <UnitTest name="GOON.Tests.Stability.NicheSiteBugsTests.PMVHaven_NestedLDJSON_ShouldExtractCorrectUrl" storage="d:\projects\goon-final\goon\goon.tests\bin\debug\net10.0-windows\goon.tests.dll" id="de1a286c-f15d-1778-8880-5729d299f0c4">
+      <Execution id="f79b0db9-9fc3-4bc5-a02f-3d0a9f88ba0d" />
+      <TestMethod codeBase="d:\Projects\Goon-Final\GOON\GOON.Tests\bin\Debug\net10.0-windows\GOON.Tests.dll" adapterTypeName="executor://xunit/VsTestRunner2/netcoreapp" className="GOON.Tests.Stability.NicheSiteBugsTests" name="PMVHaven_NestedLDJSON_ShouldExtractCorrectUrl" />
+    </UnitTest>
+  </TestDefinitions>
+  <TestEntries>
+    <TestEntry testId="0b91d888-2f75-63af-d9dd-cf26af370c23" executionId="8a98b979-913a-42e6-9249-a20fe723a555" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1f49ff20-6882-a497-3e64-045db8ff3fd9" executionId="cb3fb0da-6526-4472-8395-218acb25688b" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="78aa9676-a82b-1370-cff9-d9e0310594cc" executionId="6cfc95ff-a9da-4ee1-9f14-651550f80eff" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1259121a-9d80-578a-a4e0-ba56d1c66b2a" executionId="d1e56a63-afc1-4df4-a0fe-2121287554d5" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="a95055be-b063-7fa2-be59-dac4ce7685f1" executionId="815ed928-f62a-495e-9ebd-f8c62d281a73" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="06424359-ab9b-f5c3-d7a7-a6effa467c01" executionId="26c09289-ef48-48d0-b1aa-da5256963179" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="4a850088-c97b-bc1a-42b9-4cb7cfc23722" executionId="8103fbd8-f2cd-4a65-a557-245c2f739876" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="7955554f-f24d-8bb7-070b-d4e040fbf938" executionId="0bfa59b5-9bcf-453e-a6aa-10d77df8f9ef" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="d63ecb5e-edc7-8b86-1b96-25a11b92eee9" executionId="22792a1c-e73d-4244-b82d-cde1fb04dfba" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="eb395f3f-d0f7-d150-5535-70b8a15d5eb1" executionId="76891108-7bdd-4a3c-8364-0865e9569381" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="22f8746f-059e-6155-683f-d49a1c711169" executionId="f99a00be-46bc-43d5-8b86-19a1fc48e85f" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="de1a286c-f15d-1778-8880-5729d299f0c4" executionId="f79b0db9-9fc3-4bc5-a02f-3d0a9f88ba0d" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="54a4cd90-42b7-847c-5b77-3777bc3f07e8" executionId="deda83de-8017-4680-8481-0231e1d14bc0" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="1f662c51-ebdd-ff1a-b50b-770f0396e0c5" executionId="b23beb80-acf3-45f4-9484-c0f815062a66" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestEntry testId="591e1515-74a9-7cb2-362c-e76fa450811c" executionId="84a35e1c-47f0-4920-be97-6c09ceb29eac" testListId="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+  </TestEntries>
+  <TestLists>
+    <TestList name="Results Not in a List" id="8c84fa94-04c1-424b-9868-57a2d4851a1d" />
+    <TestList name="All Loaded Results" id="19431567-8539-422a-85d7-44ee4e166bda" />
+  </TestLists>
+  <ResultSummary outcome="Completed">
+    <Counters total="15" executed="15" passed="15" failed="0" error="0" timeout="0" aborted="0" inconclusive="0" passedButRunAborted="0" notRunnable="0" notExecuted="0" disconnected="0" warning="0" completed="0" inProgress="0" pending="0" />
+    <Output>
+      <StdOut>[xUnit.net 00:00:00.00] xUnit.net VSTest Adapter v2.5.3.1+6b60a9e56a (64-bit .NET 10.0.2)&#xD;
+[xUnit.net 00:00:00.07]   Discovering: GOON.Tests&#xD;
+[xUnit.net 00:00:00.11]   Discovered:  GOON.Tests&#xD;
+[xUnit.net 00:00:00.12]   Starting:    GOON.Tests&#xD;
+     Warning:&#xD;
+     The component "Fluent Assertions" is governed by the rules defined in the Xceed License Agreement and&#xD;
+     the Xceed Fluent Assertions Community License. You may use Fluent Assertions free of charge for&#xD;
+     non-commercial use only. An active subscription is required to use Fluent Assertions for commercial use.&#xD;
+     Please contact Xceed Sales mailto:sales@xceed.com to acquire a subscription at a very low cost.&#xD;
+     A paid commercial license supports the development and continued increasing support of&#xD;
+     Fluent Assertions users under both commercial and community licenses. Help us&#xD;
+     keep Fluent Assertions at the forefront of unit testing.&#xD;
+     For more information, visit https://xceed.com/products/unit-testing/fluent-assertions/&#xD;
+[xUnit.net 00:01:09.68]   Finished:    GOON.Tests&#xD;
+</StdOut>
+    </Output>
+  </ResultSummary>
+</TestRun>

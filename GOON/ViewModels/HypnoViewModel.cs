@@ -24,11 +24,13 @@ namespace GOON.ViewModels {
         private ConcurrentDictionary<string, int> _fileFailureCounts = new ConcurrentDictionary<string, int>(); // Track failures per file (thread-safe)
         private const int MaxFailuresPerFile = 3; // Skip a file after 3 failures
         private bool _isLoading = false; // Prevent concurrent LoadCurrentVideo() calls
+        private bool _manualPauseRequested = false; // Track if user requested pause while Opening
         private readonly object _loadLock = new object(); // Lock for loading operations
         private Uri _expectedSource = null; // Track the source we're expecting MediaOpened for
         private int _recursionDepth = 0; // Track recursion depth to prevent stack overflow
         private const int MaxRecursionDepth = 50; // Maximum recursion depth before aborting
         private CancellationTokenSource _loadCts; // Added to cancel ongoing URL extraction on Skip
+        private static readonly Random _shuffleRandom = new Random(); // Shared Random for better randomness
         
         // Pre-buffering for instant playback
         private readonly IVideoDownloadService _downloadService;
@@ -46,7 +48,18 @@ namespace GOON.ViewModels {
             set => SetProperty(ref _lastPositionRecord, value);
         }
 
-        public VideoItem CurrentItem => _currentItem;
+        public string MonitorName { get; set; } = "Unknown";
+
+        public VideoItem CurrentItem {
+            get => _currentItem;
+            protected set {
+                if (_currentItem != value) {
+                    if (_currentItem != null) _currentItem.PropertyChanged -= CurrentItem_PropertyChanged;
+                    SetProperty(ref _currentItem, value);
+                    if (_currentItem != null) _currentItem.PropertyChanged += CurrentItem_PropertyChanged;
+                }
+            }
+        }
         
         private Uri _currentSource;
         public Uri CurrentSource {
@@ -58,16 +71,27 @@ namespace GOON.ViewModels {
 
         private double _opacity;
         public virtual double Opacity {
-            get => (App.Settings != null && App.Settings.AlwaysOpaque) ? 1.0 : _opacity;
+            get => _opacity;
             set {
                 if (SetProperty(ref _opacity, value)) {
-                    Logger.Debug($"[HypnoViewModel] Opacity changed: {value} (Effective: {Opacity})");
+                    if (_currentItem != null && _currentItem.Opacity != value) {
+                        // Only push back to the shared item if we are NOT a synced follower
+                        // This prevents followers from poisoning the master's opacity in group mode
+                        if (string.IsNullOrEmpty(SyncGroupId) || IsSyncMaster) {
+                            _currentItem.Opacity = value;
+                        }
+                    }
+                    OnPropertyChanged(nameof(EffectiveOpacity));
+                    Logger.Debug($"[HypnoViewModel] Opacity changed: {value} (Effective: {EffectiveOpacity})");
                 }
             }
         }
 
+        public double EffectiveOpacity => (App.Settings != null && App.Settings.AlwaysOpaque) ? 1.0 : _opacity;
+
         public void RefreshOpacity() {
             OnPropertyChanged(nameof(Opacity));
+            OnPropertyChanged(nameof(EffectiveOpacity));
         }
 
         private double _volume;
@@ -76,6 +100,13 @@ namespace GOON.ViewModels {
             set {
                 if (SetProperty(ref _volume, value)) {
                     if (Player?.Audio != null) Player.Audio.Volume = (int)(value * 100); // Flyleaf uses 0-100
+                    if (_currentItem != null && _currentItem.Volume != value) {
+                        // Only push back to the shared item if we are NOT a synced follower
+                        // This prevents followers from muting the master in group mode
+                        if (string.IsNullOrEmpty(SyncGroupId) || IsSyncMaster) {
+                            _currentItem.Volume = value;
+                        }
+                    }
                     OnPropertyChanged(nameof(ActualVolume));
                 }
             }
@@ -108,8 +139,17 @@ namespace GOON.ViewModels {
             private set => SetProperty(ref _isReady, value);
         }
 
+        public bool IsLoading {
+            get {
+                lock (_loadLock) {
+                    return _isLoading;
+                }
+            }
+        }
+
         public bool UseCoordinatedStart { get; set; } = false;
         public string SyncGroupId { get; set; } = null;
+        public bool IsSyncMaster { get; set; } = false;
         
         public IClock ExternalClock {
             get => Player?.ExternalClock;
@@ -133,6 +173,10 @@ namespace GOON.ViewModels {
             }
         }
 
+        private VideoPlayRecord _currentPlayRecord;
+        private string _playlistHash;
+        private Guid _sessionId = Guid.NewGuid();
+        
         public int ClockDriftMs => Player?.Video.ClockDriftMs ?? 0;
         public double D3DImageLatencyMs => Player?.Video.D3DImageLatencyMs ?? 0;
         
@@ -151,16 +195,19 @@ namespace GOON.ViewModels {
         public event EventHandler RequestStop;
         public event EventHandler RequestStopBeforeSourceChange;
         public event EventHandler<MediaErrorEventArgs> MediaErrorOccurred;
+        public event EventHandler MediaOpened;
         public event EventHandler<TimeSpan> RequestSyncPosition;
         public event EventHandler RequestReady;
 
         public ICommand SkipCommand { get; }
+        public ICommand PreviousCommand { get; }
         public ICommand TogglePlayPauseCommand { get; }
 
         /// <summary>
         /// Event raised when the entire queue has failed and playback must stop
         /// </summary>
         public event EventHandler TerminalFailure;
+        public event EventHandler<MediaErrorEventArgs> MediaFailed;
         
         public void RefreshSuperResolution() {
             if (_disposed || Player == null) return;
@@ -186,6 +233,29 @@ namespace GOON.ViewModels {
 
             // Inject AI Super Resolution setting
             Config.Video.SuperResolution = App.Settings?.EnableSuperResolution ?? false;
+            // Config.Video.ClearImage = true; // Property validation failed, using default ClearScreen=true
+
+            // HLS / Streaming Optimizations for Speed & Stability
+            // HLS / Streaming Optimizations for Speed & Stability
+            // Set FFmpeg options via dictionary (properties do not exist on class)
+            if (Config.Demuxer.FormatOpt == null) Config.Demuxer.FormatOpt = new Dictionary<string, string>();
+            
+            Config.Demuxer.FormatOpt["analyzeduration"] = "3000000"; // 3s for more reliable HLS probing
+            Config.Demuxer.FormatOpt["probesize"] = "2000000";       // 2MB
+            Config.Demuxer.FormatOpt["reconnect"] = "1";
+            Config.Demuxer.FormatOpt["reconnect_streamed"] = "1";
+            Config.Demuxer.FormatOpt["reconnect_delay_max"] = "5";
+            Config.Demuxer.FormatOpt["seg_max_retry"] = "10";       // Help with HLS segment failures
+            Config.Demuxer.FormatOpt["http_persistent"] = "1";      // Keep connections alive
+
+            // Re-enabling Video Acceleration as requested
+            Config.Video.VideoAcceleration = true;
+            
+            // Fix for "Audio Only" / Black Screen with HW Acceleration ON:
+            // 1. Allow decoding even if profile doesn't perfectly match capabilities (bypasses some strict checks)
+            Config.Decoder.AllowProfileMismatch = true;
+            // 2. Use D3D11 Video Processor directly (often more stable for HLS/Web streams than internal VP)
+            Config.Video.VideoProcessor = VideoProcessors.D3D11;
             
             Player = new Player(Config);
             
@@ -194,38 +264,89 @@ namespace GOON.ViewModels {
             Player.PropertyChanged += Player_PropertyChanged;
 
             SkipCommand = new RelayCommand(_ => PlayNext(true));
+            PreviousCommand = new RelayCommand(_ => PlayPrevious(true));
             TogglePlayPauseCommand = new RelayCommand(_ => TogglePlayPause());
         }
 
+        private int _toggleClickCount = 0;
+
         public virtual void TogglePlayPause() {
-            if (_disposed) return;
-            if (MediaState == MediaState.Play) {
-                Pause();
-            } else {
-                Play();
+            _toggleClickCount++;
+            int clickId = _toggleClickCount;
+            
+            if (_disposed || Player == null) {
+                Logger.Warning($"[TogglePlayPause #{clickId}] Ignored - disposed or no player");
+                return;
             }
+
+            var status = Player.Status;
+            bool canPlay = Player.CanPlay;
+
+            Logger.Info($"[TogglePlayPause #{clickId}] Status: {status}, CanPlay: {canPlay}, Loading: {_isLoading}, ManualPause: {_manualPauseRequested}, UI: {MediaState}");
+
+            // CASE 1: Engine is not ready yet (still initializing streams)
+            if (!canPlay) {
+                Logger.Info($"[TogglePlayPause #{clickId}] CanPlay=false. Deferring pause request.");
+                _manualPauseRequested = true;
+                _mediaState = System.Windows.Controls.MediaState.Pause;
+                OnPropertyChanged(nameof(MediaState));
+                return;
+            }
+
+            // CASE 2: Video has ended. Pressing play should restart.
+            if (status == FlyleafLib.MediaPlayer.Status.Ended) {
+                Logger.Info($"[TogglePlayPause #{clickId}] Status=Ended. Seeking to start.");
+                Player.Seek(0);
+                Play();
+                _manualPauseRequested = false;
+                return;
+            }
+
+            // CASE 3: Use Flyleaf's native toggle for most reliable behavior
+            // This bypasses our complex state tracking and lets the engine decide
+            var statusBefore = Player.Status;
+            Player.TogglePlayPause();
+            var statusAfter = Player.Status;
+            
+            Logger.Info($"[TogglePlayPause #{clickId}] Native toggle: {statusBefore} -> {statusAfter}");
+            
+            // Update our UI state to match what the engine did
+            if (statusAfter == FlyleafLib.MediaPlayer.Status.Playing) {
+                _mediaState = System.Windows.Controls.MediaState.Play;
+                _manualPauseRequested = false;
+            } else {
+                _mediaState = System.Windows.Controls.MediaState.Pause;
+                // Set manual pause if we're still loading to prevent auto-play in OnMediaOpened
+                if (_isLoading || status == FlyleafLib.MediaPlayer.Status.Opening) {
+                    _manualPauseRequested = true;
+                }
+            }
+            OnPropertyChanged(nameof(MediaState));
         }
 
         public int CurrentIndex => _currentPos;
 
-        public void SetQueue(IEnumerable<VideoItem> files) {
+        public void SetQueue(IEnumerable<VideoItem> files, int startIndex = -1) {
             if (_disposed) return;
             // Unsubscribe from current item's PropertyChanged event to prevent memory leaks
-            // This must be done before changing the queue to ensure proper cleanup
+            if (CurrentItem != null) {
+                CurrentItem.PropertyChanged -= CurrentItem_PropertyChanged;
+            }
+
             lock (_loadLock) {
-                if (_currentItem != null) {
-                    _currentItem.PropertyChanged -= CurrentItem_PropertyChanged;
-                    _currentItem = null;
-                }
+                // Reset current item (event handler unsubscription handled by property setter)
+                CurrentItem = null;
                 // Reset loading state when queue changes
                 _isLoading = false;
                 // Reset recursion depth when queue changes
                 _recursionDepth = 0;
             }
             
-            // Materialize to array for indexed access - this is necessary for PlayNext() logic
             _files = files?.ToArray() ?? Array.Empty<VideoItem>();
             _currentPos = -1;
+            _manualPauseRequested = false; // Reset pause intent for new queue
+            
+            UpdatePlaylistHash();
             
             Logger.Info($"Queue updated with {_files.Length} videos");
             foreach (var f in _files) {
@@ -242,22 +363,103 @@ namespace GOON.ViewModels {
             _preBufferedPath = null;
             
             // Start playing the new queue
-            PlayNext();
+            if (startIndex >= 0 && startIndex < _files.Length) {
+                JumpToIndex(startIndex);
+            } else {
+                PlayNext();
+            }
+        }
+
+        public virtual void RemoveItems(IEnumerable<VideoItem> itemsToRemove) {
+            if (_disposed || _files == null || _files.Length == 0) return;
+            
+            // Build a set of tracking paths for fast lookup
+            var pathsToRemove = new HashSet<string>(
+                itemsToRemove.Select(x => x.TrackingPath), 
+                StringComparer.OrdinalIgnoreCase
+            );
+            
+            if (pathsToRemove.Count == 0) return;
+
+            var newFilesList = new List<VideoItem>();
+            int newCurrentPos = -1;
+            bool currentItemRemoved = false;
+            VideoItem currentItemRef = CurrentItem;
+
+            for (int i = 0; i < _files.Length; i++) {
+                var item = _files[i];
+                if (pathsToRemove.Contains(item.TrackingPath)) {
+                    if (i == _currentPos || item == currentItemRef) currentItemRemoved = true;
+                    continue;
+                }
+                
+                if (i == _currentPos || (currentItemRef != null && item == currentItemRef)) {
+                    newCurrentPos = newFilesList.Count;
+                }
+                newFilesList.Add(item);
+            }
+
+            lock (_loadLock) {
+                _files = newFilesList.ToArray();
+                _currentPos = newCurrentPos;
+                UpdatePlaylistHash();
+            }
+
+            if (_files.Length == 0) {
+                Logger.Warning($"No videos remaining in queue for {MonitorName} after removal. Triggering terminal failure.");
+                Stop();
+                TerminalFailure?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
+            if (currentItemRemoved) {
+                Logger.Info($"Current video removed from queue on {MonitorName}. Skipping to next.");
+                CurrentItem = null; // Clear highlight/current item immediately
+                PlayNext(true);
+            }
+        }
+
+        private void UpdatePlaylistHash() {
+            if (_files == null || _files.Length == 0) {
+                _playlistHash = "EMPTY";
+                return;
+            }
+            
+            try {
+                // Simple hash of file paths
+                var paths = string.Join("|", _files.Select(f => f.FilePath).OrderBy(p => p));
+                using (var md5 = System.Security.Cryptography.MD5.Create()) {
+                    var hashBytes = md5.ComputeHash(System.Text.Encoding.UTF8.GetBytes(paths));
+                    _playlistHash = BitConverter.ToString(hashBytes).Replace("-", "").Substring(0, 8);
+                }
+            } catch {
+                _playlistHash = "ERROR";
+            }
         }
 
 
 
-        public void JumpToIndex(int index) {
+        public void JumpToIndex(int index, bool force = false) {
             if (_files == null || index < 0 || index >= _files.Length) return;
-            if (_currentPos == index) return;
+            
+            // Proceed if:
+            // 1. It's a different index
+            // 2. It's a forced jump (manual skip)
+            // 3. The current player has reached the end and needs to restart (looping)
+            bool shouldJump = force || _currentPos != index || (Player != null && Player.Status == FlyleafLib.MediaPlayer.Status.Ended);
+            if (!shouldJump) return;
 
-            Logger.Info($"Jumping to index {index} (requested for sync)");
+            Logger.Info($"Jumping to index {index} (requested for sync, force={force}, sameIndex={_currentPos == index})");
             
             lock (_loadLock) {
-                _isLoading = false; // Reset loading state to allow the new jump
+                if (_isLoading) {
+                    _loadCts?.Cancel();
+                }
+                _isLoading = true; // Mark as loading immediately to prevent sync timer from starting the clock
                 _recursionDepth = 0;
             }
 
+            _manualPauseRequested = false; // Explicit user jump resets pause intent
             _currentPos = index;
             _ = LoadCurrentVideo();
         }
@@ -265,153 +467,262 @@ namespace GOON.ViewModels {
         private VideoItem _currentItem;
 
         public virtual async void PlayNext(bool force = false) {
-            if (_disposed) return;
-            if (_files == null || _files.Length == 0) return;
+            try {
+                if (_disposed) return;
 
-            // Prevent rapid/concurrent calls to PlayNext() while loading
-            // This protects against race conditions when PlayNext() is called multiple times quickly
-            lock (_loadLock) {
-                if (_isLoading && !force) {
-                    Logger.Warning("PlayNext() called while already loading, skipping to prevent race condition");
-                    return;
-                }
-                
-                if (force && _isLoading) {
-                    Logger.Info("PlayNext forced: Interrupting current load to skip.");
-                    _loadCts?.Cancel();
-                    _isLoading = false;
-                    _recursionDepth = 0; // Reset recursion depth on force skip
-                    Stop(); // Interrupt current player if it was trying to open
-                }
-                
-                _loadCts?.Cancel();
-                _loadCts = new CancellationTokenSource();
-                _isLoading = true; // Set loading flag early to prevent other PlayNext calls
-            }
+                if (force) _manualPauseRequested = false;
 
-            // Find the next valid video that hasn't failed too many times
-            int attempts = 0;
-            
-            do {
-                if (IsShuffle && _files.Length > 1) {
-                    // Smart Shuffle Logic
-                    // 1. Identify valid candidates (unplayed)
-                    var candidates = new System.Collections.Generic.List<int>();
-                    var allIndices = Enumerable.Range(0, _files.Length).ToList();
-                    
-                    // Filter out played items
-                    // We lock check against local file paths
-                    var history = new HashSet<string>(App.Settings.PlayedHistory ?? new List<string>());
-                    
-                    foreach (var i in allIndices) {
-                        if (_files[i] == null) continue;
-                        var path = _files[i].FilePath;
-                        if (!history.Contains(path)) {
-                            candidates.Add(i);
-                        }
-                    }
-
-                    // 2. If all played, reset history
-                    if (candidates.Count == 0) {
-                        Logger.Info("All videos played (Smart Shuffle). Resetting history loop.");
-                        if (App.Settings.PlayedHistory != null) {
-                            App.Settings.PlayedHistory.Clear();
-                            App.Settings.Save();
-                        }
-                        candidates = allIndices; // Fallback to all
-                    }
-
-                    // 3. Pick random
-                    if (candidates.Count > 0) {
-                        var rnd = new Random();
-                        _currentPos = candidates[rnd.Next(candidates.Count)];
-                        
-                        // 4. Record to history immediately
-                        var pickedPath = _files[_currentPos]?.FilePath;
-                        if (pickedPath != null && App.Settings.PlayedHistory != null) {
-                            App.Settings.PlayedHistory.Add(pickedPath);
-                            // Trim history if it gets too huge (optional, but good practice)
-                            if (App.Settings.PlayedHistory.Count > 10000) {
-                                App.Settings.PlayedHistory.RemoveRange(0, 1000); 
-                            }
-                            App.Settings.Save();
-                        }
-                    } else {
-                        // Should not happen if _files.Length > 0
-                        _currentPos = 0;
-                    }
-
-                } else {
-                    // Sequential Logic
-                    if (_currentPos + 1 < _files.Length) {
-                        _currentPos++;
-                    } else {
-                        _currentPos = 0; // Loop
-                    }
-                }
-                
-                attempts++;
-                
-                // Prevent infinite loop if all files have failed
-                if (attempts > _files.Length) {
-                    Logger.Warning("All videos in queue have failed too many times. Stopping playback.");
-                    MediaErrorOccurred?.Invoke(this, new MediaErrorEventArgs("All videos in queue have failed. Please check your video files."));
+                if (_files == null || _files.Length == 0) {
+                    Logger.Warning($"No videos in queue for {MonitorName}. Triggering terminal failure.");
                     TerminalFailure?.Invoke(this, EventArgs.Empty);
-                    lock (_loadLock) { _isLoading = false; }
                     return;
                 }
-                
-                // Check if current file has failed too many times
-                var item = _files[_currentPos];
-                var currentPath = item?.FilePath;
-                if (currentPath == null) continue;
 
-                if (_fileFailureCounts.TryGetValue(currentPath, out int failures) && failures >= MaxFailuresPerFile) {
-                    continue; // Skip this file, try next
-                }
+                // Record end of current video before moving to next
+                // If forced skip, count as skip
+                RecordCurrentPlayEnd(force);
 
-                // Deeper validation to avoid LoadCurrentVideo recursion
-                bool isValid = true;
-                if (item.IsUrl) {
-                    if (!FileValidator.ValidateVideoUrl(currentPath, out _)) isValid = false;
-                } else {
-                    if (!Path.IsPathRooted(currentPath) || !File.Exists(currentPath)) isValid = false;
-                }
-
-                if (!isValid) {
-                    // Mark as failed and continue
-                    _fileFailureCounts.AddOrUpdate(currentPath, MaxFailuresPerFile, (k, v) => MaxFailuresPerFile);
+                // Prevent rapid/concurrent calls to PlayNext() while loading
+                // This protects against race conditions when PlayNext() is called multiple times quickly
+                lock (_loadLock) {
+                    if (_isLoading && !force) {
+                        Logger.Warning("PlayNext() called while already loading, skipping to prevent race condition");
+                        return;
+                    }
                     
-                    // Log telemetry
-                    if (item.IsUrl) {
-                        try {
-                            var uri = new Uri(currentPath);
-                            App.Telemetry?.LogUrlFailure(uri.Host);
-                        } catch {
-                            App.Telemetry?.LogUrlFailure("invalid-url");
+                    if (force && _isLoading) {
+                        Logger.Info("PlayNext forced: Interrupting current load to skip.");
+                        _loadCts?.Cancel();
+                        _isLoading = false;
+                        _recursionDepth = 0; // Reset recursion depth on force skip
+                        Stop(); // Interrupt current player if it was trying to open
+                    }
+                    
+                    _loadCts?.Cancel();
+                    _loadCts = new CancellationTokenSource();
+                    _isLoading = true; // Set loading flag early to prevent other PlayNext calls
+                }
+
+                // Find the next valid video that hasn't failed too many times
+                // --- 0. FOLLOWER SYNC CHECK ---
+                // If we're a follower in a coordinated group, we don't make our own decisions.
+                // We forward the request to the master or wait for the broadcast.
+                if (!string.IsNullOrEmpty(SyncGroupId) && !IsSyncMaster) {
+                    if (force) {
+                        Logger.Info($"[PlayNext] {this.MonitorName} (Follower) received manual skip. Requesting group skip via master.");
+                        if (ServiceContainer.TryGet<VideoPlayerService>(out var vps)) {
+                            // Find the master for this group and trigger skip
+                            var master = vps.ActiveViewModels.FirstOrDefault(vm => vm.SyncGroupId == this.SyncGroupId && vm.IsSyncMaster);
+                            master?.PlayNext(true);
                         }
                     } else {
-                        App.Telemetry?.LogFormatFailure(System.IO.Path.GetExtension(currentPath));
+                        Logger.Debug($"[PlayNext] {this.MonitorName} (Follower) ignoring auto-skip, waiting for master sync.");
                     }
-                    continue;
+                    _isLoading = false; 
+                    return;
                 }
-                
-                break; // Found a valid file
-            } while (true);
 
-            await LoadCurrentVideo();
-            Logger.Info($"Next video: #{_currentPos} - {_currentItem?.FileName ?? "Unknown"}");
+                int attempts = 0;
+                do {
+                    if (IsShuffle && _files.Length > 1) {
+                        Logger.Debug($"[PlayNext] {this.MonitorName} (Master) shuffling...");
+                        
+                        if (App.Settings.CurrentShuffleMode == ShuffleMode.Smart && ServiceContainer.TryGet<ShuffleScoringEngine>(out var engine)) {
+                            _currentPos = engine.SelectBestVideo(_files, _playlistHash, App.Settings, _currentPos);
+                        } else {
+                             // Simple Shuffle Logic (Legacy fallback)
+                            var candidates = new System.Collections.Generic.List<int>();
+                            var allIndices = Enumerable.Range(0, _files.Length).ToList();
+                            var history = new HashSet<string>(App.Settings.PlayedHistory ?? new List<string>());
+                            
+                            foreach (var i in allIndices) {
+                                if (_files[i] == null) continue;
+                                if (i == _currentPos) continue; 
+                                if (!history.Contains(_files[i].FilePath)) candidates.Add(i);
+                            }
+
+                            if (candidates.Count == 0) {
+                                App.Settings.PlayedHistory?.Clear();
+                                App.Settings.Save();
+                                candidates = allIndices.Where(i => i != _currentPos && _files[i] != null).ToList();
+                            }
+
+                            if (candidates.Count > 0) {
+                                _currentPos = candidates[_shuffleRandom.Next(candidates.Count)];
+                                
+                                var pickedPath = _files[_currentPos]?.FilePath;
+                                if (pickedPath != null && App.Settings.PlayedHistory != null) {
+                                    App.Settings.PlayedHistory.Add(pickedPath);
+                                    if (App.Settings.PlayedHistory.Count > 10000) App.Settings.PlayedHistory.RemoveRange(0, 1000);
+                                    App.Settings.Save();
+                                }
+                            } else {
+                                _currentPos = (_currentPos + 1) % _files.Length;
+                            }
+                        }
+                    } else {
+                        // Sequential Logic
+                        _currentPos = (_currentPos + 1) % _files.Length;
+                    }
+                    
+                    // --- 1. MASTER BROADCAST ---
+                    // After master decides the next index, tell all followers
+                    if (!string.IsNullOrEmpty(SyncGroupId) && IsSyncMaster) {
+                        if (ServiceContainer.TryGet<VideoPlayerService>(out var vps)) {
+                            vps.BroadcastIndexToGroup(SyncGroupId, _currentPos, force);
+                        }
+                    }
+                    
+                    attempts++;
+                    if (attempts > _files.Length) {
+                        Logger.Error("No valid files found in playlist after full cycle. Stopping.");
+                        Application.Current?.Dispatcher?.Invoke(() => {
+                            Stop();
+                            TerminalFailure?.Invoke(this, EventArgs.Empty);
+                        });
+                        _isLoading = false;
+                        return;
+                    }
+                } while (_files[_currentPos] == null || (_fileFailureCounts.TryGetValue(_files[_currentPos].FilePath, out int fails) && fails >= 3));
+
+                Logger.Info($"[PlayNext] {this.MonitorName} selected next video: #{_currentPos} - {_files[_currentPos].FileName}");
+                
+                StartNewPlayRecord(_files[_currentPos].FilePath);
+                _ = LoadCurrentVideo();
+            } catch (Exception ex) {
+                Logger.Error($"[PlayNext] Unhandled exception on {MonitorName}", ex);
+                _isLoading = false;
+            }
+        }
+
+        public virtual async void PlayPrevious(bool force = false) {
+            try {
+                if (_disposed) return;
+
+                if (force) _manualPauseRequested = false;
+
+                if (_files == null || _files.Length == 0) {
+                    Logger.Warning($"No videos in queue for {MonitorName}. Triggering terminal failure.");
+                    TerminalFailure?.Invoke(this, EventArgs.Empty);
+                    return;
+                }
+
+                RecordCurrentPlayEnd(force);
+
+                lock (_loadLock) {
+                    if (_isLoading && !force) return;
+                    
+                    if (force && _isLoading) {
+                        _loadCts?.Cancel();
+                        _isLoading = false;
+                        _recursionDepth = 0;
+                        Stop();
+                    }
+                    
+                    _loadCts?.Cancel();
+                    _loadCts = new CancellationTokenSource();
+                    _isLoading = true;
+                }
+
+                if (!string.IsNullOrEmpty(SyncGroupId) && !IsSyncMaster) {
+                    if (force) {
+                        Logger.Info($"[PlayPrevious] {this.MonitorName} (Follower) received manual skip. Requesting group skip via master.");
+                        if (ServiceContainer.TryGet<VideoPlayerService>(out var vps)) {
+                            var master = vps.ActiveViewModels.FirstOrDefault(vm => vm.SyncGroupId == this.SyncGroupId && vm.IsSyncMaster);
+                            master?.PlayPrevious(true);
+                        }
+                    }
+                    _isLoading = false; 
+                    return;
+                }
+
+                int attempts = 0;
+                do {
+                    // Previous always goes sequentially backwards even if shuffle is on
+                    // This is more intuitive for users (going back to what they just saw)
+                    _currentPos = (_currentPos - 1 + _files.Length) % _files.Length;
+                    
+                    if (!string.IsNullOrEmpty(SyncGroupId) && IsSyncMaster) {
+                        if (ServiceContainer.TryGet<VideoPlayerService>(out var vps)) {
+                            vps.BroadcastIndexToGroup(SyncGroupId, _currentPos, force);
+                        }
+                    }
+                    
+                    attempts++;
+                    if (attempts > _files.Length) {
+                        Logger.Error("No valid files found in playlist after full cycle. Stopping.");
+                        Application.Current?.Dispatcher?.Invoke(() => {
+                            Stop();
+                            TerminalFailure?.Invoke(this, EventArgs.Empty);
+                        });
+                        _isLoading = false;
+                        return;
+                    }
+                } while (_files[_currentPos] == null || (_fileFailureCounts.TryGetValue(_files[_currentPos].FilePath, out int fails) && fails >= 3));
+
+                Logger.Info($"[PlayPrevious] {this.MonitorName} selected previous video: #{_currentPos} - {_files[_currentPos].FileName}");
+                
+                StartNewPlayRecord(_files[_currentPos].FilePath);
+                _ = LoadCurrentVideo();
+            } catch (Exception ex) {
+                Logger.Error($"[PlayPrevious] Unhandled exception on {MonitorName}", ex);
+                _isLoading = false;
+            }
+        }
+
+        private void RecordCurrentPlayEnd(bool wasSkipped = false) {
+            if (_currentPlayRecord == null || Player == null) return;
+
+            if (ServiceContainer.TryGet<PlayHistoryService>(out var historyService)) {
+                // CurTime is in 100ns units (ticks), convert to ms
+                _currentPlayRecord.WatchDurationMs = Player.CurTime / 10000;
+                _currentPlayRecord.VideoDurationMs = Math.Max(0, Player.Duration) / 10000;
+                
+                // If duration is 0, we can't calculate percentage, but assume not a complete watch
+                double percent = _currentPlayRecord.VideoDurationMs > 0 
+                    ? (double)_currentPlayRecord.WatchDurationMs / _currentPlayRecord.VideoDurationMs 
+                    : 0;
+
+                _currentPlayRecord.WasSkipped = wasSkipped || (percent < 0.3 && _currentPlayRecord.VideoDurationMs > 10000); // Only small percent count if not a very short video
+                _currentPlayRecord.WasCompleted = !wasSkipped && (percent > 0.9);
+                
+                historyService.AddRecord(_currentPlayRecord);
+                _currentPlayRecord = null;
+            }
+        }
+
+        private void StartNewPlayRecord(string filePath) {
+            _currentPlayRecord = new VideoPlayRecord {
+                FilePath = filePath,
+                PlayedAt = DateTime.Now,
+                SessionId = _sessionId,
+                PlaylistHash = _playlistHash
+            };
         }
 
         private async Task LoadCurrentVideo() {
             if (_disposed) return;
-            // Prevent concurrent calls to LoadCurrentVideo
+            
+            // Ensure we yield immediately to the caller (e.g., SetQueue or sync timer)
+            // to avoid blocking the UI thread during the synchronous initial parts of video opening.
+            await Task.Yield();
+
+            CancellationToken token;
             lock (_loadLock) {
-                if (_isLoading && _currentItem != null) {
-                    // This flag is already set by PlayNext or initial load
-                }
+                if (_loadCts == null) _loadCts = new CancellationTokenSource();
+                token = _loadCts.Token;
+                
                 _isLoading = true; // Set flag inside lock to prevent race condition
+                // DO NOT RESET _manualPauseRequested HERE. It must persist through internal retries and async ops.
+                // It is only reset by explicit user actions (Play, Skip, Jump, SetQueue).
+                
                 IsReady = false; // Reset ready flag as we are starting a new load
+                
+                // Force UI to show "Pause" icon immediately since we are starting to load/play
+                // This prevents the UI from showing "Play" icon briefly if Player.Status flickers to Stopped
+                Application.Current?.Dispatcher?.InvokeAsync(() => {
+                    MediaState = System.Windows.Controls.MediaState.Play;
+                });
                 
                 // Check recursion depth to prevent stack overflow
                 _recursionDepth++;
@@ -419,26 +730,25 @@ namespace GOON.ViewModels {
                     Logger.Error($"Maximum recursion depth ({MaxRecursionDepth}) exceeded in LoadCurrentVideo. Stopping playback.");
                     _isLoading = false;
                     _recursionDepth = 0;
-                    MediaErrorOccurred?.Invoke(this, new MediaErrorEventArgs("Playback stopped due to excessive errors. Please check your video files."));
+                    MediaErrorOccurred?.Invoke(this, new MediaErrorEventArgs("Playback stopped due to excessive errors. Please check your video files.", _currentItem));
                     return;
                 }
             }
 
             try {
-                if (_currentItem != null) {
-                    _currentItem.PropertyChanged -= CurrentItem_PropertyChanged;
-                }
+                if (token.IsCancellationRequested) return;
 
                 if (_files == null || _files.Length == 0 || _currentPos < 0 || _currentPos >= _files.Length) {
                     lock (_loadLock) {
                         _isLoading = false;
-                        _recursionDepth = Math.Max(0, _recursionDepth - 1); // Decrement on exit
                     }
                     return;
                 }
 
-                _currentItem = _files[_currentPos];
-                _currentItem.PropertyChanged += CurrentItem_PropertyChanged;
+                CurrentItem = _files[_currentPos];
+                // IsPlaying highlight is now handled centrally by VideoPlayerService
+                // (Event subscription handled by property setter)
+                // (Event subscription handled by property setter)
                 
                 var path = _currentItem.FilePath;
                 Logger.Info($"LoadCurrentVideo: Processing item '{_currentItem.FileName}' with path: {path}");
@@ -459,12 +769,13 @@ namespace GOON.ViewModels {
                     Logger.Info($"LoadCurrentVideo: Item is a URL, validating...");
                     // For URLs, validate URL format
                     if (!FileValidator.ValidateVideoUrl(path, out string urlValidationError)) {
-                        Logger.Warning($"URL validation failed for '{_currentItem.FileName}': {urlValidationError}. Skipping to next video.");
-                        lock (_loadLock) {
-                            _isLoading = false;
-                            _recursionDepth = Math.Max(0, _recursionDepth - 1);
-                        }
-                        PlayNext();
+                        Logger.Warning($"URL validation failed for '{_currentItem.FileName}': {urlValidationError}. Reporting failure.");
+                        
+                        // Increment failure count for this item
+                        _fileFailureCounts.AddOrUpdate(path, 1, (k, v) => v + 1);
+                        _consecutiveFailures++;
+
+                        OnMediaFailed(new ArgumentException($"URL validation failed: {urlValidationError}"), token);
                         return;
                     }
                     Logger.Info($"LoadCurrentVideo: URL validation passed for: {path}");
@@ -473,9 +784,21 @@ namespace GOON.ViewModels {
                     if (FileValidator.IsPageUrl(path)) {
                         var cached = _downloadService.GetCachedFilePath(path);
                         if (string.IsNullOrEmpty(cached) || cached.EndsWith(".partial")) {
+                            if (token.IsCancellationRequested) return;
                             Logger.Info($"LoadCurrentVideo: Page URL detected, resolving: {path}");
-                            var token = _loadCts?.Token ?? CancellationToken.None;
-                            var resolved = await _urlExtractor.ExtractVideoUrlAsync(path, token);
+                            
+                            // Add a timeout for resolution (30s) to prevent hanging the player
+                            var resolutionTask = _urlExtractor.ExtractVideoUrlAsync(path, token);
+                            var timeoutTask = Task.Delay(30000, token);
+                            var completedTask = await Task.WhenAny(resolutionTask, timeoutTask);
+
+                            string resolved = null;
+                            if (completedTask == resolutionTask) {
+                                resolved = await resolutionTask;
+                            } else {
+                                Logger.Warning($"LoadCurrentVideo: Resolution timed out after 30s for: {path}");
+                            }
+
                             if (!string.IsNullOrEmpty(resolved)) {
                                 Logger.Info($"LoadCurrentVideo: Successfully resolved page URL to: {resolved}");
                                 path = resolved;
@@ -484,12 +807,15 @@ namespace GOON.ViewModels {
                                     Logger.Info("LoadCurrentVideo: Resolution cancelled.");
                                     return;
                                 }
-                                Logger.Warning($"LoadCurrentVideo: Failed to resolve page URL: {path}. Skipping.");
-                                lock (_loadLock) {
-                                    _isLoading = false;
-                                    _recursionDepth = Math.Max(0, _recursionDepth - 1);
-                                }
-                                PlayNext();
+                                
+                                string errorDetail = completedTask == timeoutTask ? "Resolution timed out (30s)" : "Extraction failed";
+                                Logger.Warning($"LoadCurrentVideo: {errorDetail} for page URL: {path}. Reporting failure.");
+                                
+                                // Increment failure count for this URL
+                                _fileFailureCounts.AddOrUpdate(path, 1, (k, v) => v + 1);
+                                _consecutiveFailures++;
+
+                                OnMediaFailed(new Exception($"Failed to resolve video URL: {errorDetail}"), token);
                                 return;
                             }
                         }
@@ -513,35 +839,47 @@ namespace GOON.ViewModels {
                         }
 
                         if (!forceStream) {
-                            Logger.Info($"[PreBuffer] Using cached file: {Path.GetFileName(cachedPath)}");
-                            path = cachedPath;
-                            // Change item behavior to treat as local file now
-                            _currentItem = new VideoItem(cachedPath) {
-                                Title = _currentItem.Title,
-                                Opacity = _currentItem.Opacity,
-                                Volume = _currentItem.Volume,
-                                // CRITICAL: Preserve the OriginalPageUrl from the previous item or use the path if it was a page URL
-                                OriginalPageUrl = !string.IsNullOrEmpty(_currentItem.OriginalPageUrl) ? _currentItem.OriginalPageUrl : (FileValidator.IsPageUrl(path) ? path : null)
-                            };
-                            _currentItem.PropertyChanged += CurrentItem_PropertyChanged;
+                            // Validate the cached file before using it
+                            if (FileValidator.IsCorruptedCacheFile(cachedPath)) {
+                                Logger.Warning($"[PreBuffer] Cached file is corrupted or a manifest: {cachedPath}. Deleting and falling back to streaming.");
+                                try { File.Delete(cachedPath); } catch { }
+                            } else {
+                                Logger.Info($"[PreBuffer] Using cached file: {Path.GetFileName(cachedPath)}");
+                                path = cachedPath;
+                                
+                                // Update existing item instead of replacing it to maintain UI highlighting
+                                if (string.IsNullOrEmpty(CurrentItem.OriginalPageUrl)) {
+                                    CurrentItem.OriginalPageUrl = FileValidator.IsPageUrl(_currentItem.FilePath) ? _currentItem.FilePath : null;
+                                }
+                                CurrentItem.FilePath = cachedPath;
+                            }
                         }
                     }
                 } else {
                     // For local files, check if path is rooted
                     if (!Path.IsPathRooted(path)) {
                         Logger.Warning($"Non-rooted path detected for '{_currentItem.FileName}': {path}. Skipping to next video.");
-                        PlayNext();
+                        PlayNext(true);
                         return;
                     }
                     
                     // Re-validate file existence before attempting to load
                     if (!FileValidator.ValidateVideoFile(path, out string validationError) && !path.EndsWith(".downloading")) {
                         Logger.Warning($"File validation failed for '{_currentItem.FileName}': {validationError}. Skipping to next video.");
+                        
+                        // Cleanup corrupted cache files immediately (e.g. HLS manifests saved as MP4)
+                        if (path.Contains("VideoCache") && File.Exists(path)) {
+                            try { File.Delete(path); Logger.Info($"Deleted corrupted cache file: {path}"); } catch { }
+                        }
+                        
+                        // Increment failure count for this path
+                        _fileFailureCounts.AddOrUpdate(path, 1, (k, v) => v + 1);
+                        _consecutiveFailures++;
+
                         lock (_loadLock) {
                             _isLoading = false;
-                            _recursionDepth = Math.Max(0, _recursionDepth - 1);
                         }
-                        PlayNext();
+                        PlayNext(true);
                         return;
                     }
                 }
@@ -549,6 +887,8 @@ namespace GOON.ViewModels {
                 // Apply per-monitor/per-item settings
                 Opacity = _currentItem.Opacity;
                 Volume = _currentItem.Volume;
+
+                // --- SITE-SPECIFIC SETTINGS (Moved down to be closer to Open) ---
                 
                 RequestStopBeforeSourceChange?.Invoke(this, EventArgs.Empty);
                 
@@ -559,6 +899,8 @@ namespace GOON.ViewModels {
                 if (Path.IsPathRooted(path) && !path.StartsWith("http")) {
                    if (!File.Exists(path)) {
                        Logger.Error($"LoadCurrentVideo: File not found at path: {path}");
+                       OnMediaFailed(new FileNotFoundException("File not found", path), token);
+                       return;
                    } else {
                        Logger.Info($"LoadCurrentVideo: File verified to exist: {path}");
                        
@@ -611,47 +953,84 @@ namespace GOON.ViewModels {
                     Config.Demuxer.UserAgent = App.Settings?.UserAgent;
                     Config.Demuxer.Cookies   = App.Settings?.Cookies;
                     
-                    // CRITICAL: Inject Referer header for sites like Rule34Video
+                    // Default network stability options
+                    Config.Demuxer.FormatOpt["reconnect"] = "1";
+                    Config.Demuxer.FormatOpt["reconnect_streamed"] = "1";
+                    Config.Demuxer.FormatOpt["reconnect_delay_max"] = "5";
+                    Config.Demuxer.FormatOpt["reconnect_on_network_error"] = "1";
+                    Config.Demuxer.FormatOpt["reconnect_on_http_error"] = "1";
+                    Config.Demuxer.FormatOpt["http_persistent"] = "1";
+                    Config.Demuxer.FormatOpt["tls_verify"] = "0"; // Helps with handshake failures on some CDNs
+                    Config.Demuxer.FormatOpt["rw_timeout"] = "15000000"; // 15s socket timeout (in microseconds)
+
+                    // --- SITE-SPECIFIC HEADER INJECTION ---
                     string referer = _currentItem.OriginalPageUrl;
                     
-                    // If we resolved a Page URL locally, that page URL is the Referer
+                    // Common site detection
+                    if (path.Contains("rule34video.com")) {
+                        referer = "https://rule34video.com/";
+                    } else if (path.Contains("pmvhaven.com")) {
+                         referer = "https://pmvhaven.com/";
+                    } else if (path.Contains("hypnotube.com")) {
+                        if (App.Settings != null && !string.IsNullOrEmpty(App.Settings.HypnotubeCookies)) {
+                            Config.Demuxer.FormatOpt["headers"] = $"Cookie: {App.Settings.HypnotubeCookies.Trim()}\r\n";
+                        }
+                    }
+
+                    // If we resolved a Page URL locally, that page URL is a good Referer backup
                     if (string.IsNullOrEmpty(referer) && FileValidator.IsPageUrl(_currentItem.FilePath)) {
                         referer = _currentItem.FilePath;
                     }
 
                     if (!string.IsNullOrEmpty(referer)) {
                         Logger.Info($"LoadCurrentVideo: Injecting Referer header: {referer}");
-                        if (Config.Demuxer.FormatOpt == null) Config.Demuxer.FormatOpt = new System.Collections.Generic.Dictionary<string, string>();
+                        Config.Demuxer.FormatOpt["referer"] = referer;
                         Config.Demuxer.FormatOpt["headers"] = $"Referer: {referer}\r\n";
                     } else {
-                        // Clear headers if no referer (to prevent leaking)
-                         if (Config.Demuxer.FormatOpt != null && Config.Demuxer.FormatOpt.ContainsKey("headers")) {
-                            Config.Demuxer.FormatOpt.Remove("headers");
-                         }
+                        Config.Demuxer.FormatOpt.Remove("referer");
+                        Config.Demuxer.FormatOpt.Remove("headers");
+                    }
+
+                    // Monitor for "Opening" stall
+                    // Increase timeout for remote URLs significantly (60s) vs local files (30s)
+                    // PMVHaven and other HLS streams can take 20-30s to probe and buffer variants.
+                    int timeoutMs = _currentItem.IsUrl ? 60000 : 30000;
+                    _ = Task.Delay(timeoutMs, token).ContinueWith(t => {
+                        if (t.IsCanceled || _disposed) return;
+                        
+                        var status = Player.Status;
+                        var isLoading = _isLoading;
+                        if (isLoading && status == FlyleafLib.MediaPlayer.Status.Opening) {
+                            Logger.Warning($"LoadCurrentVideo: Player seems stuck in 'Opening' status for {timeoutMs/1000}s. Reporting failure.");
+                            var ex = new TimeoutException($"Video source timed out during opening ({timeoutMs/1000}s stall).");
+                            if (Application.Current?.Dispatcher != null) {
+                                Application.Current.Dispatcher.InvokeAsync(() => OnMediaFailed(ex, token));
+                            } else {
+                                OnMediaFailed(ex, token);
+                            }
+                        }
+                    }, TaskContinuationOptions.ExecuteSynchronously);
+
+                    if (token.IsCancellationRequested) {
+                        Logger.Info("LoadCurrentVideo: Aborting Player.Open because task was cancelled.");
+                        return;
                     }
 
                     Logger.Info($"LoadCurrentVideo: Opening path in Flyleaf: {path}");
                     CurrentSource = newSource;
-                    Player.Open(path);
                     
-                    // Monitor for "Opening" stall
-                    _ = Task.Delay(10000).ContinueWith(t => {
-                        if (_disposed) return;
-                        if (_isLoading && Player.Status == Status.Opening) {
-                            Logger.Warning($"LoadCurrentVideo: Player seems stuck in 'Opening' status for 10s. Path: {path}");
-                        }
-                    });
+                    // Call Open in a separate task to ensure zero risk of blocking the UI thread
+                    // during heavy probing or network initialization.
+                    await Task.Run(() => Player.Open(path), token);
+                    Logger.Info("LoadCurrentVideo: Player.Open call returned.");
                 } catch (Exception ex) {
-                     Logger.Error($"LoadCurrentVideo: Error opening '{path}' in Flyleaf: {ex.Message}");
-                     OnMediaFailed(ex);
+                    Logger.Error("Error in LoadCurrentVideo()", ex);
+                    OnMediaFailed(ex, token);
                 }
-            } catch (Exception ex) {
-                Logger.Error("Error in LoadCurrentVideo()", ex);
+            } finally {
                 lock (_loadLock) {
-                    _isLoading = false;
                     _recursionDepth = Math.Max(0, _recursionDepth - 1);
                 }
-                PlayNext();
             }
         }
 
@@ -668,7 +1047,32 @@ namespace GOON.ViewModels {
             if (_disposed) return;
             
             if (e.PropertyName == nameof(Player.Status)) {
+                // Sync internal MediaState with actual engine status to prevent stale state (fixes double-click issues)
+                // Treat Opening as Playing (Active) so UI shows Pause icon
+                if (Player.Status == FlyleafLib.MediaPlayer.Status.Playing || Player.Status == FlyleafLib.MediaPlayer.Status.Opening) {
+                    // Critical: If user manually requested pause during Opening, DO NOT revert UI to Play (Pause Icon).
+                    // This prevents the UI from flickering "Pause ||" when the user just clicked "Pause" (showing >)
+                    if (!_manualPauseRequested) {
+                        _mediaState = System.Windows.Controls.MediaState.Play;
+                        OnPropertyChanged(nameof(MediaState));
+                    }
+                } else if (Player.Status == FlyleafLib.MediaPlayer.Status.Paused || Player.Status == FlyleafLib.MediaPlayer.Status.Stopped) {
+                    // Ignore Stopped/Paused status updates if we are in the middle of loading a video
+                    // This prevents the UI from flipping to "Play" icon momentarily while the player initializes
+                    if (!_isLoading) {
+                        _mediaState = System.Windows.Controls.MediaState.Pause;
+                        OnPropertyChanged(nameof(MediaState));
+                    }
+                }
+
                 if (Player.Status == FlyleafLib.MediaPlayer.Status.Ended) {
+                    // Critical: Ignore 'Ended' status if we are in the middle of loading a video.
+                    // Flyleaf often fires 'Ended' for the PREVIOUS video when a new Open() is called.
+                    // Processing this would trigger a recursive Skip loop.
+                    if (_isLoading) {
+                        Logger.Warning($"Ignoring Status.Ended for '{MonitorName}' because a new video is already loading.");
+                        return;
+                    }
                     OnMediaEnded();
                 }
             } 
@@ -696,6 +1100,7 @@ namespace GOON.ViewModels {
 
         public void OnMediaEnded() {
             if (_disposed) return;
+            IsReady = false; 
             Logger.Info($"[HypnoViewModel] Media ended: {CurrentSource} (Pos: #{_currentPos})");
             
             _consecutiveFailures = 0; // Reset failure counter on successful playback
@@ -717,10 +1122,8 @@ namespace GOON.ViewModels {
                 }
             }
             
-            // Reset recursion depth on successful completion
-            lock (_loadLock) {
-                _recursionDepth = 0;
-            }
+            // Do NOT reset recursion depth here; let it be handled by success/fail
+            // to correctly catch rapid recursive failures.
             
             PlayNext();
         }
@@ -762,7 +1165,10 @@ namespace GOON.ViewModels {
             }
             Player.Speed = _speedRatio;
             
-            if (UseCoordinatedStart) {
+            if (_manualPauseRequested) {
+                 Logger.Info("[HypnoViewModel] Manual pause requested during load. Preventing auto-play.");
+                 Pause();
+            } else if (UseCoordinatedStart) {
                 // Coordinated start: Request PLAY to allow buffering to complete, 
                 // but rely on the stopped SharedClock to keep it frozen at frame 0.
                 // NOTE: We MUST call Play() here, not just set MediaState, to trigger the engine.
@@ -777,14 +1183,25 @@ namespace GOON.ViewModels {
             
             // Handle pending seek (e.g., from RestoreState) - SEEK AFTER PLAY to ensure it applies
             if (_pendingSeekPosition.HasValue) {
-                int seekMs = (int)_pendingSeekPosition.Value.TotalMilliseconds;
-                Logger.Info($"[Resume] Seeking to saved position: {_pendingSeekPosition.Value:mm\\:ss} ({seekMs}ms)");
+                var pos = _pendingSeekPosition.Value;
+                int seekMs = (int)pos.TotalMilliseconds;
+                Logger.Info($"[Resume] Seeking to saved position: {pos:mm\\:ss} ({seekMs}ms)");
+                
+                // For coordinated groups, the master's resume position drives the shared clock
+                if (UseCoordinatedStart && IsSyncMaster && ExternalClock is Classes.SharedClock sharedClock) {
+                    Logger.Info($"[Resume] Sync master updating SharedClock to resumed position: {pos}");
+                    sharedClock.Seek(pos.Ticks);
+                }
+
                 Player.Seek(seekMs);
                 _pendingSeekPosition = null;
             }
 
             // Start pre-buffering the next video for instant playback
             StartPreBuffer();
+
+            // Notify listeners that media has opened successfully
+            MediaOpened?.Invoke(this, EventArgs.Empty);
         }
         
         /// <summary>
@@ -808,6 +1225,13 @@ namespace GOON.ViewModels {
                 
                 var item = _files[pos];
                 if (item?.IsUrl == true) {
+                    // CRITICAL: Unknown/Live streams (.m3u8, .mpd) cannot be pre-buffered via simple download.
+                    // Downloading them just gets the playlist text file, which breaks the player if treated as a video cache.
+                    // We typically exclude them unless we implement a complex stream downloader.
+                    if (item.FilePath.Contains(".m3u8") || item.FilePath.Contains(".mpd")) {
+                         continue;
+                    }
+
                     var quality = QualitySelector.DetectQualityFromUrl(item.FilePath);
                     candidates.Add((item, quality, pos));
                 }
@@ -859,10 +1283,19 @@ namespace GOON.ViewModels {
                         Logger.Info($"[PreBuffer] Resolving site URL: {nextItem.FileName}");
                         var resolved = await _urlExtractor.ExtractVideoUrlAsync(videoUrl, cancellationToken);
                         if (!string.IsNullOrEmpty(resolved) && !cancellationToken.IsCancellationRequested) {
+                            if (resolved.Contains(".m3u8") || resolved.Contains(".mpd")) {
+                                Logger.Info($"[PreBuffer] Resolved to stream ({Path.GetExtension(resolved)}), skipping caching: {nextItem.FileName}");
+                                nextItem.FilePath = resolved; // Still update path so it loads immediately later
+                                return;
+                            }
+
                             finalUrl = resolved;
                             // Update the item so LoadCurrentVideo picks it up immediately
                             nextItem.FilePath = resolved; 
                             Logger.Info($"[PreBuffer] Successfully resolved {nextItem.FileName}");
+                        } else if (!cancellationToken.IsCancellationRequested) {
+                            Logger.Warning($"[PreBuffer] Failed to resolve site URL: {nextItem.FileName}. Aborting pre-buffer for this item.");
+                            return; // DO NOT proceed with downloading the page URL!
                         }
                     }
 
@@ -892,12 +1325,23 @@ namespace GOON.ViewModels {
             }, cancellationToken);
         }
 
-        public void OnMediaFailed(Exception ex) {
+        public void OnMediaFailed(Exception ex, CancellationToken token = default) {
+            MediaFailed?.Invoke(this, new MediaErrorEventArgs(ex.Message, _currentItem, ex));
             if (_disposed) return;
+            IsReady = false; 
             // Reset loading flag on failure
             // This must be done in a lock to ensure thread safety
             lock (_loadLock) {
                 _isLoading = false;
+                // Capture current load token if none provided
+                if (token == default && _loadCts != null) token = _loadCts.Token;
+            }
+
+            // CRITICAL: If the player is stuck in 'Opening', force it to stop
+            // to break any underlying stalls before we attempt to skip.
+            if (Player.Status == FlyleafLib.MediaPlayer.Status.Opening) {
+                Logger.Warning("OnMediaFailed: Player reported failure while in 'Opening' status. Forcing stop.");
+                Player.Stop();
             }
             
             var fileName = _currentItem?.FileName ?? "Unknown";
@@ -946,9 +1390,46 @@ namespace GOON.ViewModels {
                 }
             }
             
+            // --- Flyleaf / Web Stream Specific Error Handling ---
+            bool isForbiddenError = ex.Message.Contains("403 Forbidden") || (ex.InnerException?.Message.Contains("403 Forbidden") ?? false);
+            bool isNotFoundError = ex.Message.Contains("404 Not Found") || (ex.InnerException?.Message.Contains("404 Not Found") ?? false);
+            
+            if ((isForbiddenError || isNotFoundError) && _currentItem?.IsUrl == true) {
+                // If we have an OriginalPageUrl and it's different from the current FilePath, 
+                // it means the temporary streaming URL we resolved earlier has likely expired.
+                if (!string.IsNullOrEmpty(_currentItem.OriginalPageUrl) && _currentItem.FilePath != _currentItem.OriginalPageUrl) {
+                    Logger.Warning($"[HypnoViewModel] Stream URL expired ({(isForbiddenError ? "403" : "404")}) for {fileName}. Clearing cache for '{_currentItem.OriginalPageUrl}'.");
+                    PersistentUrlCache.Instance.Remove(_currentItem.OriginalPageUrl);
+                    
+                    // Reset FilePath to OriginalPageUrl so the next attempt triggers fresh extraction
+                    _currentItem.FilePath = _currentItem.OriginalPageUrl;
+                    
+                    specificAdvice = " The temporary streaming link has expired. The cache has been cleared and it will be re-acquired on the next attempt.";
+                } else {
+                    // It's a 403/404 on the page itself, or we don't have a fallback.
+                    isUrlOpenError = true;
+                    specificAdvice = $" Server returned {(isForbiddenError ? "403 Forbidden" : "404 Not Found")}. The video may have been removed or is currently unavailable.";
+                }
+            } else if (ex.Message.Contains("FFmpeg Error") && _currentItem?.IsUrl == true) {
+                isUrlOpenError = true;
+                specificAdvice = $" FFmpeg reported an error: {ex.Message}. The stream may be incompatible or unstable.";
+            }
+
             var errorMessage = $"Failed to play video: {fileName}";
             
             Logger.Error(errorMessage, ex);
+
+            // If the failure happened with a cached file, delete it so it can be re-downloaded or streamed next time
+            if (!string.IsNullOrEmpty(filePath) && filePath.Contains("VideoCache") && File.Exists(filePath)) {
+                Logger.Warning($"[HypnoViewModel] Deleting likely corrupted cache file: {filePath}");
+                try { File.Delete(filePath); } catch { }
+                
+                // Revert to original URL so we can try streaming/re-extraction
+                if (!string.IsNullOrEmpty(_currentItem?.OriginalPageUrl)) {
+                    Logger.Info($"[HypnoViewModel] Reverting path to OriginalPageUrl: {_currentItem.OriginalPageUrl}");
+                    _currentItem.FilePath = _currentItem.OriginalPageUrl;
+                }
+            }
             
             // Increment failure counters
             _consecutiveFailures++;
@@ -971,23 +1452,23 @@ namespace GOON.ViewModels {
     }
             
             // Notify listeners (e.g., UI) about the error
-            MediaErrorOccurred?.Invoke(this, new MediaErrorEventArgs($"{errorMessage}.{specificAdvice} Error: {ex?.Message ?? "Unknown error"}"));
+            MediaErrorOccurred?.Invoke(this, new MediaErrorEventArgs($"{errorMessage}.{specificAdvice} Error: {ex?.Message ?? "Unknown error"}", _currentItem));
             
             // Stop retrying if we've exceeded the failure threshold
             // This prevents infinite retry loops when all videos fail
             if (_consecutiveFailures >= MaxConsecutiveFailures) {
                 Logger.Warning($"Stopped retrying after {MaxConsecutiveFailures} consecutive failures. All videos in queue may be invalid.");
-                MediaErrorOccurred?.Invoke(this, new MediaErrorEventArgs($"Playback stopped after {MaxConsecutiveFailures} consecutive failures. Please check your video files."));
+                MediaErrorOccurred?.Invoke(this, new MediaErrorEventArgs($"Playback stopped after {MaxConsecutiveFailures} consecutive failures. Please check your video files.", _currentItem));
                 TerminalFailure?.Invoke(this, EventArgs.Empty);
                 return;
             }
             
             // Add a delay to allow GPU resources to free up (especially for 0x8898050C errors)
             int delayMs = isCodecError ? 500 : 300;
-            _ = Task.Delay(delayMs).ContinueWith(_ => {
-                if (_disposed) return;
-                Application.Current?.Dispatcher.InvokeAsync(() => PlayNext());
-            });
+            _ = Task.Delay(delayMs, token).ContinueWith(t => {
+                if (t.IsCanceled || _disposed) return;
+                Application.Current?.Dispatcher.InvokeAsync(() => PlayNext(true));
+            }, TaskContinuationOptions.ExecuteSynchronously);
         }
 
         public virtual void Play() {
@@ -995,6 +1476,13 @@ namespace GOON.ViewModels {
             IsReady = false; // No longer just "Ready", actually playing
             Player.Play();
             RequestPlay?.Invoke(this, EventArgs.Empty);
+            
+            // Resume the shared sync clock so sync logic works correctly
+            // CRITICAL FIX: Only resume the clock if we are NOT in a coordinated group OR if this is a manual user play.
+            // For coordinated groups, we let the VideoPlayerService timer handle clock resumption when all are ready.
+            if (string.IsNullOrEmpty(SyncGroupId) && ServiceContainer.TryGet<VideoPlayerService>(out var playerService)) {
+                playerService.ResumeSyncClock();
+            }
         }
 
         public virtual void ForcePlay() {
@@ -1005,11 +1493,18 @@ namespace GOON.ViewModels {
             MediaState = MediaState.Pause;
             Player.Pause();
             RequestPause?.Invoke(this, EventArgs.Empty);
+            
+            // CRITICAL: Pause the shared sync clock to prevent auto-resume!
+            // This is the fix for the "extra click" issue where sync was overriding user's pause.
+            if (ServiceContainer.TryGet<VideoPlayerService>(out var playerService)) {
+                playerService.PauseSyncClock();
+            }
         }
 
         public void Stop() {
             // Force save position before stopping
             SaveCurrentPosition();
+            RecordCurrentPlayEnd(false); // Normal stop, not necessarily a skip unless watch time is low
             Player.Stop();
             RequestStop?.Invoke(this, EventArgs.Empty);
         }
@@ -1082,8 +1577,13 @@ namespace GOON.ViewModels {
             
             Logger.Info($"[HypnoViewModel] Disposing (Current: {CurrentSource})");
             
-            // Force save position before disposing
+            // Force save position and record play record before disposing
             SaveCurrentPosition();
+            RecordCurrentPlayEnd(false);
+            
+            if (CurrentItem != null) {
+                CurrentItem.IsPlaying = false;
+            }
             
             try {
                 if (Player != null) {
@@ -1104,15 +1604,15 @@ namespace GOON.ViewModels {
         }
     }
 
-    /// <summary>
-    /// Event arguments for media error events
-    /// </summary>
     public class MediaErrorEventArgs : EventArgs {
         public string ErrorMessage { get; }
+        public VideoItem Item { get; }
+        public Exception Exception { get; set; }
         
-        public MediaErrorEventArgs(string errorMessage) {
+        public MediaErrorEventArgs(string errorMessage, VideoItem item = null, Exception ex = null) {
             ErrorMessage = errorMessage;
+            Item = item;
+            Exception = ex;
         }
-
     }
 }

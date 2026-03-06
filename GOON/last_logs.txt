@@ -1,0 +1,1000 @@
+﻿[2026-01-20 19:30:24] [INFO] 19.30.24.172 | Info  | [#1]     [Player        ] Opening D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Agnes teasing.mov
+[2026-01-20 19:30:24] [INFO] 19.30.24.182 | Info  | [#1]     [Player        ] [A] Finished at 00.583
+[2026-01-20 19:30:24] [INFO] 19.30.24.200 | Info  | [#1]     [Player        ] [V] Finished at 00.583 (Reason: Status is Opening)
+[2026-01-20 19:30:24] [INFO] 19.30.24.242 | Info  | [#1]     [Demuxer:  Main] Disposed
+[2026-01-20 19:30:24] [INFO] 19.30.24.242 | Info  | [#1]     [PluginHandler ] [OpenDefault] Open Success
+[2026-01-20 19:30:24] [INFO] 19.30.24.242 | Info  | [#1]     [PluginHandler ] SuggestItem #0 - Agnes teasing.mov
+[2026-01-20 19:30:24] [INFO] 19.30.24.242 | Info  | [#1]     [PluginHandler ] [OpenDefault] Open Item (0) Success
+[2026-01-20 19:30:24] [INFO] 19.30.24.331 | Info  | [#1]     [Demuxer:  Main] Format Info
+[Time	 ] 00:00:00.000 / 00:00:30.533 (based on Stream), 42266 kb/s
+[Format  ] QuickTime / MOV (mov,mp4,m4a,3gp,3g2,mj2) [Flags: ShowIds, NoByteSeek, SeekToPts] [Ext(s): mov,mp4,m4a,3gp,3g2,mj2,psp,m4b,ism,ismv,isma,f4v,avif,heic,heif]
+	[Metadata] major_brand      : qt  
+	           minor_version    : 512
+	           compatible_brands: qt  
+	           creation_time    : 2025-06-10T04:38:37.000000Z
+	           encoder          : Blackmagic Design DaVinci Resolve Studio
+
+[Video #00]
+	[Time	 ] 00:00:00.000 (0) / 00:00:30.533 (468992) | tb: 1/15360
+	[Codec   ] h264 | High (avc1 / 0x31637661), 39955 kb/s - (Default)
+	[Format  ] Yuv420p (Bt709, Bt709, Bt709, Left, Limited, Progressive), 1920x1080 @ 60.000 fps [SAR: 1/1 DAR: 16:9 Crop: None]
+	[Metadata] creation_time: 2025-06-10T04:38:37.000000Z
+	           handler_name : VideoHandler
+	           vendor_id    :     
+	           encoder      : H.264 NVIDIA
+	           timecode     : 01:00:00:00
+
+[Audio #01]
+	[Time	 ] 00:00:00.000 (0) / 00:00:30.533 (1465600) | tb: 1/48000
+	[Codec   ] pcm_s24le (lpcm / 0x6D63706C), 2304 kb/s - (Default)
+	[Format  ] 48000 Hz, stereo, s32
+	[Metadata] creation_time: 2025-06-10T04:38:37.000000Z
+	           handler_name : SoundHandler
+	           vendor_id    : [0][0][0][0]
+
+[Data  #02]
+	[Time	 ] 00:00:00.000 (0) / 00:00:30.533 (468992) | tb: 1/15360
+	[Codec   ] none (tmcd / 0x64636D74), 0 kb/s - (Default)
+	[Metadata] creation_time: 2025-06-10T04:38:37.000000Z
+	           handler_name : TimeCodeHandler
+	           timecode     : 01:00:00:00
+
+[2026-01-20 19:30:24] [INFO] 19.30.24.331 | Info  | [#1]     [Demuxer:  Main] [Video #0] Enabled
+[2026-01-20 19:30:24] [INFO] 19.30.24.331 | Info  | [#1]     [StreamSuggester] Audio based on language
+[2026-01-20 19:30:24] [INFO] 19.30.24.331 | Info  | [#1]     [Demuxer:  Main] [Audio #1] Enabled
+[2026-01-20 19:30:24] [INFO] 19.30.24.331 | Info  | [#1]     [DecoderContext] [OpenAudioStream] #_ => #1
+[2026-01-20 19:30:24] [INFO] 19.30.24.331 | Info  | [#1]     [DecoderContext] [OpenVideoStream] #_ => #0
+[2026-01-20 19:30:24] [INFO] 19.30.24.331 | Info  | [#1]     [DecoderContext] [OpenPlaylistItem] None => Agnes teasing.mov
+[2026-01-20 19:30:24] [INFO] 19.30.24.331 | Info  | [#1]     [DecoderContext] [Open] D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Agnes teasing.mov 
+[2026-01-20 19:30:24] [INFO] [HypnoViewModel] Applied volume 10 to new media.
+[2026-01-20 19:30:24] [INFO] [Sync] Pausing SharedClock. Stalled players: [\\.\DISPLAY2 (Buffering)]
+[2026-01-20 19:30:24] [INFO] 19.30.24.353 | Warn  | [#1]     [Player        ] Audio Exhausted 2 | 4
+[2026-01-20 19:30:24] [INFO] 19.30.24.364 | Warn  | [#1]     [Player        ] Audio Exhausted 2 | 2
+[2026-01-20 19:30:24] [INFO] 19.30.24.374 | Warn  | [#1]     [Player        ] Audio Exhausted 1
+[2026-01-20 19:30:24] [INFO] 19.30.24.387 | Info  | [#1]     [Player        ] [V] Started at 00.016]
+[2026-01-20 19:30:24] [INFO] [Sync] All players ready/buffered. Starting/Resuming SharedClock. (Ticks: 1566474788)
+[2026-01-20 19:30:24] [INFO] 19.30.24.464 | Info  | [#1]     [Player        ] [A] Resynced at 00.079 [Diff: -00.000]
+[2026-01-20 19:30:24] [INFO] [ShuffleScoring] Selected #52 (Makima - Like Jennie.webm) from 62 candidates
+[2026-01-20 19:30:24] [INFO] [PlayNext] \\.\DISPLAY2 selected next video: #52 - Makima - Like Jennie.webm
+[2026-01-20 19:30:24] [INFO] LoadCurrentVideo: Processing item 'Makima - Like Jennie.webm' with path: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Makima - Like Jennie.webm
+[2026-01-20 19:30:24] [INFO] LoadCurrentVideo: File verified to exist: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Makima - Like Jennie.webm
+[2026-01-20 19:30:24] [INFO] LoadCurrentVideo: Generated URI: file:///D:/Downloads/JDownloads/PMVs/Mackg4/EXTRA!SHORTS/Makima%20-%20Like%20Jennie.webm
+[2026-01-20 19:30:24] [INFO] [PositionTracker] No saved position for Makima - Like Jennie.webm
+[2026-01-20 19:30:24] [INFO] LoadCurrentVideo: Opening path in Flyleaf: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Makima - Like Jennie.webm
+[2026-01-20 19:30:24] [INFO] 19.30.24.955 | Info  | [#1]     [Player        ] Opening D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Makima - Like Jennie.webm
+[2026-01-20 19:30:24] [INFO] 19.30.24.961 | Info  | [#1]     [Player        ] [A] Finished at 00.533
+[2026-01-20 19:30:24] [INFO] 19.30.24.979 | Info  | [#1]     [Player        ] [V] Finished at 00.533 (Reason: Status is Opening)
+[2026-01-20 19:30:25] [INFO] 19.30.25.017 | Info  | [#1]     [Demuxer:  Main] Disposed
+[2026-01-20 19:30:25] [INFO] 19.30.25.017 | Info  | [#1]     [PluginHandler ] [OpenDefault] Open Success
+[2026-01-20 19:30:25] [INFO] 19.30.25.017 | Info  | [#1]     [PluginHandler ] SuggestItem #0 - Makima - Like Jennie.webm
+[2026-01-20 19:30:25] [INFO] 19.30.25.017 | Info  | [#1]     [PluginHandler ] [OpenDefault] Open Item (0) Success
+[2026-01-20 19:30:25] [INFO] 19.30.25.018 | Info  | [#1]     [Demuxer:  Main] Format Info
+[Time	 ] -00:00:00.007 / 00:02:03.561 (based on Stream), 2980 kb/s
+[Format  ] Matroska / WebM (matroska,webm) [Mime: audio/webm,audio/x-matroska,video/webm,video/x-matroska] [Ext(s): mkv,mk3d,mka,mks,webm]
+	[Metadata] creation_time: 2025-08-23T08:35:07.000000Z
+	           ENCODER      : Lavf61.7.100
+
+[Video #00]
+	[Time	 ] 00:00:00.000 (0) / - | tb: 1/1000
+	[Codec   ] av1 | Main - (Default)
+	[Format  ] Yuv420p10le (Bt709, Bt709, Bt709, Left, Limited, Progressive), 1920x1080 @ 60.000 fps [SAR: 1/1 DAR: 16:9 Crop: None]
+	[Metadata] DURATION: 00:02:03.550000000
+
+[Audio #01]
+	[Time	 ] -00:00:00.007 (-7) / - | tb: 1/1000
+	[Codec   ] opus - (Default)
+	[Format  ] 48000 Hz, stereo, fltp
+	[Metadata] DURATION: 00:02:03.561000000
+
+[2026-01-20 19:30:25] [INFO] 19.30.25.018 | Info  | [#1]     [Demuxer:  Main] [Video #0] Enabled
+[2026-01-20 19:30:25] [INFO] 19.30.25.018 | Info  | [#1]     [StreamSuggester] Audio based on language
+[2026-01-20 19:30:25] [INFO] 19.30.25.018 | Info  | [#1]     [Demuxer:  Main] [Audio #1] Enabled
+[2026-01-20 19:30:25] [INFO] 19.30.25.018 | Info  | [#1]     [DecoderContext] [OpenAudioStream] #_ => #1
+[2026-01-20 19:30:25] [INFO] 19.30.25.018 | Info  | [#1]     [DecoderContext] [OpenVideoStream] #_ => #0
+[2026-01-20 19:30:25] [INFO] 19.30.25.018 | Info  | [#1]     [DecoderContext] [OpenPlaylistItem] None => Makima - Like Jennie.webm
+[2026-01-20 19:30:25] [INFO] 19.30.25.018 | Info  | [#1]     [DecoderContext] [Open] D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Makima - Like Jennie.webm 
+[2026-01-20 19:30:25] [INFO] [HypnoViewModel] Applied volume 10 to new media.
+[2026-01-20 19:30:25] [INFO] [Sync] Pausing SharedClock. Stalled players: [\\.\DISPLAY2 (Buffering)]
+[2026-01-20 19:30:25] [INFO] 19.30.25.051 | Warn  | [#1]     [Player        ] Audio Exhausted 2 | 4
+[2026-01-20 19:30:25] [INFO] 19.30.25.062 | Warn  | [#1]     [Player        ] Audio Exhausted 2 | 2
+[2026-01-20 19:30:25] [INFO] 19.30.25.089 | Info  | [#1]     [Player        ] [V] Started at 00.024] [A: 00.067]
+[2026-01-20 19:30:25] [INFO] [Sync] All players ready/buffered. Starting/Resuming SharedClock. (Ticks: 1572371256)
+[2026-01-20 19:30:25] [INFO] 19.30.25.130 | Info  | [#1]     [Player        ] [A] Resynced at 00.067 [Diff: -00.000]
+[2026-01-20 19:30:25] [INFO] [ShuffleScoring] Selected #35 (QOS CLUB - Mi-Chan TIKTOK.mov) from 62 candidates
+[2026-01-20 19:30:25] [INFO] [PlayNext] \\.\DISPLAY2 selected next video: #35 - QOS CLUB - Mi-Chan TIKTOK.mov
+[2026-01-20 19:30:25] [INFO] LoadCurrentVideo: Processing item 'QOS CLUB - Mi-Chan TIKTOK.mov' with path: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\QOS CLUB - Mi-Chan TIKTOK.mov
+[2026-01-20 19:30:25] [INFO] LoadCurrentVideo: File verified to exist: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\QOS CLUB - Mi-Chan TIKTOK.mov
+[2026-01-20 19:30:25] [INFO] LoadCurrentVideo: Generated URI: file:///D:/Downloads/JDownloads/PMVs/Mackg4/EXTRA!SHORTS/QOS%20CLUB%20-%20Mi-Chan%20TIKTOK.mov
+[2026-01-20 19:30:25] [INFO] [PositionTracker] No saved position for QOS CLUB - Mi-Chan TIKTOK.mov
+[2026-01-20 19:30:25] [INFO] LoadCurrentVideo: Opening path in Flyleaf: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\QOS CLUB - Mi-Chan TIKTOK.mov
+[2026-01-20 19:30:25] [INFO] 19.30.25.659 | Info  | [#1]     [Player        ] Opening D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\QOS CLUB - Mi-Chan TIKTOK.mov
+[2026-01-20 19:30:25] [INFO] 19.30.25.667 | Info  | [#1]     [Player        ] [A] Finished at 00.557
+[2026-01-20 19:30:25] [INFO] 19.30.25.683 | Info  | [#1]     [Player        ] [V] Finished at 00.557 (Reason: Status is Opening)
+[2026-01-20 19:30:25] [INFO] 19.30.25.731 | Info  | [#1]     [Demuxer:  Main] Disposed
+[2026-01-20 19:30:25] [INFO] 19.30.25.732 | Info  | [#1]     [PluginHandler ] [OpenDefault] Open Success
+[2026-01-20 19:30:25] [INFO] 19.30.25.732 | Info  | [#1]     [PluginHandler ] SuggestItem #0 - QOS CLUB - Mi-Chan TIKTOK.mov
+[2026-01-20 19:30:25] [INFO] 19.30.25.732 | Info  | [#1]     [PluginHandler ] [OpenDefault] Open Item (0) Success
+[2026-01-20 19:30:25] [INFO] 19.30.25.737 | Info  | [#1]     [Demuxer:  Main] Format Info
+[Time	 ] 00:00:00.000 / 00:00:31.400 (based on Stream), 32559 kb/s
+[Format  ] QuickTime / MOV (mov,mp4,m4a,3gp,3g2,mj2) [Flags: ShowIds, NoByteSeek, SeekToPts] [Ext(s): mov,mp4,m4a,3gp,3g2,mj2,psp,m4b,ism,ismv,isma,f4v,avif,heic,heif]
+	[Metadata] major_brand      : qt  
+	           minor_version    : 512
+	           compatible_brands: qt  
+	           creation_time    : 2023-06-10T16:03:28.000000Z
+	           encoder          : Blackmagic Design DaVinci Resolve
+
+[Video #00]
+	[Time	 ] 00:00:00.000 (0) / 00:00:31.400 (482304) | tb: 1/15360
+	[Codec   ] h264 | Main (avc1 / 0x31637661), 31017 kb/s - (Default)
+	[Format  ] Yuv420p (Bt709, Bt709, Bt709, Left, None, Progressive), 1080x1920 @ 60.000 fps [SAR: 1/1 DAR: 9:16 Crop: None]
+	[Metadata] creation_time: 2023-06-10T16:03:28.000000Z
+	           handler_name : VideoHandler
+	           vendor_id    :     
+	           encoder      : H.264
+	           timecode     : 01:00:00:00
+
+[Audio #01]
+	[Time	 ] 00:00:00.000 (0) / 00:00:31.400 (1507200) | tb: 1/48000
+	[Codec   ] pcm_s16le (lpcm / 0x6D63706C), 1536 kb/s - (Default)
+	[Format  ] 48000 Hz, stereo, s16
+	[Metadata] creation_time: 2023-06-10T16:03:28.000000Z
+	           handler_name : SoundHandler
+	           vendor_id    : [0][0][0][0]
+
+[Data  #02]
+	[Time	 ] 00:00:00.000 (0) / 00:00:31.400 (482304) | tb: 1/15360
+	[Codec   ] none (tmcd / 0x64636D74), 0 kb/s
+	[Metadata] creation_time: 2023-06-10T16:03:28.000000Z
+	           handler_name : TimeCodeHandler
+	           timecode     : 01:00:00:00
+
+[2026-01-20 19:30:25] [INFO] 19.30.25.737 | Info  | [#1]     [Demuxer:  Main] [Video #0] Enabled
+[2026-01-20 19:30:25] [INFO] 19.30.25.737 | Info  | [#1]     [StreamSuggester] Audio based on language
+[2026-01-20 19:30:25] [INFO] 19.30.25.737 | Info  | [#1]     [Demuxer:  Main] [Audio #1] Enabled
+[2026-01-20 19:30:25] [INFO] 19.30.25.737 | Info  | [#1]     [DecoderContext] [OpenAudioStream] #_ => #1
+[2026-01-20 19:30:25] [INFO] 19.30.25.737 | Info  | [#1]     [DecoderContext] [OpenVideoStream] #_ => #0
+[2026-01-20 19:30:25] [INFO] 19.30.25.737 | Info  | [#1]     [DecoderContext] [OpenPlaylistItem] None => QOS CLUB - Mi-Chan TIKTOK.mov
+[2026-01-20 19:30:25] [INFO] 19.30.25.737 | Info  | [#1]     [DecoderContext] [Open] D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\QOS CLUB - Mi-Chan TIKTOK.mov 
+[2026-01-20 19:30:25] [INFO] [HypnoViewModel] Applied volume 10 to new media.
+[2026-01-20 19:30:25] [INFO] [Sync] Pausing SharedClock. Stalled players: [\\.\DISPLAY2 (Buffering)]
+[2026-01-20 19:30:25] [INFO] 19.30.25.769 | Warn  | [#1]     [Player        ] Audio Exhausted 2 | 3
+[2026-01-20 19:30:25] [INFO] 19.30.25.780 | Warn  | [#1]     [Player        ] Audio Exhausted 2 | 1
+[2026-01-20 19:30:25] [INFO] 19.30.25.798 | Info  | [#1]     [Player        ] [V] Started at 00.016] [A: 00.060]
+[2026-01-20 19:30:25] [INFO] [Sync] All players ready/buffered. Starting/Resuming SharedClock. (Ticks: 1578592769)
+[2026-01-20 19:30:25] [INFO] 19.30.25.851 | Info  | [#1]     [Player        ] [A] Resynced at 00.060 [Diff: -00.000]
+[2026-01-20 19:30:26] [INFO] [ShuffleScoring] Selected #57 (QOS CLUB - Marie Rose.mov) from 62 candidates
+[2026-01-20 19:30:26] [INFO] [PlayNext] \\.\DISPLAY2 selected next video: #57 - QOS CLUB - Marie Rose.mov
+[2026-01-20 19:30:26] [INFO] LoadCurrentVideo: Processing item 'QOS CLUB - Marie Rose.mov' with path: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\QOS CLUB - Marie Rose.mov
+[2026-01-20 19:30:26] [INFO] LoadCurrentVideo: File verified to exist: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\QOS CLUB - Marie Rose.mov
+[2026-01-20 19:30:26] [INFO] LoadCurrentVideo: Generated URI: file:///D:/Downloads/JDownloads/PMVs/Mackg4/EXTRA!SHORTS/QOS%20CLUB%20-%20Marie%20Rose.mov
+[2026-01-20 19:30:26] [INFO] [PositionTracker] No saved position for QOS CLUB - Marie Rose.mov
+[2026-01-20 19:30:26] [INFO] LoadCurrentVideo: Opening path in Flyleaf: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\QOS CLUB - Marie Rose.mov
+[2026-01-20 19:30:26] [INFO] 19.30.26.670 | Info  | [#1]     [Player        ] Opening D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\QOS CLUB - Marie Rose.mov
+[2026-01-20 19:30:26] [INFO] 19.30.26.676 | Info  | [#1]     [Player        ] [A] Finished at 00.850
+[2026-01-20 19:30:26] [INFO] 19.30.26.694 | Info  | [#1]     [Player        ] [V] Finished at 00.850 (Reason: Status is Opening)
+[2026-01-20 19:30:26] [INFO] 19.30.26.732 | Info  | [#1]     [Demuxer:  Main] Disposed
+[2026-01-20 19:30:26] [INFO] 19.30.26.733 | Info  | [#1]     [PluginHandler ] [OpenDefault] Open Success
+[2026-01-20 19:30:26] [INFO] 19.30.26.733 | Info  | [#1]     [PluginHandler ] SuggestItem #0 - QOS CLUB - Marie Rose.mov
+[2026-01-20 19:30:26] [INFO] 19.30.26.733 | Info  | [#1]     [PluginHandler ] [OpenDefault] Open Item (0) Success
+[2026-01-20 19:30:26] [INFO] 19.30.26.807 | Info  | [#1]     [Demuxer:  Main] Format Info
+[Time	 ] 00:00:00.000 / 00:02:48.450 (based on Stream), 81208 kb/s
+[Format  ] QuickTime / MOV (mov,mp4,m4a,3gp,3g2,mj2) [Flags: ShowIds, NoByteSeek, SeekToPts] [Ext(s): mov,mp4,m4a,3gp,3g2,mj2,psp,m4b,ism,ismv,isma,f4v,avif,heic,heif]
+	[Metadata] major_brand      : qt  
+	           minor_version    : 512
+	           compatible_brands: qt  
+	           creation_time    : 2024-08-02T14:27:17.000000Z
+	           encoder          : Blackmagic Design DaVinci Resolve
+
+[Video #00]
+	[Time	 ] 00:00:00.000 (0) / 00:02:48.450 (2587392) | tb: 1/15360
+	[Codec   ] h264 | Main (avc1 / 0x31637661), 79669 kb/s - (Default)
+	[Format  ] Yuv420p (Bt709, Bt709, Bt709, Left, None, Progressive), 3840x2160 @ 60.000 fps [SAR: 1/1 DAR: 16:9 Crop: None]
+	[Metadata] creation_time: 2024-08-02T14:27:17.000000Z
+	           handler_name : VideoHandler
+	           vendor_id    :     
+	           encoder      : H.264
+	           timecode     : 01:00:00:00
+
+[Audio #01]
+	[Time	 ] 00:00:00.000 (0) / 00:02:48.449 (8085600) | tb: 1/48000
+	[Codec   ] pcm_s16le (lpcm / 0x6D63706C), 1536 kb/s - (Default)
+	[Format  ] 48000 Hz, stereo, s16
+	[Metadata] creation_time: 2024-08-02T14:27:17.000000Z
+	           handler_name : SoundHandler
+	           vendor_id    : [0][0][0][0]
+
+[Data  #02]
+	[Time	 ] 00:00:00.000 (0) / 00:02:48.450 (2587392) | tb: 1/15360
+	[Codec   ] none (tmcd / 0x64636D74) - (Default)
+	[Metadata] creation_time: 2024-08-02T14:27:17.000000Z
+	           handler_name : TimeCodeHandler
+	           timecode     : 01:00:00:00
+
+[2026-01-20 19:30:26] [INFO] 19.30.26.808 | Info  | [#1]     [Demuxer:  Main] [Video #0] Enabled
+[2026-01-20 19:30:26] [INFO] 19.30.26.808 | Info  | [#1]     [StreamSuggester] Audio based on language
+[2026-01-20 19:30:26] [INFO] 19.30.26.808 | Info  | [#1]     [Demuxer:  Main] [Audio #1] Enabled
+[2026-01-20 19:30:26] [INFO] 19.30.26.808 | Info  | [#1]     [DecoderContext] [OpenAudioStream] #_ => #1
+[2026-01-20 19:30:26] [INFO] 19.30.26.808 | Info  | [#1]     [DecoderContext] [OpenVideoStream] #_ => #0
+[2026-01-20 19:30:26] [INFO] 19.30.26.808 | Info  | [#1]     [DecoderContext] [OpenPlaylistItem] None => QOS CLUB - Marie Rose.mov
+[2026-01-20 19:30:26] [INFO] 19.30.26.808 | Info  | [#1]     [DecoderContext] [Open] D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\QOS CLUB - Marie Rose.mov 
+[2026-01-20 19:30:26] [INFO] [HypnoViewModel] Applied volume 10 to new media.
+[2026-01-20 19:30:26] [INFO] [Sync] Pausing SharedClock. Stalled players: [\\.\DISPLAY2 (Buffering)]
+[2026-01-20 19:30:26] [INFO] 19.30.26.829 | Warn  | [#1]     [Player        ] Audio Exhausted 2 | 4
+[2026-01-20 19:30:26] [INFO] 19.30.26.840 | Warn  | [#1]     [Player        ] Audio Exhausted 2 | 2
+[2026-01-20 19:30:26] [INFO] 19.30.26.851 | Warn  | [#1]     [Player        ] Audio Exhausted 1
+[2026-01-20 19:30:26] [INFO] 19.30.26.865 | Info  | [#1]     [Player        ] [V] Started at 00.016]
+[2026-01-20 19:30:26] [INFO] [Sync] All players ready/buffered. Starting/Resuming SharedClock. (Ticks: 1588299642)
+[2026-01-20 19:30:26] [INFO] 19.30.26.947 | Info  | [#1]     [Player        ] [A] Resynced at 00.079 [Diff: -00.001]
+[2026-01-20 19:30:27] [INFO] [ShuffleScoring] Selected #27 (Makima x Power - CHEWY.mp4) from 62 candidates
+[2026-01-20 19:30:27] [INFO] [PlayNext] \\.\DISPLAY2 selected next video: #27 - Makima x Power - CHEWY.mp4
+[2026-01-20 19:30:27] [INFO] LoadCurrentVideo: Processing item 'Makima x Power - CHEWY.mp4' with path: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Makima x Power - CHEWY.mp4
+[2026-01-20 19:30:27] [INFO] LoadCurrentVideo: File verified to exist: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Makima x Power - CHEWY.mp4
+[2026-01-20 19:30:27] [INFO] LoadCurrentVideo: Generated URI: file:///D:/Downloads/JDownloads/PMVs/Mackg4/EXTRA!SHORTS/Makima%20x%20Power%20-%20CHEWY.mp4
+[2026-01-20 19:30:27] [INFO] [PositionTracker] No saved position for Makima x Power - CHEWY.mp4
+[2026-01-20 19:30:27] [INFO] LoadCurrentVideo: Opening path in Flyleaf: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Makima x Power - CHEWY.mp4
+[2026-01-20 19:30:27] [INFO] 19.30.27.827 | Info  | [#1]     [Player        ] Opening D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Makima x Power - CHEWY.mp4
+[2026-01-20 19:30:27] [INFO] 19.30.27.838 | Info  | [#1]     [Player        ] [A] Finished at 00.933
+[2026-01-20 19:30:27] [INFO] 19.30.27.856 | Info  | [#1]     [Player        ] [V] Finished at 00.933 (Reason: Status is Opening)
+[2026-01-20 19:30:27] [INFO] 19.30.27.899 | Info  | [#1]     [Demuxer:  Main] Disposed
+[2026-01-20 19:30:27] [INFO] 19.30.27.899 | Info  | [#1]     [PluginHandler ] [OpenDefault] Open Success
+[2026-01-20 19:30:27] [INFO] 19.30.27.899 | Info  | [#1]     [PluginHandler ] SuggestItem #0 - Makima x Power - CHEWY.mp4
+[2026-01-20 19:30:27] [INFO] 19.30.27.899 | Info  | [#1]     [PluginHandler ] [OpenDefault] Open Item (0) Success
+[2026-01-20 19:30:27] [INFO] 19.30.27.905 | Info  | [#1]     [Demuxer:  Main] Format Info
+[Time	 ] 00:00:00.000 / 00:03:18.000 (based on Stream), 11359 kb/s
+[Format  ] QuickTime / MOV (mov,mp4,m4a,3gp,3g2,mj2) [Flags: ShowIds, NoByteSeek, SeekToPts] [Ext(s): mov,mp4,m4a,3gp,3g2,mj2,psp,m4b,ism,ismv,isma,f4v,avif,heic,heif]
+	[Metadata] major_brand      : isom
+	           minor_version    : 512
+	           compatible_brands: isomiso2avc1mp41
+	           encoder          : Lavf60.16.100
+
+[Video #00]
+	[Time	 ] 00:00:00.000 (0) / 00:03:18.000 (3041280) | tb: 1/15360
+	[Codec   ] h264 | Constrained Baseline (avc1 / 0x31637661), 11216 kb/s - (Default)
+	[Format  ] Yuv420p (Bt709, Bt709, Bt709, Left, Limited, Progressive), 1920x1080 @ 60.000 fps [SAR: 1/1 DAR: 16:9 Crop: None]
+	[Metadata] handler_name: VideoHandler
+	           vendor_id   : [0][0][0][0]
+	           encoder     : Lavc60.31.102 libx264
+
+[Audio #01]
+	[Time	 ] 00:00:00.000 (0) / 00:03:17.999 (9504000) | tb: 1/48000
+	[Codec   ] aac | LC (mp4a / 0x6134706D), 132 kb/s - (Default)
+	[Format  ] 48000 Hz, stereo, fltp
+	[Metadata] handler_name: SoundHandler
+	           vendor_id   : [0][0][0][0]
+
+[2026-01-20 19:30:27] [INFO] 19.30.27.905 | Info  | [#1]     [Demuxer:  Main] [Video #0] Enabled
+[2026-01-20 19:30:27] [INFO] 19.30.27.905 | Info  | [#1]     [StreamSuggester] Audio based on language
+[2026-01-20 19:30:27] [INFO] 19.30.27.905 | Info  | [#1]     [Demuxer:  Main] [Audio #1] Enabled
+[2026-01-20 19:30:27] [INFO] 19.30.27.905 | Info  | [#1]     [DecoderContext] [OpenAudioStream] #_ => #1
+[2026-01-20 19:30:27] [INFO] 19.30.27.905 | Info  | [#1]     [DecoderContext] [OpenVideoStream] #_ => #0
+[2026-01-20 19:30:27] [INFO] 19.30.27.905 | Info  | [#1]     [DecoderContext] [OpenPlaylistItem] None => Makima x Power - CHEWY.mp4
+[2026-01-20 19:30:27] [INFO] 19.30.27.905 | Info  | [#1]     [DecoderContext] [Open] D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Makima x Power - CHEWY.mp4 
+[2026-01-20 19:30:27] [INFO] [HypnoViewModel] Applied volume 10 to new media.
+[2026-01-20 19:30:27] [INFO] [Sync] Pausing SharedClock. Stalled players: [\\.\DISPLAY2 (Buffering)]
+[2026-01-20 19:30:27] [INFO] 19.30.27.938 | Warn  | [#1]     [Player        ] Audio Exhausted 2 | 3
+[2026-01-20 19:30:27] [INFO] 19.30.27.949 | Warn  | [#1]     [Player        ] Audio Exhausted 2 | 1
+[2026-01-20 19:30:27] [INFO] 19.30.27.965 | Info  | [#1]     [Player        ] [V] Started at 00.016] [A: 00.060]
+[2026-01-20 19:30:28] [INFO] [Sync] All players ready/buffered. Starting/Resuming SharedClock. (Ticks: 1598233012)
+[2026-01-20 19:30:28] [INFO] 19.30.28.018 | Info  | [#1]     [Player        ] [A] Resynced at 00.060 [Diff: 00.000]
+[2026-01-20 19:30:29] [INFO] [ShuffleScoring] Selected #25 (MOM2.mov) from 62 candidates
+[2026-01-20 19:30:29] [INFO] [PlayNext] \\.\DISPLAY2 selected next video: #25 - MOM2.mov
+[2026-01-20 19:30:29] [INFO] LoadCurrentVideo: Processing item 'MOM2.mov' with path: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\MOM2.mov
+[2026-01-20 19:30:29] [INFO] LoadCurrentVideo: File verified to exist: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\MOM2.mov
+[2026-01-20 19:30:29] [INFO] LoadCurrentVideo: Generated URI: file:///D:/Downloads/JDownloads/PMVs/Mackg4/EXTRA!SHORTS/MOM2.mov
+[2026-01-20 19:30:29] [INFO] [PositionTracker] No saved position for MOM2.mov
+[2026-01-20 19:30:29] [INFO] LoadCurrentVideo: Opening path in Flyleaf: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\MOM2.mov
+[2026-01-20 19:30:29] [INFO] 19.30.29.178 | Info  | [#1]     [Player        ] Opening D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\MOM2.mov
+[2026-01-20 19:30:29] [INFO] 19.30.29.195 | Info  | [#1]     [Player        ] [A] Finished at 01.183
+[2026-01-20 19:30:29] [INFO] 19.30.29.213 | Info  | [#1]     [Player        ] [V] Finished at 01.183 (Reason: Status is Opening)
+[2026-01-20 19:30:29] [INFO] 19.30.29.265 | Info  | [#1]     [Demuxer:  Main] Disposed
+[2026-01-20 19:30:29] [INFO] 19.30.29.265 | Info  | [#1]     [PluginHandler ] [OpenDefault] Open Success
+[2026-01-20 19:30:29] [INFO] 19.30.29.265 | Info  | [#1]     [PluginHandler ] SuggestItem #0 - MOM2.mov
+[2026-01-20 19:30:29] [INFO] 19.30.29.265 | Info  | [#1]     [PluginHandler ] [OpenDefault] Open Item (0) Success
+[2026-01-20 19:30:29] [INFO] 19.30.29.284 | Info  | [#1]     [Demuxer:  Main] Format Info
+[Time	 ] 00:00:00.000 / 00:00:47.850 (based on Stream), 25209 kb/s
+[Format  ] QuickTime / MOV (mov,mp4,m4a,3gp,3g2,mj2) [Flags: ShowIds, NoByteSeek, SeekToPts] [Ext(s): mov,mp4,m4a,3gp,3g2,mj2,psp,m4b,ism,ismv,isma,f4v,avif,heic,heif]
+	[Metadata] major_brand      : qt  
+	           minor_version    : 512
+	           compatible_brands: qt  
+	           creation_time    : 2024-08-10T20:31:47.000000Z
+	           encoder          : Blackmagic Design DaVinci Resolve
+
+[Video #00]
+	[Time	 ] 00:00:00.000 (0) / 00:00:47.850 (734976) | tb: 1/15360
+	[Codec   ] h264 | Main (avc1 / 0x31637661), 23671 kb/s - (Default)
+	[Format  ] Yuv420p (Bt709, Bt709, Bt709, Left, None, Progressive), 1920x1080 @ 60.000 fps [SAR: 1/1 DAR: 16:9 Crop: None]
+	[Metadata] creation_time: 2024-08-10T20:31:47.000000Z
+	           handler_name : VideoHandler
+	           vendor_id    :     
+	           encoder      : H.264
+	           timecode     : 01:00:00:00
+
+[Audio #01]
+	[Time	 ] 00:00:00.000 (0) / 00:00:47.849 (2296800) | tb: 1/48000
+	[Codec   ] pcm_s16le (lpcm / 0x6D63706C), 1536 kb/s - (Default)
+	[Format  ] 48000 Hz, stereo, s16
+	[Metadata] creation_time: 2024-08-10T20:31:47.000000Z
+	           handler_name : SoundHandler
+	           vendor_id    : [0][0][0][0]
+
+[Data  #02]
+	[Time	 ] 00:00:00.000 (0) / 00:00:47.850 (734976) | tb: 1/15360
+	[Codec   ] none (tmcd / 0x64636D74) - (Default)
+	[Metadata] creation_time: 2024-08-10T20:31:47.000000Z
+	           handler_name : TimeCodeHandler
+	           timecode     : 01:00:00:00
+
+[2026-01-20 19:30:29] [INFO] 19.30.29.284 | Info  | [#1]     [Demuxer:  Main] [Video #0] Enabled
+[2026-01-20 19:30:29] [INFO] 19.30.29.284 | Info  | [#1]     [StreamSuggester] Audio based on language
+[2026-01-20 19:30:29] [INFO] 19.30.29.284 | Info  | [#1]     [Demuxer:  Main] [Audio #1] Enabled
+[2026-01-20 19:30:29] [INFO] 19.30.29.284 | Info  | [#1]     [DecoderContext] [OpenAudioStream] #_ => #1
+[2026-01-20 19:30:29] [INFO] 19.30.29.284 | Info  | [#1]     [DecoderContext] [OpenVideoStream] #_ => #0
+[2026-01-20 19:30:29] [INFO] 19.30.29.284 | Info  | [#1]     [DecoderContext] [OpenPlaylistItem] None => MOM2.mov
+[2026-01-20 19:30:29] [INFO] 19.30.29.284 | Info  | [#1]     [DecoderContext] [Open] D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\MOM2.mov 
+[2026-01-20 19:30:29] [INFO] [HypnoViewModel] Applied volume 10 to new media.
+[2026-01-20 19:30:29] [INFO] [Sync] Pausing SharedClock. Stalled players: [\\.\DISPLAY2 (Buffering)]
+[2026-01-20 19:30:29] [INFO] 19.30.29.306 | Warn  | [#1]     [Player        ] Audio Exhausted 2 | 3
+[2026-01-20 19:30:29] [INFO] 19.30.29.316 | Warn  | [#1]     [Player        ] Audio Exhausted 2 | 1
+[2026-01-20 19:30:29] [INFO] 19.30.29.335 | Info  | [#1]     [Player        ] [V] Started at 00.016] [A: 00.060]
+[2026-01-20 19:30:29] [INFO] [Sync] All players ready/buffered. Starting/Resuming SharedClock. (Ticks: 1611032932)
+[2026-01-20 19:30:29] [INFO] 19.30.29.397 | Info  | [#1]     [Player        ] [A] Resynced at 00.060 [Diff: -00.000]
+[2026-01-20 19:30:30] [INFO] [PositionTracker] Successfully saved 40 positions to data directory
+[2026-01-20 19:30:30] [INFO] 19.30.30.496 | Warn  | [#1]     [Player        ] [V] Hard Resync (Drift: 162219ms)
+[2026-01-20 19:30:30] [INFO] 19.30.30.496 | Info  | [#1]     [Player        ] [Sync] Proactive seek to -02:41.086
+[2026-01-20 19:30:30] [INFO] [HypnoViewModel] Disposing (Current: file:///D:/Downloads/JDownloads/PMVs/Mackg4/EXTRA!SHORTS/MOM2.mov)
+[2026-01-20 19:30:30] [INFO] 19.30.30.524 | Info  | [#1]     [Player        ] [A] Finished at 01.116
+[2026-01-20 19:30:30] [INFO] 19.30.30.547 | Info  | [#1]     [Player        ] Stopped
+[2026-01-20 19:30:30] [INFO] 19.30.30.547 | Warn  | [#1]     [Player        ] [Sync] Buffer Empty, waiting...
+[2026-01-20 19:30:30] [INFO] 19.30.30.614 | Info  | [#1]     [Player        ] [V] Finished at 01.116 (Reason: Status is Stopped)
+[2026-01-20 19:30:30] [INFO] 19.30.30.654 | Info  | [#1]     [Demuxer:  Main] Disposed
+[2026-01-20 19:30:30] [INFO] 19.30.30.701 | Info  | [#1]     [Renderer      ] Disposed
+[2026-01-20 19:30:30] [INFO] 19.30.30.701 | Info  | [#1]     [Player        ] Disposed
+[2026-01-20 19:30:30] [INFO] [HypnoViewModel] Player disposed successfully
+[2026-01-20 19:30:30] [INFO] [VideoPlayerService] Last player removed, stopped sync timer.
+[2026-01-20 19:30:30] [INFO] [HypnoWindow] Flyleaf control reference cleared
+[2026-01-20 19:30:30] [INFO] [HypnoWindow] Disposed
+[2026-01-20 19:30:30] [INFO] 19.30.30.703 | Info  | [#1]     [Player        ] [Player #1] Status: Stopped -> Stopped
+[2026-01-20 19:30:45] [INFO] Hypnotize called. Queuing 6 items across 2 screens.
+[2026-01-20 19:30:45] [INFO] [PositionTracker] Successfully saved 40 positions to data directory
+[2026-01-20 19:30:45] [INFO] 19.30.45.385 | Info  | [#2]     [Renderer      ] Initialized with Feature Level 11.1
+[2026-01-20 19:30:45] [INFO] [HypnoWindow] Created for screen \\.\DISPLAY1 | Bounds: {X=0,Y=0,Width=1920,Height=1080}
+[2026-01-20 19:30:45] [INFO] 19.30.45.419 | Info  | [#2]     [Renderer      ] D3DImage Shared Textures Created Successfully: 1920x1080
+[2026-01-20 19:30:45] [INFO] [Hardware] Rendering Tier: 2 (Tier 2 = Full Hardware Acceleration)
+[2026-01-20 19:30:45] [INFO] [HypnoWindow] Positioning: 0,0 1920x1080
+[2026-01-20 19:30:45] [INFO] Queue updated with 1 videos
+[2026-01-20 19:30:45] [INFO]   - Agnes.mov (Local)
+[2026-01-20 19:30:45] [INFO] [PlayNext] \\.\DISPLAY1 selected next video: #0 - Agnes.mov
+[2026-01-20 19:30:45] [INFO] LoadCurrentVideo: Processing item 'Agnes.mov' with path: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Agnes.mov
+[2026-01-20 19:30:45] [INFO] LoadCurrentVideo: File verified to exist: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Agnes.mov
+[2026-01-20 19:30:45] [INFO] LoadCurrentVideo: Generated URI: file:///D:/Downloads/JDownloads/PMVs/Mackg4/EXTRA!SHORTS/Agnes.mov
+[2026-01-20 19:30:45] [INFO] [PositionTracker] No saved position for Agnes.mov
+[2026-01-20 19:30:45] [INFO] LoadCurrentVideo: Opening path in Flyleaf: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Agnes.mov
+[2026-01-20 19:30:45] [INFO] 19.30.45.446 | Info  | [#2]     [Player        ] Opening D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Agnes.mov
+[2026-01-20 19:30:45] [INFO] 19.30.45.446 | Info  | [#2]     [PluginHandler ] [OpenDefault] Open Success
+[2026-01-20 19:30:45] [INFO] 19.30.45.446 | Info  | [#2]     [PluginHandler ] SuggestItem #0 - Agnes.mov
+[2026-01-20 19:30:45] [INFO] 19.30.45.446 | Info  | [#2]     [PluginHandler ] [OpenDefault] Open Item (0) Success
+[2026-01-20 19:30:45] [INFO] 19.30.45.504 | Info  | [#2]     [Demuxer:  Main] Format Info
+[Time	 ] 00:00:00.000 / 00:01:36.133 (based on Stream), 40778 kb/s
+[Format  ] QuickTime / MOV (mov,mp4,m4a,3gp,3g2,mj2) [Flags: ShowIds, NoByteSeek, SeekToPts] [Ext(s): mov,mp4,m4a,3gp,3g2,mj2,psp,m4b,ism,ismv,isma,f4v,avif,heic,heif]
+	[Metadata] major_brand      : qt  
+	           minor_version    : 512
+	           compatible_brands: qt  
+	           creation_time    : 2025-06-05T17:49:08.000000Z
+	           encoder          : Blackmagic Design DaVinci Resolve Studio
+
+[Video #00]
+	[Time	 ] 00:00:00.000 (0) / 00:01:36.133 (1476608) | tb: 1/15360
+	[Codec   ] h264 | High (avc1 / 0x31637661), 38467 kb/s - (Default)
+	[Format  ] Yuv420p (Bt709, Bt709, Bt709, Left, Limited, Progressive), 1920x1080 @ 60.000 fps [SAR: 1/1 DAR: 16:9 Crop: None]
+	[Metadata] creation_time: 2025-06-05T17:49:08.000000Z
+	           handler_name : VideoHandler
+	           vendor_id    :     
+	           encoder      : H.264 NVIDIA
+	           timecode     : 01:00:00:00
+
+[Audio #01]
+	[Time	 ] 00:00:00.000 (0) / 00:01:36.133 (4614400) | tb: 1/48000
+	[Codec   ] pcm_s24le (lpcm / 0x6D63706C), 2304 kb/s - (Default)
+	[Format  ] 48000 Hz, stereo, s32
+	[Metadata] creation_time: 2025-06-05T17:49:08.000000Z
+	           handler_name : SoundHandler
+	           vendor_id    : [0][0][0][0]
+
+[Data  #02]
+	[Time	 ] 00:00:00.000 (0) / 00:01:36.133 (1476608) | tb: 1/15360
+	[Codec   ] none (tmcd / 0x64636D74) - (Default)
+	[Metadata] creation_time: 2025-06-05T17:49:08.000000Z
+	           handler_name : TimeCodeHandler
+	           timecode     : 01:00:00:00
+
+[2026-01-20 19:30:45] [INFO] 19.30.45.504 | Info  | [#2]     [Demuxer:  Main] [Video #0] Enabled
+[2026-01-20 19:30:45] [INFO] 19.30.45.504 | Info  | [#2]     [StreamSuggester] Audio based on language
+[2026-01-20 19:30:45] [INFO] 19.30.45.504 | Info  | [#2]     [Demuxer:  Main] [Audio #1] Enabled
+[2026-01-20 19:30:45] [INFO] 19.30.45.504 | Info  | [#2]     [DecoderContext] [OpenAudioStream] #_ => #1
+[2026-01-20 19:30:45] [INFO] 19.30.45.504 | Info  | [#2]     [DecoderContext] [OpenVideoStream] #_ => #0
+[2026-01-20 19:30:45] [INFO] 19.30.45.504 | Info  | [#2]     [DecoderContext] [OpenPlaylistItem] None => Agnes.mov
+[2026-01-20 19:30:45] [INFO] 19.30.45.504 | Info  | [#2]     [DecoderContext] [Open] D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Agnes.mov 
+[2026-01-20 19:30:45] [INFO] [HypnoViewModel] Applied volume 10 to new media.
+[2026-01-20 19:30:45] [INFO] [Sync] User played. Resuming SharedClock.
+[2026-01-20 19:30:45] [INFO] 19.30.45.506 | Info  | [#2]     [Player        ] [Player #2] Status: Playing -> Playing
+[2026-01-20 19:30:45] [INFO] 19.30.45.508 | Info  | [#2]     [Player        ] Initialiazing audio at 48000Hz (0:Default)
+[2026-01-20 19:30:45] [INFO] 19.30.45.567 | Warn  | [#2]     [Player        ] Audio Exhausted 2 | 4
+[2026-01-20 19:30:45] [INFO] 19.30.45.578 | Warn  | [#2]     [Player        ] Audio Exhausted 2 | 2
+[2026-01-20 19:30:45] [INFO] 19.30.45.588 | Warn  | [#2]     [Player        ] Audio Exhausted 1
+[2026-01-20 19:30:45] [INFO] 19.30.45.601 | Info  | [#2]     [Player        ] [V] Started at 00.016]
+[2026-01-20 19:30:45] [INFO] 19.30.45.631 | Info  | [#2]     [Player        ] [A] Resynced at 00.079 [Diff: 00.000]
+[2026-01-20 19:30:45] [INFO] 19.30.45.640 | Info  | [#3]     [Renderer      ] Initialized with Feature Level 11.1
+[2026-01-20 19:30:45] [INFO] [HypnoWindow] Created for screen \\.\DISPLAY2 | Bounds: {X=1920,Y=-56,Width=1920,Height=1080}
+[2026-01-20 19:30:45] [INFO] [Hardware] Rendering Tier: 2 (Tier 2 = Full Hardware Acceleration)
+[2026-01-20 19:30:45] [INFO] [HypnoWindow] Positioning: 1920,-56 1920x1080
+[2026-01-20 19:30:45] [INFO] Queue updated with 5 videos
+[2026-01-20 19:30:45] [INFO]   - Agnes teasing.mov (Local)
+[2026-01-20 19:30:45] [INFO]   - Aimi urethral pegging.mov (Local)
+[2026-01-20 19:30:45] [INFO]   - AIMI INTRO.mov (Local)
+[2026-01-20 19:30:45] [INFO]   - AIMI PROSTATE MILKING.mov (Local)
+[2026-01-20 19:30:45] [INFO]   - ANA TEST.mov (Local)
+[2026-01-20 19:30:45] [INFO] [ShuffleScoring] Selected #4 (ANA TEST.mov) from 5 candidates
+[2026-01-20 19:30:45] [INFO] [PlayNext] \\.\DISPLAY2 selected next video: #4 - ANA TEST.mov
+[2026-01-20 19:30:45] [INFO] LoadCurrentVideo: Processing item 'ANA TEST.mov' with path: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\ANA TEST.mov
+[2026-01-20 19:30:45] [INFO] LoadCurrentVideo: File verified to exist: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\ANA TEST.mov
+[2026-01-20 19:30:45] [INFO] LoadCurrentVideo: Generated URI: file:///D:/Downloads/JDownloads/PMVs/Mackg4/EXTRA!SHORTS/ANA%20TEST.mov
+[2026-01-20 19:30:45] [INFO] [PositionTracker] No saved position for ANA TEST.mov
+[2026-01-20 19:30:45] [INFO] LoadCurrentVideo: Opening path in Flyleaf: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\ANA TEST.mov
+[2026-01-20 19:30:45] [INFO] 19.30.45.665 | Info  | [#3]     [Player        ] Opening D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\ANA TEST.mov
+[2026-01-20 19:30:45] [INFO] 19.30.45.666 | Info  | [#3]     [PluginHandler ] [OpenDefault] Open Success
+[2026-01-20 19:30:45] [INFO] 19.30.45.666 | Info  | [#3]     [PluginHandler ] SuggestItem #0 - ANA TEST.mov
+[2026-01-20 19:30:45] [INFO] 19.30.45.666 | Info  | [#3]     [PluginHandler ] [OpenDefault] Open Item (0) Success
+[2026-01-20 19:30:45] [INFO] 19.30.45.671 | Info  | [#3]     [Demuxer:  Main] Format Info
+[Time	 ] 00:00:00.000 / 00:00:39.200 (based on Stream), 23634 kb/s
+[Format  ] QuickTime / MOV (mov,mp4,m4a,3gp,3g2,mj2) [Flags: ShowIds, NoByteSeek, SeekToPts] [Ext(s): mov,mp4,m4a,3gp,3g2,mj2,psp,m4b,ism,ismv,isma,f4v,avif,heic,heif]
+	[Metadata] major_brand      : qt  
+	           minor_version    : 512
+	           compatible_brands: qt  
+	           creation_time    : 2024-10-14T19:10:10.000000Z
+	           encoder          : Blackmagic Design DaVinci Resolve
+
+[Video #00]
+	[Time	 ] 00:00:00.000 (0) / 00:00:39.200 (602112) | tb: 1/15360
+	[Codec   ] h264 | Main (avc1 / 0x31637661), 22093 kb/s - (Default)
+	[Format  ] Yuv420p (Bt709, Bt709, Bt709, Left, None, Progressive), 1920x1080 @ 60.000 fps [SAR: 1/1 DAR: 16:9 Crop: None]
+	[Metadata] creation_time: 2024-10-14T19:10:10.000000Z
+	           handler_name : VideoHandler
+	           vendor_id    :     
+	           encoder      : H.264
+	           timecode     : 01:00:00:00
+
+[Audio #01]
+	[Time	 ] 00:00:00.000 (0) / 00:00:39.199 (1881600) | tb: 1/48000
+	[Codec   ] pcm_s16le (lpcm / 0x6D63706C), 1536 kb/s - (Default)
+	[Format  ] 48000 Hz, stereo, s16
+	[Metadata] creation_time: 2024-10-14T19:10:10.000000Z
+	           handler_name : SoundHandler
+	           vendor_id    : [0][0][0][0]
+
+[Data  #02]
+	[Time	 ] 00:00:00.000 (0) / 00:00:39.200 (602112) | tb: 1/15360
+	[Codec   ] none (tmcd / 0x64636D74) - (Default)
+	[Metadata] creation_time: 2024-10-14T19:10:10.000000Z
+	           handler_name : TimeCodeHandler
+	           timecode     : 01:00:00:00
+
+[2026-01-20 19:30:45] [INFO] 19.30.45.671 | Info  | [#3]     [Demuxer:  Main] [Video #0] Enabled
+[2026-01-20 19:30:45] [INFO] 19.30.45.671 | Info  | [#3]     [StreamSuggester] Audio based on language
+[2026-01-20 19:30:45] [INFO] 19.30.45.672 | Info  | [#3]     [Demuxer:  Main] [Audio #1] Enabled
+[2026-01-20 19:30:45] [INFO] 19.30.45.672 | Info  | [#3]     [DecoderContext] [OpenAudioStream] #_ => #1
+[2026-01-20 19:30:45] [INFO] 19.30.45.672 | Info  | [#3]     [DecoderContext] [OpenVideoStream] #_ => #0
+[2026-01-20 19:30:45] [INFO] 19.30.45.672 | Info  | [#3]     [DecoderContext] [OpenPlaylistItem] None => ANA TEST.mov
+[2026-01-20 19:30:45] [INFO] 19.30.45.672 | Info  | [#3]     [DecoderContext] [Open] D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\ANA TEST.mov 
+[2026-01-20 19:30:45] [INFO] [HypnoViewModel] Applied volume 10 to new media.
+[2026-01-20 19:30:45] [INFO] 19.30.45.672 | Info  | [#3]     [Player        ] [Player #3] Status: Playing -> Playing
+[2026-01-20 19:30:45] [INFO] 19.30.45.675 | Info  | [#3]     [Player        ] Initialiazing audio at 48000Hz (0:Default)
+[2026-01-20 19:30:45] [INFO] 19.30.45.747 | Info  | [#3]     [Renderer      ] D3DImage Shared Textures Created Successfully: 1920x1080
+[2026-01-20 19:30:45] [INFO] 19.30.45.757 | Warn  | [#3]     [Player        ] Audio Exhausted 2 | 3
+[2026-01-20 19:30:45] [INFO] 19.30.45.767 | Warn  | [#3]     [Player        ] Audio Exhausted 2 | 1
+[2026-01-20 19:30:45] [INFO] 19.30.45.784 | Info  | [#3]     [Player        ] [V] Started at 00.016] [A: 00.060]
+[2026-01-20 19:30:45] [INFO] 19.30.45.795 | Info  | [#3]     [Player        ] [A] Resynced at 00.060 [Diff: 00.000]
+[2026-01-20 19:30:47] [INFO] [ShuffleScoring] Selected #1 (Aimi urethral pegging.mov) from 4 candidates
+[2026-01-20 19:30:47] [INFO] [PlayNext] \\.\DISPLAY2 selected next video: #1 - Aimi urethral pegging.mov
+[2026-01-20 19:30:47] [INFO] LoadCurrentVideo: Processing item 'Aimi urethral pegging.mov' with path: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Aimi urethral pegging.mov
+[2026-01-20 19:30:47] [INFO] LoadCurrentVideo: File verified to exist: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Aimi urethral pegging.mov
+[2026-01-20 19:30:47] [INFO] LoadCurrentVideo: Generated URI: file:///D:/Downloads/JDownloads/PMVs/Mackg4/EXTRA!SHORTS/Aimi%20urethral%20pegging.mov
+[2026-01-20 19:30:47] [INFO] [PositionTracker] No saved position for Aimi urethral pegging.mov
+[2026-01-20 19:30:47] [INFO] LoadCurrentVideo: Opening path in Flyleaf: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Aimi urethral pegging.mov
+[2026-01-20 19:30:47] [INFO] 19.30.47.015 | Info  | [#3]     [Player        ] Opening D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Aimi urethral pegging.mov
+[2026-01-20 19:30:47] [INFO] 19.30.47.024 | Info  | [#3]     [Player        ] [A] Finished at 01.250
+[2026-01-20 19:30:47] [INFO] 19.30.47.043 | Info  | [#3]     [Player        ] [V] Finished at 01.250 (Reason: Status is Opening)
+[2026-01-20 19:30:47] [INFO] 19.30.47.092 | Info  | [#3]     [Demuxer:  Main] Disposed
+[2026-01-20 19:30:47] [INFO] 19.30.47.092 | Info  | [#3]     [PluginHandler ] [OpenDefault] Open Success
+[2026-01-20 19:30:47] [INFO] 19.30.47.092 | Info  | [#3]     [PluginHandler ] SuggestItem #0 - Aimi urethral pegging.mov
+[2026-01-20 19:30:47] [INFO] 19.30.47.092 | Info  | [#3]     [PluginHandler ] [OpenDefault] Open Item (0) Success
+[2026-01-20 19:30:47] [INFO] 19.30.47.195 | Info  | [#3]     [Demuxer:  Main] Format Info
+[Time	 ] 00:00:00.000 / 00:02:08.216 (based on Stream), 42309 kb/s
+[Format  ] QuickTime / MOV (mov,mp4,m4a,3gp,3g2,mj2) [Flags: ShowIds, NoByteSeek, SeekToPts] [Ext(s): mov,mp4,m4a,3gp,3g2,mj2,psp,m4b,ism,ismv,isma,f4v,avif,heic,heif]
+	[Metadata] major_brand      : qt  
+	           minor_version    : 512
+	           compatible_brands: qt  
+	           creation_time    : 2025-06-17T02:19:57.000000Z
+	           encoder          : Blackmagic Design DaVinci Resolve Studio
+
+[Video #00]
+	[Time	 ] 00:00:00.000 (0) / 00:02:08.216 (1969408) | tb: 1/15360
+	[Codec   ] h264 | High (avc1 / 0x31637661), 39998 kb/s - (Default)
+	[Format  ] Yuv420p (Bt709, Bt709, Bt709, Left, Limited, Progressive), 1920x1080 @ 60.000 fps [SAR: 1/1 DAR: 16:9 Crop: None]
+	[Metadata] creation_time: 2025-06-17T02:19:57.000000Z
+	           handler_name : VideoHandler
+	           vendor_id    :     
+	           encoder      : H.264 NVIDIA
+	           timecode     : 01:00:00:00
+
+[Audio #01]
+	[Time	 ] 00:00:00.000 (0) / 00:02:08.216 (6154400) | tb: 1/48000
+	[Codec   ] pcm_s24le (lpcm / 0x6D63706C), 2304 kb/s - (Default)
+	[Format  ] 48000 Hz, stereo, s32
+	[Metadata] creation_time: 2025-06-17T02:19:57.000000Z
+	           handler_name : SoundHandler
+	           vendor_id    : [0][0][0][0]
+
+[Data  #02]
+	[Time	 ] 00:00:00.000 (0) / 00:02:08.216 (1969408) | tb: 1/15360
+	[Codec   ] none (tmcd / 0x64636D74) - (Default)
+	[Metadata] creation_time: 2025-06-17T02:19:57.000000Z
+	           handler_name : TimeCodeHandler
+	           timecode     : 01:00:00:00
+
+[2026-01-20 19:30:47] [INFO] 19.30.47.195 | Info  | [#3]     [Demuxer:  Main] [Video #0] Enabled
+[2026-01-20 19:30:47] [INFO] 19.30.47.195 | Info  | [#3]     [StreamSuggester] Audio based on language
+[2026-01-20 19:30:47] [INFO] 19.30.47.195 | Info  | [#3]     [Demuxer:  Main] [Audio #1] Enabled
+[2026-01-20 19:30:47] [INFO] 19.30.47.195 | Info  | [#3]     [DecoderContext] [OpenAudioStream] #_ => #1
+[2026-01-20 19:30:47] [INFO] 19.30.47.195 | Info  | [#3]     [DecoderContext] [OpenVideoStream] #_ => #0
+[2026-01-20 19:30:47] [INFO] 19.30.47.195 | Info  | [#3]     [DecoderContext] [OpenPlaylistItem] None => Aimi urethral pegging.mov
+[2026-01-20 19:30:47] [INFO] 19.30.47.195 | Info  | [#3]     [DecoderContext] [Open] D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Aimi urethral pegging.mov 
+[2026-01-20 19:30:47] [INFO] [HypnoViewModel] Applied volume 10 to new media.
+[2026-01-20 19:30:47] [INFO] [Sync] Pausing SharedClock. Stalled players: [\\.\DISPLAY2 (Buffering)]
+[2026-01-20 19:30:47] [INFO] 19.30.47.218 | Warn  | [#3]     [Player        ] Audio Exhausted 2 | 4
+[2026-01-20 19:30:47] [INFO] 19.30.47.228 | Warn  | [#3]     [Player        ] Audio Exhausted 2 | 2
+[2026-01-20 19:30:47] [INFO] 19.30.47.239 | Warn  | [#3]     [Player        ] Audio Exhausted 1
+[2026-01-20 19:30:47] [INFO] 19.30.47.253 | Info  | [#3]     [Player        ] [V] Started at 00.016]
+[2026-01-20 19:30:47] [INFO] [Sync] All players ready/buffered. Starting/Resuming SharedClock. (Ticks: 16942012)
+[2026-01-20 19:30:47] [INFO] 19.30.47.338 | Info  | [#3]     [Player        ] [A] Resynced at 00.079 [Diff: -00.001]
+[2026-01-20 19:30:50] [INFO] [ShuffleScoring] Selected #3 (AIMI PROSTATE MILKING.mov) from 4 candidates
+[2026-01-20 19:30:50] [INFO] [PlayNext] \\.\DISPLAY2 selected next video: #3 - AIMI PROSTATE MILKING.mov
+[2026-01-20 19:30:50] [INFO] LoadCurrentVideo: Processing item 'AIMI PROSTATE MILKING.mov' with path: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\AIMI PROSTATE MILKING.mov
+[2026-01-20 19:30:50] [INFO] LoadCurrentVideo: File verified to exist: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\AIMI PROSTATE MILKING.mov
+[2026-01-20 19:30:50] [INFO] LoadCurrentVideo: Generated URI: file:///D:/Downloads/JDownloads/PMVs/Mackg4/EXTRA!SHORTS/AIMI%20PROSTATE%20MILKING.mov
+[2026-01-20 19:30:50] [INFO] [PositionTracker] Found saved position for AIMI PROSTATE MILKING.mov: 00:05
+[2026-01-20 19:30:50] [INFO] [Resume] Found saved position for 'AIMI PROSTATE MILKING.mov': 00:05. Setting pending seek.
+[2026-01-20 19:30:50] [INFO] LoadCurrentVideo: Opening path in Flyleaf: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\AIMI PROSTATE MILKING.mov
+[2026-01-20 19:30:50] [INFO] 19.30.50.218 | Info  | [#3]     [Player        ] Opening D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\AIMI PROSTATE MILKING.mov
+[2026-01-20 19:30:50] [INFO] 19.30.50.227 | Info  | [#3]     [Player        ] [A] Finished at 02.933
+[2026-01-20 19:30:50] [INFO] 19.30.50.244 | Info  | [#3]     [Player        ] [V] Finished at 02.933 (Reason: Status is Opening)
+[2026-01-20 19:30:50] [INFO] 19.30.50.290 | Info  | [#3]     [Demuxer:  Main] Disposed
+[2026-01-20 19:30:50] [INFO] 19.30.50.290 | Info  | [#3]     [PluginHandler ] [OpenDefault] Open Success
+[2026-01-20 19:30:50] [INFO] 19.30.50.290 | Info  | [#3]     [PluginHandler ] SuggestItem #0 - AIMI PROSTATE MILKING.mov
+[2026-01-20 19:30:50] [INFO] 19.30.50.290 | Info  | [#3]     [PluginHandler ] [OpenDefault] Open Item (0) Success
+[2026-01-20 19:30:50] [INFO] 19.30.50.310 | Info  | [#3]     [Demuxer:  Main] Format Info
+[Time	 ] 00:00:00.000 / 00:00:48.216 (based on Stream), 26837 kb/s
+[Format  ] QuickTime / MOV (mov,mp4,m4a,3gp,3g2,mj2) [Flags: ShowIds, NoByteSeek, SeekToPts] [Ext(s): mov,mp4,m4a,3gp,3g2,mj2,psp,m4b,ism,ismv,isma,f4v,avif,heic,heif]
+	[Metadata] major_brand      : qt  
+	           minor_version    : 512
+	           compatible_brands: qt  
+	           creation_time    : 2024-08-11T13:05:02.000000Z
+	           encoder          : Blackmagic Design DaVinci Resolve
+
+[Video #00]
+	[Time	 ] 00:00:00.000 (0) / 00:00:48.216 (740608) | tb: 1/15360
+	[Codec   ] h264 | Main (avc1 / 0x31637661), 25299 kb/s - (Default)
+	[Format  ] Yuv420p (Bt709, Bt709, Bt709, Left, None, Progressive), 1920x1080 @ 60.000 fps [SAR: 1/1 DAR: 16:9 Crop: None]
+	[Metadata] creation_time: 2024-08-11T13:05:02.000000Z
+	           handler_name : VideoHandler
+	           vendor_id    :     
+	           encoder      : H.264
+	           timecode     : 01:00:00:00
+
+[Audio #01]
+	[Time	 ] 00:00:00.000 (0) / 00:00:48.216 (2314400) | tb: 1/48000
+	[Codec   ] pcm_s16le (lpcm / 0x6D63706C), 1536 kb/s - (Default)
+	[Format  ] 48000 Hz, stereo, s16
+	[Metadata] creation_time: 2024-08-11T13:05:02.000000Z
+	           handler_name : SoundHandler
+	           vendor_id    : [0][0][0][0]
+
+[Data  #02]
+	[Time	 ] 00:00:00.000 (0) / 00:00:48.216 (740608) | tb: 1/15360
+	[Codec   ] none (tmcd / 0x64636D74) - (Default)
+	[Metadata] creation_time: 2024-08-11T13:05:02.000000Z
+	           handler_name : TimeCodeHandler
+	           timecode     : 01:00:00:00
+
+[2026-01-20 19:30:50] [INFO] 19.30.50.311 | Info  | [#3]     [Demuxer:  Main] [Video #0] Enabled
+[2026-01-20 19:30:50] [INFO] 19.30.50.311 | Info  | [#3]     [StreamSuggester] Audio based on language
+[2026-01-20 19:30:50] [INFO] 19.30.50.311 | Info  | [#3]     [Demuxer:  Main] [Audio #1] Enabled
+[2026-01-20 19:30:50] [INFO] 19.30.50.311 | Info  | [#3]     [DecoderContext] [OpenAudioStream] #_ => #1
+[2026-01-20 19:30:50] [INFO] 19.30.50.311 | Info  | [#3]     [DecoderContext] [OpenVideoStream] #_ => #0
+[2026-01-20 19:30:50] [INFO] 19.30.50.311 | Info  | [#3]     [DecoderContext] [OpenPlaylistItem] None => AIMI PROSTATE MILKING.mov
+[2026-01-20 19:30:50] [INFO] 19.30.50.311 | Info  | [#3]     [DecoderContext] [Open] D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\AIMI PROSTATE MILKING.mov 
+[2026-01-20 19:30:50] [INFO] [HypnoViewModel] Applied volume 10 to new media.
+[2026-01-20 19:30:50] [INFO] [Resume] Seeking to saved position: 00:05 (5000ms)
+[2026-01-20 19:30:50] [INFO] [Sync] Pausing SharedClock. Stalled players: [\\.\DISPLAY2 (Buffering)]
+[2026-01-20 19:30:50] [INFO] 19.30.50.402 | Warn  | [#3]     [Player        ] Audio Exhausted 2 | 4
+[2026-01-20 19:30:50] [INFO] 19.30.50.412 | Warn  | [#3]     [Player        ] Audio Exhausted 2 | 2
+[2026-01-20 19:30:50] [INFO] [Sync] All players ready/buffered. Starting/Resuming SharedClock. (Ticks: 47030701)
+[2026-01-20 19:30:50] [INFO] [Sync] Pausing SharedClock. Stalled players: [\\.\DISPLAY2 (Buffering)]
+[2026-01-20 19:30:50] [INFO] 19.30.50.422 | Warn  | [#3]     [Player        ] Audio Exhausted 1
+[2026-01-20 19:30:50] [INFO] 19.30.50.440 | Info  | [#3]     [Player        ] [V] Started at 05.016]
+[2026-01-20 19:30:50] [INFO] [Sync] All players ready/buffered. Starting/Resuming SharedClock. (Ticks: 47030857)
+[2026-01-20 19:30:50] [INFO] 19.30.50.554 | Info  | [#3]     [Player        ] [A] Resynced at 05.079 [Diff: 00.000]
+[2026-01-20 19:30:51] [INFO] [PlayNext] \\.\DISPLAY1 selected next video: #0 - Agnes.mov
+[2026-01-20 19:30:51] [INFO] LoadCurrentVideo: Processing item 'Agnes.mov' with path: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Agnes.mov
+[2026-01-20 19:30:51] [INFO] LoadCurrentVideo: File verified to exist: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Agnes.mov
+[2026-01-20 19:30:51] [INFO] LoadCurrentVideo: Generated URI: file:///D:/Downloads/JDownloads/PMVs/Mackg4/EXTRA!SHORTS/Agnes.mov
+[2026-01-20 19:30:51] [INFO] [PositionTracker] No saved position for Agnes.mov
+[2026-01-20 19:30:51] [INFO] LoadCurrentVideo: Opening path in Flyleaf: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Agnes.mov
+[2026-01-20 19:30:51] [INFO] 19.30.51.538 | Info  | [#2]     [Player        ] Opening D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Agnes.mov
+[2026-01-20 19:30:51] [INFO] 19.30.51.551 | Info  | [#2]     [Player        ] [A] Finished at 05.633
+[2026-01-20 19:30:51] [INFO] 19.30.51.566 | Info  | [#2]     [Player        ] [V] Finished at 05.633 (Reason: Status is Opening)
+[2026-01-20 19:30:51] [INFO] 19.30.51.602 | Info  | [#2]     [Demuxer:  Main] Disposed
+[2026-01-20 19:30:51] [INFO] 19.30.51.602 | Info  | [#2]     [PluginHandler ] [OpenDefault] Open Success
+[2026-01-20 19:30:51] [INFO] 19.30.51.602 | Info  | [#2]     [PluginHandler ] SuggestItem #0 - Agnes.mov
+[2026-01-20 19:30:51] [INFO] 19.30.51.602 | Info  | [#2]     [PluginHandler ] [OpenDefault] Open Item (0) Success
+[2026-01-20 19:30:51] [INFO] 19.30.51.656 | Info  | [#2]     [Demuxer:  Main] Format Info
+[Time	 ] 00:00:00.000 / 00:01:36.133 (based on Stream), 40778 kb/s
+[Format  ] QuickTime / MOV (mov,mp4,m4a,3gp,3g2,mj2) [Flags: ShowIds, NoByteSeek, SeekToPts] [Ext(s): mov,mp4,m4a,3gp,3g2,mj2,psp,m4b,ism,ismv,isma,f4v,avif,heic,heif]
+	[Metadata] major_brand      : qt  
+	           minor_version    : 512
+	           compatible_brands: qt  
+	           creation_time    : 2025-06-05T17:49:08.000000Z
+	           encoder          : Blackmagic Design DaVinci Resolve Studio
+
+[Video #00]
+	[Time	 ] 00:00:00.000 (0) / 00:01:36.133 (1476608) | tb: 1/15360
+	[Codec   ] h264 | High (avc1 / 0x31637661), 38467 kb/s - (Default)
+	[Format  ] Yuv420p (Bt709, Bt709, Bt709, Left, Limited, Progressive), 1920x1080 @ 60.000 fps [SAR: 1/1 DAR: 16:9 Crop: None]
+	[Metadata] creation_time: 2025-06-05T17:49:08.000000Z
+	           handler_name : VideoHandler
+	           vendor_id    :     
+	           encoder      : H.264 NVIDIA
+	           timecode     : 01:00:00:00
+
+[Audio #01]
+	[Time	 ] 00:00:00.000 (0) / 00:01:36.133 (4614400) | tb: 1/48000
+	[Codec   ] pcm_s24le (lpcm / 0x6D63706C), 2304 kb/s - (Default)
+	[Format  ] 48000 Hz, stereo, s32
+	[Metadata] creation_time: 2025-06-05T17:49:08.000000Z
+	           handler_name : SoundHandler
+	           vendor_id    : [0][0][0][0]
+
+[Data  #02]
+	[Time	 ] 00:00:00.000 (0) / 00:01:36.133 (1476608) | tb: 1/15360
+	[Codec   ] none (tmcd / 0x64636D74) - (Default)
+	[Metadata] creation_time: 2025-06-05T17:49:08.000000Z
+	           handler_name : TimeCodeHandler
+	           timecode     : 01:00:00:00
+
+[2026-01-20 19:30:51] [INFO] 19.30.51.656 | Info  | [#2]     [Demuxer:  Main] [Video #0] Enabled
+[2026-01-20 19:30:51] [INFO] 19.30.51.656 | Info  | [#2]     [StreamSuggester] Audio based on language
+[2026-01-20 19:30:51] [INFO] 19.30.51.656 | Info  | [#2]     [Demuxer:  Main] [Audio #1] Enabled
+[2026-01-20 19:30:51] [INFO] 19.30.51.656 | Info  | [#2]     [DecoderContext] [OpenAudioStream] #_ => #1
+[2026-01-20 19:30:51] [INFO] 19.30.51.656 | Info  | [#2]     [DecoderContext] [OpenVideoStream] #_ => #0
+[2026-01-20 19:30:51] [INFO] 19.30.51.656 | Info  | [#2]     [DecoderContext] [OpenPlaylistItem] None => Agnes.mov
+[2026-01-20 19:30:51] [INFO] 19.30.51.656 | Info  | [#2]     [DecoderContext] [Open] D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Agnes.mov 
+[2026-01-20 19:30:51] [INFO] [HypnoViewModel] Applied volume 10 to new media.
+[2026-01-20 19:30:51] [INFO] [Sync] Pausing SharedClock. Stalled players: [\\.\DISPLAY1 (Buffering)]
+[2026-01-20 19:30:51] [INFO] [Sync] All players ready/buffered. Starting/Resuming SharedClock. (Ticks: 58391333)
+[2026-01-20 19:30:51] [INFO] 19.30.51.678 | Warn  | [#2]     [Player        ] Audio Exhausted 2 | 4
+[2026-01-20 19:30:51] [INFO] 19.30.51.689 | Warn  | [#2]     [Player        ] Audio Exhausted 2 | 2
+[2026-01-20 19:30:51] [INFO] 19.30.51.699 | Warn  | [#2]     [Player        ] Audio Exhausted 1
+[2026-01-20 19:30:51] [INFO] 19.30.51.715 | Info  | [#2]     [Player        ] [V] Started at 00.016]
+[2026-01-20 19:30:51] [INFO] 19.30.51.745 | Info  | [#2]     [Player        ] [A] Resynced at 00.079 [Diff: 00.000]
+[2026-01-20 19:30:52] [INFO] [PlayNext] \\.\DISPLAY1 selected next video: #0 - Agnes.mov
+[2026-01-20 19:30:52] [INFO] LoadCurrentVideo: Processing item 'Agnes.mov' with path: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Agnes.mov
+[2026-01-20 19:30:52] [INFO] LoadCurrentVideo: File verified to exist: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Agnes.mov
+[2026-01-20 19:30:52] [INFO] LoadCurrentVideo: Generated URI: file:///D:/Downloads/JDownloads/PMVs/Mackg4/EXTRA!SHORTS/Agnes.mov
+[2026-01-20 19:30:52] [INFO] [PositionTracker] No saved position for Agnes.mov
+[2026-01-20 19:30:52] [INFO] LoadCurrentVideo: Opening path in Flyleaf: D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Agnes.mov
+[2026-01-20 19:30:52] [INFO] 19.30.52.562 | Info  | [#2]     [Player        ] Opening D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Agnes.mov
+[2026-01-20 19:30:52] [INFO] 19.30.52.574 | Info  | [#2]     [Player        ] [A] Finished at 00.866
+[2026-01-20 19:30:52] [INFO] 19.30.52.591 | Info  | [#2]     [Player        ] [V] Finished at 00.866 (Reason: Status is Opening)
+[2026-01-20 19:30:52] [INFO] 19.30.52.633 | Info  | [#2]     [Demuxer:  Main] Disposed
+[2026-01-20 19:30:52] [INFO] 19.30.52.633 | Info  | [#2]     [PluginHandler ] [OpenDefault] Open Success
+[2026-01-20 19:30:52] [INFO] 19.30.52.633 | Info  | [#2]     [PluginHandler ] SuggestItem #0 - Agnes.mov
+[2026-01-20 19:30:52] [INFO] 19.30.52.633 | Info  | [#2]     [PluginHandler ] [OpenDefault] Open Item (0) Success
+[2026-01-20 19:30:52] [INFO] 19.30.52.688 | Info  | [#2]     [Demuxer:  Main] Format Info
+[Time	 ] 00:00:00.000 / 00:01:36.133 (based on Stream), 40778 kb/s
+[Format  ] QuickTime / MOV (mov,mp4,m4a,3gp,3g2,mj2) [Flags: ShowIds, NoByteSeek, SeekToPts] [Ext(s): mov,mp4,m4a,3gp,3g2,mj2,psp,m4b,ism,ismv,isma,f4v,avif,heic,heif]
+	[Metadata] major_brand      : qt  
+	           minor_version    : 512
+	           compatible_brands: qt  
+	           creation_time    : 2025-06-05T17:49:08.000000Z
+	           encoder          : Blackmagic Design DaVinci Resolve Studio
+
+[Video #00]
+	[Time	 ] 00:00:00.000 (0) / 00:01:36.133 (1476608) | tb: 1/15360
+	[Codec   ] h264 | High (avc1 / 0x31637661), 38467 kb/s - (Default)
+	[Format  ] Yuv420p (Bt709, Bt709, Bt709, Left, Limited, Progressive), 1920x1080 @ 60.000 fps [SAR: 1/1 DAR: 16:9 Crop: None]
+	[Metadata] creation_time: 2025-06-05T17:49:08.000000Z
+	           handler_name : VideoHandler
+	           vendor_id    :     
+	           encoder      : H.264 NVIDIA
+	           timecode     : 01:00:00:00
+
+[Audio #01]
+	[Time	 ] 00:00:00.000 (0) / 00:01:36.133 (4614400) | tb: 1/48000
+	[Codec   ] pcm_s24le (lpcm / 0x6D63706C), 2304 kb/s - (Default)
+	[Format  ] 48000 Hz, stereo, s32
+	[Metadata] creation_time: 2025-06-05T17:49:08.000000Z
+	           handler_name : SoundHandler
+	           vendor_id    : [0][0][0][0]
+
+[Data  #02]
+	[Time	 ] 00:00:00.000 (0) / 00:01:36.133 (1476608) | tb: 1/15360
+	[Codec   ] none (tmcd / 0x64636D74) - (Default)
+	[Metadata] creation_time: 2025-06-05T17:49:08.000000Z
+	           handler_name : TimeCodeHandler
+	           timecode     : 01:00:00:00
+
+[2026-01-20 19:30:52] [INFO] 19.30.52.688 | Info  | [#2]     [Demuxer:  Main] [Video #0] Enabled
+[2026-01-20 19:30:52] [INFO] 19.30.52.688 | Info  | [#2]     [StreamSuggester] Audio based on language
+[2026-01-20 19:30:52] [INFO] 19.30.52.688 | Info  | [#2]     [Demuxer:  Main] [Audio #1] Enabled
+[2026-01-20 19:30:52] [INFO] 19.30.52.688 | Info  | [#2]     [DecoderContext] [OpenAudioStream] #_ => #1
+[2026-01-20 19:30:52] [INFO] 19.30.52.688 | Info  | [#2]     [DecoderContext] [OpenVideoStream] #_ => #0
+[2026-01-20 19:30:52] [INFO] 19.30.52.688 | Info  | [#2]     [DecoderContext] [OpenPlaylistItem] None => Agnes.mov
+[2026-01-20 19:30:52] [INFO] 19.30.52.688 | Info  | [#2]     [DecoderContext] [Open] D:\Downloads\JDownloads\PMVs\Mackg4\EXTRA!SHORTS\Agnes.mov 
+[2026-01-20 19:30:52] [INFO] [HypnoViewModel] Applied volume 10 to new media.
+[2026-01-20 19:30:52] [INFO] [Sync] Pausing SharedClock. Stalled players: [\\.\DISPLAY1 (Buffering)]
+[2026-01-20 19:30:52] [INFO] [Sync] All players ready/buffered. Starting/Resuming SharedClock. (Ticks: 68719511)
+[2026-01-20 19:30:52] [INFO] 19.30.52.712 | Warn  | [#2]     [Player        ] Audio Exhausted 2 | 4
+[2026-01-20 19:30:52] [INFO] 19.30.52.722 | Warn  | [#2]     [Player        ] Audio Exhausted 2 | 2
+[2026-01-20 19:30:52] [INFO] 19.30.52.732 | Warn  | [#2]     [Player        ] Audio Exhausted 1
+[2026-01-20 19:30:52] [INFO] 19.30.52.748 | Info  | [#2]     [Player        ] [V] Started at 00.016]
+[2026-01-20 19:30:52] [INFO] 19.30.52.780 | Info  | [#2]     [Player        ] [A] Resynced at 00.079 [Diff: -00.000]
+[2026-01-20 19:30:53] [INFO] [PositionTracker] Successfully saved 40 positions to data directory
+[2026-01-20 19:30:53] [INFO] [HypnoViewModel] Disposing (Current: file:///D:/Downloads/JDownloads/PMVs/Mackg4/EXTRA!SHORTS/Agnes.mov)
+[2026-01-20 19:30:53] [INFO] 19.30.53.641 | Warn  | [#3]     [Player        ] [V] Hard Resync (Drift: 7836ms)
+[2026-01-20 19:30:53] [INFO] 19.30.53.644 | Info  | [#2]     [Player        ] [A] Finished at 00.900
+[2026-01-20 19:30:53] [INFO] 19.30.53.650 | Info  | [#3]     [Player        ] [A] Finished at 08.133
+[2026-01-20 19:30:53] [INFO] 19.30.53.660 | Info  | [#2]     [Player        ] [V] Finished at 00.900 (Reason: Status is Stopped)
+[2026-01-20 19:30:53] [INFO] 19.30.53.664 | Info  | [#3]     [Player        ] [V] Started at 08.183] [A: 08.239]
+[2026-01-20 19:30:53] [INFO] 19.30.53.700 | Info  | [#2]     [Demuxer:  Main] Disposed
+[2026-01-20 19:30:53] [INFO] 19.30.53.737 | Info  | [#2]     [Renderer      ] Disposed
+[2026-01-20 19:30:53] [INFO] 19.30.53.737 | Info  | [#2]     [Player        ] Disposed
+[2026-01-20 19:30:53] [INFO] [HypnoViewModel] Player disposed successfully
+[2026-01-20 19:30:53] [INFO] [VideoPlayerService] Last player removed, stopped sync timer.
+[2026-01-20 19:30:53] [INFO] [HypnoWindow] Flyleaf control reference cleared
+[2026-01-20 19:30:53] [INFO] [HypnoWindow] Disposed
+[2026-01-20 19:30:53] [INFO] [HypnoViewModel] Disposing (Current: file:///D:/Downloads/JDownloads/PMVs/Mackg4/EXTRA!SHORTS/AIMI PROSTATE MILKING.mov)
+[2026-01-20 19:30:53] [INFO] 19.30.53.748 | Info  | [#3]     [Player        ] [A] Finished at 08.183
+[2026-01-20 19:30:53] [INFO] 19.30.53.766 | Info  | [#3]     [Player        ] [V] Finished at 08.183 (Reason: Status is Stopped)
+[2026-01-20 19:30:53] [INFO] 19.30.53.807 | Info  | [#3]     [Demuxer:  Main] Disposed
+[2026-01-20 19:30:53] [INFO] 19.30.53.839 | Info  | [#3]     [Renderer      ] Disposed
+[2026-01-20 19:30:53] [INFO] 19.30.53.839 | Info  | [#3]     [Player        ] Disposed
+[2026-01-20 19:30:53] [INFO] [HypnoViewModel] Player disposed successfully
+[2026-01-20 19:30:53] [INFO] [VideoPlayerService] Last player removed, stopped sync timer.
+[2026-01-20 19:30:53] [INFO] [HypnoWindow] Flyleaf control reference cleared
+[2026-01-20 19:30:53] [INFO] [HypnoWindow] Disposed
+[2026-01-20 19:30:53] [INFO] 19.30.53.842 | Info  | [#2]     [Player        ] [Player #2] Status: Stopped -> Stopped
+[2026-01-20 19:30:53] [INFO] 19.30.53.842 | Info  | [#3]     [Player        ] [Player #3] Status: Stopped -> Stopped
+[2026-01-20 19:32:33] [INFO] [PMVHaven] Recognized input as single video page, skipping playlist extraction: https://pmvhaven.com/video/sissy-lumps_696dee09879a33bb37343520?from=home
+[2026-01-20 19:32:33] [INFO] [PersistentUrlCache] Loaded 0 valid entries
+[2026-01-20 19:32:33] [INFO] Fetching HTML from: https://pmvhaven.com/video/sissy-lumps_696dee09879a33bb37343520?from=home
+[2026-01-20 19:32:36] [INFO] Fetched 454129 characters from https://pmvhaven.com/video/sissy-lumps_696dee09879a33bb37343520?from=home
+[2026-01-20 19:32:36] [INFO] Using cached HTML for: https://pmvhaven.com/video/sissy-lumps_696dee09879a33bb37343520?from=home
+[2026-01-20 19:32:36] [INFO] ExtractVideoFromHtml: Processing 454129 characters of HTML from https://pmvhaven.com/video/sissy-lumps_696dee09879a33bb37343520?from=home
+[2026-01-20 19:32:36] [INFO] Trying Method 1: <video> tag with src attribute
+[2026-01-20 19:32:36] [INFO] Trying Method 2: <source> tags
+[2026-01-20 19:32:36] [INFO] Method 2: Found 0 <source> tags
+[2026-01-20 19:32:36] [INFO] Trying Method 3: data attributes
+[2026-01-20 19:32:36] [INFO] Method 4: Pattern (?:src|url|source|videoUrl|file|video_url|video_alt_url|video_alt_url2|video_alt_url3)\s*[:=]\s*["']([^"']*\.(?:mp4|webm|mkv|avi|mov|wmv|m4v|mpg|mpeg|ts|m2ts)(?:\?[^"']*)?)["'] found 0 potential matches
+[2026-01-20 19:32:36] [INFO] Method 4: Pattern ["']([^"']*\.(?:mp4|webm|mkv|avi|mov|wmv|m4v|mpg|mpeg|ts|m2ts)(?:\?[^"']*)?)["'] found 71 potential matches
+[2026-01-20 19:32:36] [INFO] Method 4: Selected best video URL: https://storage.pmvhaven.com/68740780a7b0b37209606282/videoPreview/comus_68740780a7b0b37209606282.mp4
+[2026-01-20 19:32:38] [INFO] Hypnotize called. Queuing 1 items across 1 screens.
+[2026-01-20 19:32:38] [INFO] [PositionTracker] Successfully saved 40 positions to data directory
+[2026-01-20 19:32:38] [INFO] 19.32.38.415 | Info  | [#4]     [Renderer      ] Initialized with Feature Level 11.1
+[2026-01-20 19:32:38] [INFO] [HypnoWindow] Created for screen \\.\DISPLAY2 | Bounds: {X=1920,Y=-56,Width=1920,Height=1080}
+[2026-01-20 19:32:38] [INFO] 19.32.38.447 | Info  | [#4]     [Renderer      ] D3DImage Shared Textures Created Successfully: 1920x1080
+[2026-01-20 19:32:38] [INFO] [Hardware] Rendering Tier: 2 (Tier 2 = Full Hardware Acceleration)
+[2026-01-20 19:32:38] [INFO] [HypnoWindow] Positioning: 1920,-56 1920x1080
+[2026-01-20 19:32:38] [INFO] Queue updated with 1 videos
+[2026-01-20 19:32:38] [INFO]   - Sissy Lumps (URL)
+[2026-01-20 19:32:38] [INFO] [PlayNext] \\.\DISPLAY2 selected next video: #0 - Sissy Lumps
+[2026-01-20 19:32:38] [INFO] LoadCurrentVideo: Processing item 'Sissy Lumps' with path: https://storage.pmvhaven.com/68740780a7b0b37209606282/videoPreview/comus_68740780a7b0b37209606282.mp4
+[2026-01-20 19:32:38] [INFO] LoadCurrentVideo: Item is a URL, validating...
+[2026-01-20 19:32:38] [INFO] LoadCurrentVideo: URL validation passed for: https://storage.pmvhaven.com/68740780a7b0b37209606282/videoPreview/comus_68740780a7b0b37209606282.mp4
+[2026-01-20 19:32:38] [INFO] [PositionTracker] No saved position for sissy-lumps_696dee09879a33bb37343520?from=home
+[2026-01-20 19:32:38] [INFO] LoadCurrentVideo: Injecting Referer header: https://pmvhaven.com/video/sissy-lumps_696dee09879a33bb37343520?from=home
+[2026-01-20 19:32:38] [INFO] LoadCurrentVideo: Opening path in Flyleaf: https://storage.pmvhaven.com/68740780a7b0b37209606282/videoPreview/comus_68740780a7b0b37209606282.mp4
+[2026-01-20 19:32:38] [INFO] 19.32.38.465 | Info  | [#4]     [Player        ] Opening https://storage.pmvhaven.com/68740780a7b0b37209606282/videoPreview/comus_68740780a7b0b37209606282.mp4
+[2026-01-20 19:32:38] [INFO] 19.32.38.465 | Info  | [#4]     [PluginHandler ] [OpenDefault] Open Success
+[2026-01-20 19:32:38] [INFO] 19.32.38.465 | Info  | [#4]     [PluginHandler ] SuggestItem #0 - comus_68740780a7b0b37209606282.mp4
+[2026-01-20 19:32:38] [INFO] 19.32.38.465 | Info  | [#4]     [PluginHandler ] [OpenDefault] Open Item (0) Success
+[2026-01-20 19:32:40] [INFO] 19.32.40.953 | Info  | [#4]     [Demuxer:  Main] Format Info
+[Time	 ] 00:00:00.000 / 00:00:10.000 (based on Stream), 510 kb/s
+[Format  ] QuickTime / MOV (mov,mp4,m4a,3gp,3g2,mj2) [Flags: ShowIds, NoByteSeek, SeekToPts] [Ext(s): mov,mp4,m4a,3gp,3g2,mj2,psp,m4b,ism,ismv,isma,f4v,avif,heic,heif]
+	[Metadata] major_brand      : isom
+	           minor_version    : 512
+	           compatible_brands: isomiso2avc1mp41
+	           encoder          : Lavf61.1.100
+
+[Video #00]
+	[Time	 ] 00:00:00.000 (0) / 00:00:10.000 (128000) | tb: 1/12800
+	[Codec   ] h264 | High (avc1 / 0x31637661), 366 kb/s - (Default)
+	[Format  ] Yuv420p (Unspecified, None, Unspecified, Left, None, Progressive), 480x234 @ 25.000 fps [SAR: 312/313 DAR: 640:313 Crop: None]
+	[Metadata] handler_name: VideoHandler
+	           vendor_id   : [0][0][0][0]
+	           encoder     : Lavc61.3.100 libx264
+
+[Audio #01]
+	[Time	 ] 00:00:00.000 (0) / 00:00:09.999 (480000) | tb: 1/48000
+	[Codec   ] aac | LC (mp4a / 0x6134706D), 133 kb/s - (Default)
+	[Format  ] 48000 Hz, stereo, fltp
+	[Metadata] handler_name: SoundHandler
+	           vendor_id   : [0][0][0][0]
+
+[2026-01-20 19:32:40] [INFO] 19.32.40.953 | Info  | [#4]     [Demuxer:  Main] [Video #0] Enabled
+[2026-01-20 19:32:40] [INFO] 19.32.40.953 | Info  | [#4]     [StreamSuggester] Audio based on language
+[2026-01-20 19:32:40] [INFO] 19.32.40.954 | Info  | [#4]     [Demuxer:  Main] [Audio #1] Enabled
+[2026-01-20 19:32:40] [INFO] 19.32.40.954 | Info  | [#4]     [DecoderContext] [OpenAudioStream] #_ => #1
+[2026-01-20 19:32:40] [INFO] 19.32.40.954 | Info  | [#4]     [DecoderContext] [OpenVideoStream] #_ => #0
+[2026-01-20 19:32:40] [INFO] 19.32.40.954 | Info  | [#4]     [DecoderContext] [OpenPlaylistItem] None => comus_68740780a7b0b37209606282.mp4
+[2026-01-20 19:32:40] [INFO] 19.32.40.954 | Info  | [#4]     [DecoderContext] [Open] https://storage.pmvhaven.com/68740780a7b0b37209606282/videoPreview/comus_68740780a7b0b37209606282.mp4 
+[2026-01-20 19:32:40] [INFO] [HypnoViewModel] Applied volume 10 to new media.
+[2026-01-20 19:32:40] [INFO] [Sync] User played. Resuming SharedClock.
+[2026-01-20 19:32:40] [INFO] 19.32.40.956 | Info  | [#4]     [Player        ] [Player #4] Status: Playing -> Playing
+[2026-01-20 19:32:40] [INFO] 19.32.40.957 | Info  | [#4]     [Player        ] Initialiazing audio at 48000Hz (0:Default)
+[2026-01-20 19:32:41] [INFO] 19.32.41.030 | Warn  | [#4]     [Player        ] Audio Exhausted 2 | 2
+[2026-01-20 19:32:41] [INFO] 19.32.41.056 | Info  | [#4]     [Player        ] [V] Started at 00.040] [A: 00.079]
+[2026-01-20 19:32:41] [INFO] 19.32.41.064 | Info  | [#4]     [Player        ] [A] Resynced at 00.079 [Diff: 00.000]
+[2026-01-20 19:32:50] [INFO] [PositionTracker] Successfully saved 41 positions to data directory
+[2026-01-20 19:32:50] [INFO] 19.32.50.953 | Info  | [#4]     [Player        ] [A] Finished at 09.920
+[2026-01-20 19:32:51] [INFO] 19.32.51.068 | Info  | [#4]     [Player        ] [V] Finished at 10.000 (Reason: Decoder has ended)
+[2026-01-20 19:32:51] [INFO] [HypnoViewModel] Media ended: https://storage.pmvhaven.com/68740780a7b0b37209606282/videoPreview/comus_68740780a7b0b37209606282.mp4 (Pos: #0)
+[2026-01-20 19:32:51] [INFO] [PositionTracker] Cleared position for sissy-lumps_696dee09879a33bb37343520?from=home (video finished)
+[2026-01-20 19:32:51] [INFO] [PositionTracker] Successfully saved 40 positions to data directory
+[2026-01-20 19:32:51] [INFO] [PlayNext] \\.\DISPLAY2 selected next video: #0 - Sissy Lumps
+[2026-01-20 19:32:51] [INFO] LoadCurrentVideo: Processing item 'Sissy Lumps' with path: https://storage.pmvhaven.com/68740780a7b0b37209606282/videoPreview/comus_68740780a7b0b37209606282.mp4
+[2026-01-20 19:32:51] [INFO] LoadCurrentVideo: Item is a URL, validating...
+[2026-01-20 19:32:51] [INFO] LoadCurrentVideo: URL validation passed for: https://storage.pmvhaven.com/68740780a7b0b37209606282/videoPreview/comus_68740780a7b0b37209606282.mp4
+[2026-01-20 19:32:51] [INFO] [PositionTracker] No saved position for sissy-lumps_696dee09879a33bb37343520?from=home
+[2026-01-20 19:32:51] [INFO] LoadCurrentVideo: Injecting Referer header: https://pmvhaven.com/video/sissy-lumps_696dee09879a33bb37343520?from=home
+[2026-01-20 19:32:51] [INFO] LoadCurrentVideo: Opening path in Flyleaf: https://storage.pmvhaven.com/68740780a7b0b37209606282/videoPreview/comus_68740780a7b0b37209606282.mp4
+[2026-01-20 19:32:51] [INFO] 19.32.51.070 | Info  | [#4]     [Player        ] Opening https://storage.pmvhaven.com/68740780a7b0b37209606282/videoPreview/comus_68740780a7b0b37209606282.mp4
+[2026-01-20 19:32:51] [INFO] 19.32.51.075 | Info  | [#4]     [Demuxer:  Main] Disposed
+[2026-01-20 19:32:51] [INFO] 19.32.51.075 | Info  | [#4]     [PluginHandler ] [OpenDefault] Open Success
+[2026-01-20 19:32:51] [INFO] 19.32.51.075 | Info  | [#4]     [PluginHandler ] SuggestItem #0 - comus_68740780a7b0b37209606282.mp4
+[2026-01-20 19:32:51] [INFO] 19.32.51.075 | Info  | [#4]     [PluginHandler ] [OpenDefault] Open Item (0) Success
+[2026-01-20 19:32:53] [INFO] 19.32.53.080 | Info  | [#4]     [Demuxer:  Main] Format Info
+[Time	 ] 00:00:00.000 / 00:00:10.000 (based on Stream), 510 kb/s
+[Format  ] QuickTime / MOV (mov,mp4,m4a,3gp,3g2,mj2) [Flags: ShowIds, NoByteSeek, SeekToPts] [Ext(s): mov,mp4,m4a,3gp,3g2,mj2,psp,m4b,ism,ismv,isma,f4v,avif,heic,heif]
+	[Metadata] major_brand      : isom
+	           minor_version    : 512
+	           compatible_brands: isomiso2avc1mp41
+	           encoder          : Lavf61.1.100
+
+[Video #00]
+	[Time	 ] 00:00:00.000 (0) / 00:00:10.000 (128000) | tb: 1/12800
+	[Codec   ] h264 | High (avc1 / 0x31637661), 366 kb/s - (Default)
+	[Format  ] Yuv420p (Unspecified, None, Unspecified, Left, None, Progressive), 480x234 @ 25.000 fps [SAR: 312/313 DAR: 640:313 Crop: None]
+	[Metadata] handler_name: VideoHandler
+	           vendor_id   : [0][0][0][0]
+	           encoder     : Lavc61.3.100 libx264
+
+[Audio #01]
+	[Time	 ] 00:00:00.000 (0) / 00:00:09.999 (480000) | tb: 1/48000
+	[Codec   ] aac | LC (mp4a / 0x6134706D), 133 kb/s - (Default)
+	[Format  ] 48000 Hz, stereo, fltp
+	[Metadata] handler_name: SoundHandler
+	           vendor_id   : [0][0][0][0]
+
+[2026-01-20 19:32:53] [INFO] 19.32.53.080 | Info  | [#4]     [Demuxer:  Main] [Video #0] Enabled
+[2026-01-20 19:32:53] [INFO] 19.32.53.080 | Info  | [#4]     [StreamSuggester] Audio based on language
+[2026-01-20 19:32:53] [INFO] 19.32.53.081 | Info  | [#4]     [Demuxer:  Main] [Audio #1] Enabled
+[2026-01-20 19:32:53] [INFO] 19.32.53.081 | Info  | [#4]     [DecoderContext] [OpenAudioStream] #_ => #1
+[2026-01-20 19:32:53] [INFO] 19.32.53.081 | Info  | [#4]     [DecoderContext] [OpenVideoStream] #_ => #0
+[2026-01-20 19:32:53] [INFO] 19.32.53.081 | Info  | [#4]     [DecoderContext] [OpenPlaylistItem] None => comus_68740780a7b0b37209606282.mp4
+[2026-01-20 19:32:53] [INFO] 19.32.53.081 | Info  | [#4]     [DecoderContext] [Open] https://storage.pmvhaven.com/68740780a7b0b37209606282/videoPreview/comus_68740780a7b0b37209606282.mp4 
+[2026-01-20 19:32:53] [INFO] [HypnoViewModel] Applied volume 10 to new media.
+[2026-01-20 19:32:53] [INFO] 19.32.53.081 | Info  | [#4]     [Player        ] [Player #4] Status: Ended -> Ended
+[2026-01-20 19:32:53] [INFO] 19.32.53.081 | Info  | [#4]     [Player        ] [Player #4] Status: Playing -> Playing
+[2026-01-20 19:32:53] [INFO] [Sync] Pausing SharedClock. Stalled players: [\\.\DISPLAY2 (Buffering)]
+[2026-01-20 19:32:53] [INFO] 19.32.53.139 | Info  | [#4]     [Player        ] [V] Started at 00.040] [A: 00.079]
+[2026-01-20 19:32:53] [INFO] 19.32.53.148 | Info  | [#4]     [Player        ] [A] Resynced at 00.079 [Diff: 00.008]
+[2026-01-20 19:32:53] [INFO] [Sync] All players ready/buffered. Starting/Resuming SharedClock. (Ticks: 121296266)
+[2026-01-20 19:33:00] [INFO] [PositionTracker] Successfully saved 41 positions to data directory
+[2026-01-20 19:33:03] [INFO] 19.33.03.040 | Info  | [#4]     [Player        ] [A] Finished at 09.880
+[2026-01-20 19:33:03] [INFO] [PositionTracker] Successfully saved 41 positions to data directory
+[2026-01-20 19:33:03] [INFO] 19.33.03.192 | Info  | [#4]     [Player        ] [V] Finished at 10.000 (Reason: Decoder has ended)
+[2026-01-20 19:33:03] [INFO] [HypnoViewModel] Media ended: https://storage.pmvhaven.com/68740780a7b0b37209606282/videoPreview/comus_68740780a7b0b37209606282.mp4 (Pos: #0)
+[2026-01-20 19:33:03] [INFO] [PositionTracker] Cleared position for sissy-lumps_696dee09879a33bb37343520?from=home (video finished)
+[2026-01-20 19:33:03] [INFO] [PositionTracker] Successfully saved 40 positions to data directory
+[2026-01-20 19:33:03] [INFO] [PlayNext] \\.\DISPLAY2 selected next video: #0 - Sissy Lumps
+[2026-01-20 19:33:03] [INFO] LoadCurrentVideo: Processing item 'Sissy Lumps' with path: https://storage.pmvhaven.com/68740780a7b0b37209606282/videoPreview/comus_68740780a7b0b37209606282.mp4
+[2026-01-20 19:33:03] [INFO] LoadCurrentVideo: Item is a URL, validating...
+[2026-01-20 19:33:03] [INFO] LoadCurrentVideo: URL validation passed for: https://storage.pmvhaven.com/68740780a7b0b37209606282/videoPreview/comus_68740780a7b0b37209606282.mp4
+[2026-01-20 19:33:03] [INFO] [PositionTracker] No saved position for sissy-lumps_696dee09879a33bb37343520?from=home
+[2026-01-20 19:33:03] [INFO] LoadCurrentVideo: Injecting Referer header: https://pmvhaven.com/video/sissy-lumps_696dee09879a33bb37343520?from=home
+[2026-01-20 19:33:03] [INFO] LoadCurrentVideo: Opening path in Flyleaf: https://storage.pmvhaven.com/68740780a7b0b37209606282/videoPreview/comus_68740780a7b0b37209606282.mp4
+[2026-01-20 19:33:03] [INFO] 19.33.03.193 | Info  | [#4]     [Player        ] Opening https://storage.pmvhaven.com/68740780a7b0b37209606282/videoPreview/comus_68740780a7b0b37209606282.mp4
+[2026-01-20 19:33:03] [INFO] 19.33.03.196 | Info  | [#4]     [Demuxer:  Main] Disposed
+[2026-01-20 19:33:03] [INFO] 19.33.03.196 | Info  | [#4]     [PluginHandler ] [OpenDefault] Open Success
+[2026-01-20 19:33:03] [INFO] 19.33.03.196 | Info  | [#4]     [PluginHandler ] SuggestItem #0 - comus_68740780a7b0b37209606282.mp4
+[2026-01-20 19:33:03] [INFO] 19.33.03.196 | Info  | [#4]     [PluginHandler ] [OpenDefault] Open Item (0) Success
+[2026-01-20 19:33:05] [INFO] 19.33.05.210 | Info  | [#4]     [Demuxer:  Main] Format Info
+[Time	 ] 00:00:00.000 / 00:00:10.000 (based on Stream), 510 kb/s
+[Format  ] QuickTime / MOV (mov,mp4,m4a,3gp,3g2,mj2) [Flags: ShowIds, NoByteSeek, SeekToPts] [Ext(s): mov,mp4,m4a,3gp,3g2,mj2,psp,m4b,ism,ismv,isma,f4v,avif,heic,heif]
+	[Metadata] major_brand      : isom
+	           minor_version    : 512
+	           compatible_brands: isomiso2avc1mp41
+	           encoder          : Lavf61.1.100
+
+[Video #00]
+	[Time	 ] 00:00:00.000 (0) / 00:00:10.000 (128000) | tb: 1/12800
+	[Codec   ] h264 | High (avc1 / 0x31637661), 366 kb/s - (Default)
+	[Format  ] Yuv420p (Unspecified, None, Unspecified, Left, None, Progressive), 480x234 @ 25.000 fps [SAR: 312/313 DAR: 640:313 Crop: None]
+	[Metadata] handler_name: VideoHandler
+	           vendor_id   : [0][0][0][0]
+	           encoder     : Lavc61.3.100 libx264
+
+[Audio #01]
+	[Time	 ] 00:00:00.000 (0) / 00:00:09.999 (480000) | tb: 1/48000
+	[Codec   ] aac | LC (mp4a / 0x6134706D), 133 kb/s - (Default)
+	[Format  ] 48000 Hz, stereo, fltp
+	[Metadata] handler_name: SoundHandler
+	           vendor_id   : [0][0][0][0]
+
+[2026-01-20 19:33:05] [INFO] 19.33.05.210 | Info  | [#4]     [Demuxer:  Main] [Video #0] Enabled
+[2026-01-20 19:33:05] [INFO] 19.33.05.210 | Info  | [#4]     [StreamSuggester] Audio based on language
+[2026-01-20 19:33:05] [INFO] 19.33.05.210 | Info  | [#4]     [Demuxer:  Main] [Audio #1] Enabled
+[2026-01-20 19:33:05] [INFO] 19.33.05.210 | Info  | [#4]     [DecoderContext] [OpenAudioStream] #_ => #1
+[2026-01-20 19:33:05] [INFO] 19.33.05.210 | Info  | [#4]     [DecoderContext] [OpenVideoStream] #_ => #0
+[2026-01-20 19:33:05] [INFO] 19.33.05.210 | Info  | [#4]     [DecoderContext] [OpenPlaylistItem] None => comus_68740780a7b0b37209606282.mp4
+[2026-01-20 19:33:05] [INFO] 19.33.05.210 | Info  | [#4]     [DecoderContext] [Open] https://storage.pmvhaven.com/68740780a7b0b37209606282/videoPreview/comus_68740780a7b0b37209606282.mp4 
+[2026-01-20 19:33:05] [INFO] [HypnoViewModel] Applied volume 10 to new media.
+[2026-01-20 19:33:05] [INFO] 19.33.05.211 | Info  | [#4]     [Player        ] [Player #4] Status: Ended -> Ended
+[2026-01-20 19:33:05] [INFO] 19.33.05.211 | Info  | [#4]     [Player        ] [Player #4] Status: Playing -> Playing
+[2026-01-20 19:33:05] [INFO] [Sync] Pausing SharedClock. Stalled players: [\\.\DISPLAY2 (Buffering)]
+[2026-01-20 19:33:05] [INFO] 19.33.05.270 | Info  | [#4]     [Player        ] [V] Started at 00.040] [A: 00.079]
+[2026-01-20 19:33:05] [INFO] 19.33.05.279 | Info  | [#4]     [Player        ] [A] Resynced at 00.079 [Diff: 00.008]
+[2026-01-20 19:33:05] [INFO] [Sync] All players ready/buffered. Starting/Resuming SharedClock. (Ticks: 241582041)
+[2026-01-20 19:33:06] [INFO] [PositionTracker] Successfully saved 40 positions to data directory
+[2026-01-20 19:33:06] [INFO] [HypnoViewModel] Disposing (Current: https://storage.pmvhaven.com/68740780a7b0b37209606282/videoPreview/comus_68740780a7b0b37209606282.mp4)
+[2026-01-20 19:33:06] [INFO] 19.33.06.401 | Info  | [#4]     [Player        ] [A] Finished at 01.080
+[2026-01-20 19:33:06] [INFO] 19.33.06.419 | Info  | [#4]     [Player        ] [V] Finished at 01.080 (Reason: Status is Stopped)
+[2026-01-20 19:33:06] [INFO] 19.33.06.471 | Info  | [#4]     [Demuxer:  Main] Disposed
+[2026-01-20 19:33:06] [INFO] 19.33.06.504 | Info  | [#4]     [Renderer      ] Disposed
+[2026-01-20 19:33:06] [INFO] 19.33.06.505 | Info  | [#4]     [Player        ] Disposed
+[2026-01-20 19:33:06] [INFO] [HypnoViewModel] Player disposed successfully
+[2026-01-20 19:33:06] [INFO] [VideoPlayerService] Last player removed, stopped sync timer.
+[2026-01-20 19:33:06] [INFO] [HypnoWindow] Flyleaf control reference cleared
+[2026-01-20 19:33:06] [INFO] [HypnoWindow] Disposed
+[2026-01-20 19:33:06] [INFO] 19.33.06.506 | Info  | [#4]     [Player        ] [Player #4] Status: Stopped -> Stopped
+[2026-01-20 19:33:33] [INFO] [PMVHaven] Recognized input as single video page, skipping playlist extraction: https://pmvhaven.com/video/blondelashes-pmv_69687aed4c8c99c2b2e7d244?from=home
+[2026-01-20 19:33:33] [INFO] Fetching HTML from: https://pmvhaven.com/video/blondelashes-pmv_69687aed4c8c99c2b2e7d244?from=home
+[2026-01-20 19:33:36] [INFO] Fetched 378108 characters from https://pmvhaven.com/video/blondelashes-pmv_69687aed4c8c99c2b2e7d244?from=home
+[2026-01-20 19:33:36] [INFO] Using cached HTML for: https://pmvhaven.com/video/blondelashes-pmv_69687aed4c8c99c2b2e7d244?from=home
+[2026-01-20 19:33:36] [INFO] ExtractVideoFromHtml: Processing 378108 characters of HTML from https://pmvhaven.com/video/blondelashes-pmv_69687aed4c8c99c2b2e7d244?from=home
+[2026-01-20 19:33:36] [INFO] Trying Method 1: <video> tag with src attribute
+[2026-01-20 19:33:36] [INFO] Trying Method 2: <source> tags
+[2026-01-20 19:33:36] [INFO] Method 2: Found 0 <source> tags
+[2026-01-20 19:33:36] [INFO] Trying Method 3: data attributes
+[2026-01-20 19:33:36] [INFO] Method 4: Pattern (?:src|url|source|videoUrl|file|video_url|video_alt_url|video_alt_url2|video_alt_url3)\s*[:=]\s*["']([^"']*\.(?:mp4|webm|mkv|avi|mov|wmv|m4v|mpg|mpeg|ts|m2ts)(?:\?[^"']*)?)["'] found 0 potential matches
+[2026-01-20 19:33:36] [INFO] Method 4: Pattern ["']([^"']*\.(?:mp4|webm|mkv|avi|mov|wmv|m4v|mpg|mpeg|ts|m2ts)(?:\?[^"']*)?)["'] found 59 potential matches
+[2026-01-20 19:33:36] [INFO] Method 4: Selected best video URL: https://video.pmvhaven.com/videos/Cyb3rT0y_-_BlondeLashes_PMV_1768454893942_nf42jikh.mp4
+[2026-01-20 19:33:39] [INFO] Hypnotize called. Queuing 1 items across 1 screens.
+[2026-01-20 19:33:39] [INFO] [PositionTracker] Successfully saved 40 positions to data directory
+[2026-01-20 19:33:39] [INFO] 19.33.39.903 | Info  | [#5]     [Renderer      ] Initialized with Feature Level 11.1
+[2026-01-20 19:33:39] [INFO] [HypnoWindow] Created for screen \\.\DISPLAY2 | Bounds: {X=1920,Y=-56,Width=1920,Height=1080}
+[2026-01-20 19:33:39] [INFO] 19.33.39.933 | Info  | [#5]     [Renderer      ] D3DImage Shared Textures Created Successfully: 1920x1080
+[2026-01-20 19:33:39] [INFO] [Hardware] Rendering Tier: 2 (Tier 2 = Full Hardware Acceleration)
+[2026-01-20 19:33:39] [INFO] [HypnoWindow] Positioning: 1920,-56 1920x1080
+[2026-01-20 19:33:39] [INFO] Queue updated with 1 videos
+[2026-01-20 19:33:39] [INFO]   - BlondeLashes PMV (URL)
+[2026-01-20 19:33:39] [INFO] [PlayNext] \\.\DISPLAY2 selected next video: #0 - BlondeLashes PMV
+[2026-01-20 19:33:39] [INFO] LoadCurrentVideo: Processing item 'BlondeLashes PMV' with path: https://video.pmvhaven.com/videos/Cyb3rT0y_-_BlondeLashes_PMV_1768454893942_nf42jikh.mp4
+[2026-01-20 19:33:39] [INFO] LoadCurrentVideo: Item is a URL, validating...
+[2026-01-20 19:33:39] [INFO] LoadCurrentVideo: URL validation passed for: https://video.pmvhaven.com/videos/Cyb3rT0y_-_BlondeLashes_PMV_1768454893942_nf42jikh.mp4
+[2026-01-20 19:33:39] [INFO] [PositionTracker] No saved position for blondelashes-pmv_69687aed4c8c99c2b2e7d244?from=home
+[2026-01-20 19:33:39] [INFO] LoadCurrentVideo: Injecting Referer header: https://pmvhaven.com/video/blondelashes-pmv_69687aed4c8c99c2b2e7d244?from=home
+[2026-01-20 19:33:39] [INFO] LoadCurrentVideo: Opening path in Flyleaf: https://video.pmvhaven.com/videos/Cyb3rT0y_-_BlondeLashes_PMV_1768454893942_nf42jikh.mp4
+[2026-01-20 19:33:39] [INFO] 19.33.39.946 | Info  | [#5]     [Player        ] Opening https://video.pmvhaven.com/videos/Cyb3rT0y_-_BlondeLashes_PMV_1768454893942_nf42jikh.mp4
+[2026-01-20 19:33:39] [INFO] 19.33.39.947 | Info  | [#5]     [PluginHandler ] [OpenDefault] Open Success
+[2026-01-20 19:33:39] [INFO] 19.33.39.947 | Info  | [#5]     [PluginHandler ] SuggestItem #0 - Cyb3rT0y_-_BlondeLashes_PMV_1768454893942_nf42jikh.mp4
+[2026-01-20 19:33:39] [INFO] 19.33.39.947 | Info  | [#5]     [PluginHandler ] [OpenDefault] Open Item (0) Success

@@ -11,7 +11,7 @@ namespace GOON.Windows {
             DataContext = this;
             
             var version = Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
-            VersionText.Text = $"v{version}";
+            VersionText.Text = $"v{version?.Split('+')[0]}";
         }
 
         private void Grid_MouseLeftButtonDown(object sender, MouseButtonEventArgs e) {

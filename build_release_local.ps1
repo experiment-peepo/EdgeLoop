@@ -77,18 +77,14 @@ if ($LASTEXITCODE -ne 0) {
 # 4. Copy Dependencies from local folder
 Write-Host "Copying External Dependencies..." -ForegroundColor Yellow
 
-if (-not (Test-Path "Dependencies\ffmpeg.exe")) {
-    Write-Error "ffmpeg.exe not found in Dependencies folder!"
-    exit 1
-}
+
 
 if (-not (Test-Path "Dependencies\yt-dlp.exe")) {
     Write-Error "yt-dlp.exe not found in Dependencies folder!"
     exit 1
 }
 
-Copy-Item "Dependencies\ffmpeg.exe" "publish\ffmpeg.exe" -Force
-Write-Host "Copied ffmpeg.exe from Dependencies"
+
 
 Copy-Item "Dependencies\yt-dlp.exe" "publish\yt-dlp.exe" -Force
 Write-Host "Copied yt-dlp.exe from Dependencies"
@@ -105,9 +101,9 @@ Write-Host "`nVerifying Artifacts..." -ForegroundColor Yellow
 
 $goonExe = Get-ChildItem "publish/GO*.exe" | Select-Object -First 1
 $ytDlp = Test-Path "publish/yt-dlp.exe"
-$ffmpeg = Test-Path "publish/ffmpeg.exe"
 
-if ($goonExe -and $ytDlp -and $ffmpeg) {
+
+if ($goonExe -and $ytDlp) {
     Write-Host "SUCCESS! All artifacts present:" -ForegroundColor Green
     Get-ChildItem "publish" -Filter "*.exe" | ForEach-Object { 
         Write-Host "$($_.Name) - $([math]::Round($_.Length/1MB, 2)) MB" 

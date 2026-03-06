@@ -18,6 +18,7 @@ namespace GOON.Classes {
         private readonly IHtmlFetcher _htmlFetcher;
         // private readonly LruCache<string, string> _urlCache; // Replaced by PersistentUrlCache
         private readonly YtDlpService _ytDlpService;
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task<string>> _activeExtractions = new System.Collections.Concurrent.ConcurrentDictionary<string, Task<string>>();
 
         public VideoUrlExtractor(IHtmlFetcher htmlFetcher = null, YtDlpService ytDlpService = null) {
             _htmlFetcher = htmlFetcher ?? new StandardHtmlFetcher();
@@ -49,6 +50,11 @@ namespace GOON.Classes {
                  // But if we already cached it, we might skip the heavy lifting of video extraction.
             }
 
+            if (host.Contains("redgifs.com")) {
+                Logger.Warning($"[VideoUrlExtractor] RedGifs support removed. Skipping: {normalizedUrl}");
+                return new VideoMetadata();
+            }
+
             try {
                 // Fetch HTML
                 var html = await FetchHtmlAsync(normalizedUrl, cancellationToken);
@@ -71,12 +77,15 @@ namespace GOON.Classes {
                                 Logger.Warning($"[VideoUrlExtractor] yt-dlp failed for Rule34Video: {ex.Message}");
                             }
                         }
+                        
+                        // Fallback to specialized scraper if yt-dlp failed or is missing
+                        if (string.IsNullOrEmpty(videoUrl)) {
+                            videoUrl = await ExtractRule34VideoUrlAsync(normalizedUrl, cancellationToken);
+                        }
                     } else if (host.Contains("pmvhaven.com")) {
                         videoUrl = await ExtractPmvHavenUrlAsync(normalizedUrl, cancellationToken);
                     } else if (host.Contains("hypnotube.com")) {
                         videoUrl = await ExtractHypnotubeUrlAsync(normalizedUrl, cancellationToken);
-                    } else if (host.Contains("redgifs.com")) {
-                        videoUrl = await ExtractRedgifsUrlAsync(normalizedUrl, cancellationToken);
                     } else {
                         videoUrl = await ExtractGenericVideoUrlAsync(normalizedUrl, cancellationToken);
                     }
@@ -94,16 +103,34 @@ namespace GOON.Classes {
                 return new VideoMetadata();
             }
         }
-
         public virtual async Task<string> ExtractVideoUrlAsync(string pageUrl, CancellationToken cancellationToken = default) {
             if (string.IsNullOrWhiteSpace(pageUrl)) return null;
-            
-            // Check Persistent Cache first
-            var cachedUrl = PersistentUrlCache.Instance.Get(pageUrl);
-            if (!string.IsNullOrEmpty(cachedUrl)) {
-                Logger.Info($"[VideoUrlExtractor] Cache HIT for {pageUrl}");
-                return cachedUrl;
+
+            try {
+                // Coalesce multiple simultaneous requests for the same URL 
+                // using a Task-based dictionary.
+                Task<string> extractionTask;
+                lock (_activeExtractions) {
+                    if (!_activeExtractions.TryGetValue(pageUrl, out extractionTask) || extractionTask.IsFaulted || extractionTask.IsCanceled) {
+                        extractionTask = ExtractVideoUrlInternalAsync(pageUrl, cancellationToken);
+                        _activeExtractions[pageUrl] = extractionTask;
+                        
+                        // Self-cleanup after completion
+                        extractionTask.ContinueWith(t => {
+                            _activeExtractions.TryRemove(pageUrl, out _);
+                        }, TaskContinuationOptions.ExecuteSynchronously);
+                    }
+                }
+                return await extractionTask;
+            } catch {
+                return null;
             }
+        }
+
+        private async Task<string> ExtractVideoUrlInternalAsync(string pageUrl, CancellationToken cancellationToken) {
+            // Re-check cache inside the task just in case it was updated while waiting in GetOrAdd
+            var cachedUrl = PersistentUrlCache.Instance.Get(pageUrl);
+            if (!string.IsNullOrEmpty(cachedUrl)) return cachedUrl;
 
             try {
                 var normalizedUrl = FileValidator.NormalizeUrl(pageUrl);
@@ -116,10 +143,15 @@ namespace GOON.Classes {
                 
                 string videoUrl = null;
                 
-                var isRedgifsProfile = host.Contains("redgifs.com") && normalizedUrl.Contains("/users/");
                 var hasSpecializedScraper = host.Contains("pmvhaven.com") || 
-                                           host.Contains("hypnotube.com") ||
-                                           (host.Contains("redgifs.com") && !isRedgifsProfile);
+                                           host.Contains("hypnotube.com");
+                
+                // Explicitly block RedGifs support as requested
+                if (host.Contains("redgifs.com")) {
+                    Logger.Warning($"[VideoUrlExtractor] RedGifs support has been removed. Skipping: {normalizedUrl}");
+                    return null;
+                }
+
                 var useYtDlp = !hasSpecializedScraper;
 
                 if (_ytDlpService != null && _ytDlpService.IsAvailable && useYtDlp) {
@@ -143,17 +175,25 @@ namespace GOON.Classes {
                     videoUrl = await ExtractHypnotubeUrlAsync(normalizedUrl, cancellationToken);
                 } else if (host.Contains("pmvhaven.com")) {
                     videoUrl = await ExtractPmvHavenUrlAsync(normalizedUrl, cancellationToken);
-                } else if (host.Contains("redgifs.com")) {
-                    videoUrl = await ExtractRedgifsUrlAsync(normalizedUrl, cancellationToken);
                 } else if (host.Contains("rule34video.com")) {
-                    Logger.Warning($"[VideoUrlExtractor] Rule34Video requires yt-dlp. Custom scraper URLs don't work in MediaElement.");
-                    return null;
+                    videoUrl = await ExtractRule34VideoUrlAsync(normalizedUrl, cancellationToken);
                 } else {
                     videoUrl = await ExtractGenericVideoUrlAsync(normalizedUrl, cancellationToken);
                 }
 
                 if (videoUrl != null) {
                     PersistentUrlCache.Instance.Set(pageUrl, videoUrl);
+                } else if (_ytDlpService != null && _ytDlpService.IsAvailable) {
+                    // FALLBACK: If specialized scrapers failed, try yt-dlp as a last resort
+                    try {
+                        Logger.Info($"[VideoUrlExtractor] Specialized scraper for {host} failed, falling back to yt-dlp");
+                        videoUrl = await _ytDlpService.GetBestVideoUrlAsync(normalizedUrl, cancellationToken);
+                        if (videoUrl != null) {
+                            PersistentUrlCache.Instance.Set(pageUrl, videoUrl);
+                        }
+                    } catch (Exception ex) {
+                        Logger.Warning($"[VideoUrlExtractor] yt-dlp fallback failing for {host}: {ex.Message}");
+                    }
                 }
 
                 return videoUrl;
@@ -170,18 +210,18 @@ namespace GOON.Classes {
 
                 Logger.Info($"ExtractHypnotubeUrlAsync: Processing HTML from {url}");
 
-                // Try extracting all video sources and select highest quality
+                // 1. Try multi-source extraction (Higher Priority)
                 Logger.Info("Hypnotube: Trying multi-source extraction");
                 var sources = StashPatternExtractor.ExtractAllVideoSources(html, url);
                 if (sources.Any()) {
                     var best = QualitySelector.SelectBest(sources);
-                    if (best != null && best.Height >= 720) {
-                        Logger.Info($"Hypnotube: Selected high quality {best.Label} from {sources.Count} sources");
+                    if (best != null) {
+                        Logger.Info($"Hypnotube: Selected quality {best.Label} from {sources.Count} sources");
                         return ResolveUrl(best.Url, url);
                     }
                 }
 
-                // Try Stash pattern: Open Graph video (fallback if multi-source didn't find high quality)
+                // 2. Try Open Graph video (fallback if multi-source didn't find anything)
                 Logger.Info("Hypnotube: Trying og:video extraction");
                 var ogVideo = StashPatternExtractor.ExtractOgVideo(html);
                 if (!string.IsNullOrEmpty(ogVideo)) {
@@ -189,26 +229,20 @@ namespace GOON.Classes {
                     return ResolveUrl(ogVideo, url);
                 }
 
-                // If multi-source found something even if not 720p, use it as fallback after og:video
-                if (sources.Any()) {
-                    var best = QualitySelector.SelectBest(sources);
-                    if (best != null) {
-                        Logger.Info($"Hypnotube: Falling back to {best.Label} quality from {sources.Count} sources");
-                        return ResolveUrl(best.Url, url);
-                    }
-                }
-
-                // Fallback to generic extraction
+                // 3. Try generic extraction (Method 4 handles JS variables with extensions)
                 Logger.Info("Hypnotube: Trying generic extraction");
                 var videoUrl = ExtractVideoFromHtml(html, url);
-                
                 if (videoUrl != null) return videoUrl;
 
-                // Fallback site-specific: Hypnotube often uses a player config
-                var playerPattern = @"(?:video_url|file|src)\s*[:=]\s*[""']([^""']+)[""']";
+                // 4. Stricter site-specific fallback: only match scripts/configs if they hint at a video extension
+                var playerPattern = @"(?:video_url|file|src)\s*[:=]\s*[""']([^""']+\.(?:mp4|webm|mkv|m3u8)(?:\?[^""']*)?)[""']";
                 var match = Regex.Match(html, playerPattern, RegexOptions.IgnoreCase);
                 if (match.Success) {
-                    return ResolveUrl(match.Groups[1].Value, url);
+                    var resolved = ResolveUrl(match.Groups[1].Value, url);
+                    if (HasVideoExtension(resolved)) {
+                        Logger.Info($"Hypnotube: Found video URL in player config fallback: {resolved}");
+                        return resolved;
+                    }
                 }
 
                 return null;
@@ -230,69 +264,94 @@ namespace GOON.Classes {
 
                 Logger.Info($"ExtractRule34VideoUrlAsync: Starting specialized extraction for {url} ({html.Length} chars)");
 
-                // 1. Extract 'rnd' token from flashvars
-                var rndPattern = @"rnd\s*:\s*['""](\d+)['""]";
-                var rndMatch = Regex.Match(html, rndPattern, RegexOptions.IgnoreCase);
-                string rndToken = rndMatch.Success ? rndMatch.Groups[1].Value : null;
-                
-                if (!string.IsNullOrEmpty(rndToken)) {
-                    Logger.Info($"Rule34Video: Found rnd token: {rndToken}");
-                } else {
-                    Logger.Warning("Rule34Video: could not find rnd token, URL might fail");
+                // 1. Extract tokens (rnd, license_code, etc)
+                var tokens = new Dictionary<string, string>();
+                var tokenPatterns = new[] { 
+                    @"\brnd\s*[:=]\s*['""](\d+)['""]",
+                    @"\blicense_code\s*[:=]\s*['""]([^'""]+)['""]",
+                    @"\bvid_id\s*[:=]\s*['""](\d+)['""]"
+                };
+
+                foreach (var pattern in tokenPatterns) {
+                    var match = Regex.Match(html, pattern, RegexOptions.IgnoreCase);
+                    if (match.Success) {
+                        string key = match.Value.Split(new[] { ':', '=' })[0].Trim();
+                        tokens[key] = match.Groups[1].Value;
+                        Logger.Info($"Rule34Video: Found token {key}: {tokens[key]}");
+                    }
                 }
 
-                // 2. Extract best video URL from variables
-                // Priorities: video_alt_url3 (1080p) > video_alt_url2 (720p) > video_alt_url (480p) > video_url (360p)
+                // 2. PRIORITY 1: Search for direct download links in the HTML
+                // These are often the most reliable as they are what the user sees
+                var getFilePattern = @"href=[""']([^""']*\/get_file\/[^""']+\.mp4\/?(?:[^""']*)?)[""']";
+                var getFileMatches = Regex.Matches(html, getFilePattern, RegexOptions.IgnoreCase);
+                
+                string bestFoundUrl = null;
+                int bestFoundQuality = 0;
+                
+                foreach (Match linkMatch in getFileMatches) {
+                    var link = linkMatch.Groups[1].Value;
+                    int quality = 360; // Default
+                    if (link.Contains("1080p")) quality = 1080;
+                    else if (link.Contains("720p")) quality = 720;
+                    else if (link.Contains("480p")) quality = 480;
+                    else if (link.Contains("2160p") || link.Contains("4k")) quality = 2160;
+                    
+                    if (quality > bestFoundQuality) {
+                        bestFoundQuality = quality;
+                        bestFoundUrl = ResolveUrl(link, url);
+                    }
+                }
+
+                if (bestFoundUrl != null) {
+                    Logger.Info($"Rule34Video: Found direct get_file link with {bestFoundQuality}p quality: {bestFoundUrl}");
+                    var resolvedUrl = await _htmlFetcher.ResolveRedirectUrlAsync(bestFoundUrl, url, cancellationToken);
+                    return resolvedUrl ?? bestFoundUrl;
+                }
+
+                // 3. PRIORITY 2: Extract from player variables (Legacy/Fallback)
                 var priorities = new[] { 
                     ("video_alt_url3", 1080),
                     ("video_alt_url2", 720),
                     ("video_alt_url", 480),
                     ("video_url", 360)
                 };
+                
                 string bestUrl = null;
                 int selectedQuality = 0;
 
                 foreach (var (key, quality) in priorities) {
-                    var pattern = $@"{key}\s*:\s*['""]([^'""]+)['""]";
+                    var pattern = $@"\b{key}\s*[:=]\s*['""]([^'""]+)['""]";
                     var match = Regex.Match(html, pattern, RegexOptions.IgnoreCase);
                     if (match.Success && match.Groups.Count > 1) {
                         var rawUrl = match.Groups[1].Value;
                         if (!string.IsNullOrWhiteSpace(rawUrl) && rawUrl.Contains("mp4")) {
                             bestUrl = CleanExtractedUrl(rawUrl);
                             selectedQuality = quality;
-                            Logger.Info($"Rule34Video: Found {quality}p quality from {key}");
+                            Logger.Info($"Rule34Video: Found {quality}p quality from {key} variable");
                             break; 
                         }
                     }
                 }
 
                 if (bestUrl != null) {
-                    Logger.Info($"Rule34Video: Selected {selectedQuality}p quality (highest available)");
+                    bestUrl = ResolveUrl(bestUrl, url);
                     
-                    // 3. Append rnd token if known and not already present
-                    if (!string.IsNullOrEmpty(rndToken) && !bestUrl.Contains("rnd=")) {
-                        var separator = bestUrl.Contains("?") ? "&" : "?";
-                        bestUrl += $"{separator}rnd={rndToken}";
-                        Logger.Info($"Rule34Video: Appended rnd token. Intermediate URL: {bestUrl}");
+                    // Append tokens if not present
+                    foreach (var token in tokens) {
+                        if (!bestUrl.Contains($"{token.Key}=")) {
+                            var separator = bestUrl.Contains("?") ? "&" : "?";
+                            bestUrl += $"{separator}{token.Key}={token.Value}";
+                        }
                     }
                     
-                    // 4. Resolve redirect (Rule34Video uses get_file php script that redirects to CDN)
-                    // We need to resolve this using the same session (cookies) as the page fetch
-                    Logger.Info($"Rule34Video: Attempting to resolve redirect for: {bestUrl}");
+                    Logger.Info($"Rule34Video: Resolving player variable URL: {bestUrl}");
                     var resolvedUrl = await _htmlFetcher.ResolveRedirectUrlAsync(bestUrl, url, cancellationToken);
-                    Logger.Info($"Rule34Video: ResolveRedirectUrlAsync returned: {resolvedUrl ?? "null"}");
-                    
-                    if (!string.IsNullOrEmpty(resolvedUrl)) {
-                        Logger.Info($"Rule34Video: Resolved redirect from {bestUrl} to {resolvedUrl}");
-                        return resolvedUrl;
-                    }
-
-                    Logger.Info($"Rule34Video: No redirect occurred or failed, returning intermediate URL: {bestUrl}");
-                    return bestUrl;
+                    return resolvedUrl ?? bestUrl;
                 }
 
-                Logger.Warning("Rule34Video: generic fallback triggered");
-                return ExtractVideoFromHtml(html, url);
+                Logger.Warning("Rule34Video: specialized extraction failed, falling back to generic");
+                return await ExtractGenericVideoUrlAsync(url, cancellationToken);
             } catch (Exception ex) {
                 Logger.Warning($"Error extracting RULE34Video URL: {ex.Message}");
                 return null;
@@ -304,14 +363,38 @@ namespace GOON.Classes {
                 var html = await FetchHtmlAsync(url, cancellationToken);
                 if (string.IsNullOrWhiteSpace(html)) return null;
 
-                // Try og:video first (often highest quality)
+                // 1. Try JSON-LD contentUrl (Highest Priority for PMVHaven)
+                // Look for "contentUrl":"...m3u8"
+                var jsonLdPattern = @"""contentUrl""\s*:\s*[""']([^""']+\.m3u8(?:[^""']*)?)[""']";
+                var jsonLdMatch = Regex.Match(html, jsonLdPattern, RegexOptions.IgnoreCase);
+                if (jsonLdMatch.Success && jsonLdMatch.Groups.Count > 1) {
+                    var hlsUrl = CleanExtractedUrl(jsonLdMatch.Groups[1].Value);
+                    Logger.Info($"PMVHaven: Found HLS URL in JSON-LD: {hlsUrl}");
+                    return ResolveUrl(hlsUrl, url);
+                }
+
+                // 2. Try generic HLS (.m3u8) patterns
+                var hlsPattern = @"[""']([^""']+\.m3u8(?:[^""']*)?)[""']";
+                var hlsMatches = Regex.Matches(html, hlsPattern, RegexOptions.IgnoreCase);
+                foreach (Match match in hlsMatches) {
+                     if (match.Success && match.Groups.Count > 1) {
+                        var hlsUrl = CleanExtractedUrl(match.Groups[1].Value);
+                        // Filter out common false positives if necessary, but m3u8 is usually good
+                         if (!hlsUrl.Contains("preview", StringComparison.OrdinalIgnoreCase)) {
+                             Logger.Info($"PMVHaven: Found HLS URL in HTML: {hlsUrl}");
+                             return ResolveUrl(hlsUrl, url);
+                         }
+                     }
+                }
+
+                // 3. Try og:video (often highest quality direct file if not HLS)
                 var ogVideo = StashPatternExtractor.ExtractOgVideo(html);
                 if (!string.IsNullOrEmpty(ogVideo)) {
                     Logger.Info("PMVHaven: Found og:video URL (likely highest quality)");
                     return ResolveUrl(ogVideo, url);
                 }
 
-                // Try multi-source extraction with quality selection
+                // 4. Try multi-source extraction with quality selection
                 var sources = StashPatternExtractor.ExtractAllVideoSources(html, url);
                 if (sources.Any()) {
                     var best = QualitySelector.SelectBest(sources);
@@ -321,7 +404,8 @@ namespace GOON.Classes {
                     }
                 }
 
-                // Fallback to generic extraction
+                // 5. Fallback to generic extraction
+                // Explicitly warn or filter if we think generic might pick a preview
                 var videoUrl = ExtractVideoFromHtml(html, url);
                 return videoUrl;
             } catch (Exception ex) {
@@ -330,105 +414,6 @@ namespace GOON.Classes {
             }
         }
 
-        /// <summary>
-        /// Extracts video URL from RedGifs using their v2 API
-        /// API Flow:
-        /// 1. Get temp token from https://api.redgifs.com/v2/auth/temporary
-        /// 2. Fetch GIF data from https://api.redgifs.com/v2/gifs/{gif_id} with Bearer token
-        /// 3. Return HD URL from gif.urls.hd
-        /// </summary>
-        private async Task<string> ExtractRedgifsUrlAsync(string url, CancellationToken cancellationToken) {
-            try {
-                Logger.Info($"[RedGifs] Starting extraction for: {url}");
-                
-                // Extract GIF ID from URL (e.g., https://redgifs.com/watch/abcxyz -> abcxyz)
-                var uri = new Uri(url);
-                var pathSegments = uri.AbsolutePath.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
-                
-                // Check if this is a user profile URL (e.g. /users/username)
-                if (uri.AbsolutePath.Contains("/users/")) {
-                    Logger.Info("[RedGifs] Detected user profile URL, delegating to yt-dlp");
-                    return null;
-                }
-
-                string gifId = null;
-                // Handle both /watch/id and /ifr/id patterns
-                if (pathSegments.Length >= 2) {
-                    gifId = pathSegments[pathSegments.Length - 1];
-                } else if (pathSegments.Length == 1) {
-                    gifId = pathSegments[0];
-                }
-                
-                if (string.IsNullOrEmpty(gifId)) {
-                    Logger.Warning("[RedGifs] Could not extract GIF ID from URL");
-                    return null;
-                }
-                
-                // Remove any query parameters or hash from the ID
-                var queryIndex = gifId.IndexOf('?');
-                if (queryIndex > 0) gifId = gifId.Substring(0, queryIndex);
-                var hashIndex = gifId.IndexOf('#');
-                if (hashIndex > 0) gifId = gifId.Substring(0, hashIndex);
-                
-                Logger.Info($"[RedGifs] Extracted GIF ID: {gifId}");
-                
-                using var httpClient = new HttpClient();
-                httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-                
-                // Step 1: Get temporary auth token
-                var authResponse = await httpClient.GetStringAsync("https://api.redgifs.com/v2/auth/temporary");
-                cancellationToken.ThrowIfCancellationRequested();
-                
-                // Parse token from JSON response: {"token":"...","session":"...","addr":"..."}
-                var tokenMatch = Regex.Match(authResponse, @"""token""\s*:\s*""([^""]+)""");
-                if (!tokenMatch.Success) {
-                    // Try alternative pattern
-                    tokenMatch = Regex.Match(authResponse, @"access_token""\s*:\s*""([^""]+)""");
-                }
-
-                if (!tokenMatch.Success) {
-                    Logger.Warning($"[RedGifs] Failed to extract auth token from: {authResponse.Substring(0, Math.Min(authResponse.Length, 100))}");
-                    return null;
-                }
-                var token = tokenMatch.Groups[1].Value;
-                Logger.Info("[RedGifs] Successfully obtained auth token");
-                
-                // Step 2: Fetch GIF data with auth header
-                var gifRequest = new HttpRequestMessage(HttpMethod.Get, $"https://api.redgifs.com/v2/gifs/{gifId.ToLowerInvariant()}");
-                gifRequest.Headers.Add("Authorization", $"Bearer {token}");
-                
-                var gifResponse = await httpClient.SendAsync(gifRequest, cancellationToken);
-                var gifData = await gifResponse.Content.ReadAsStringAsync();
-                
-                if (!gifResponse.IsSuccessStatusCode) {
-                    Logger.Warning($"[RedGifs] API returned {gifResponse.StatusCode} for GIF {gifId}");
-                    return null;
-                }
-                
-                // Step 3: Extract HD URL from response
-                // Response format: {"gif":{"urls":{"hd":"...","sd":"...","poster":"...","thumbnail":"...","vthumbnail":"..."}}}
-                // Try HD first, then SD as fallback
-                var hdMatch = Regex.Match(gifData, @"""hd""\s*:\s*""([^""]+)""");
-                if (hdMatch.Success) {
-                    var hdUrl = hdMatch.Groups[1].Value.Replace("\\/", "/");
-                    Logger.Info($"[RedGifs] Found HD URL: {hdUrl}");
-                    return hdUrl;
-                }
-                
-                var sdMatch = Regex.Match(gifData, @"""sd""\s*:\s*""([^""]+)""");
-                if (sdMatch.Success) {
-                    var sdUrl = sdMatch.Groups[1].Value.Replace("\\/", "/");
-                    Logger.Info($"[RedGifs] Found SD URL (HD not available): {sdUrl}");
-                    return sdUrl;
-                }
-                
-                Logger.Warning("[RedGifs] No video URL found in API response");
-                return null;
-            } catch (Exception ex) {
-                Logger.Warning($"[RedGifs] Error extracting URL: {ex.Message}");
-                return null;
-            }
-        }
 
         private async Task<string> ExtractGenericVideoUrlAsync(string url, CancellationToken cancellationToken) {
             try {

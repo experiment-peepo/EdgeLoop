@@ -600,7 +600,13 @@ public unsafe class Demuxer : RunThreadBase
         }
 
         if (headers != "")
+        {
+            AVDictionaryEntry* existingHeaders = av_dict_get(*avFmtOpts, "headers", null, DictReadFlags.IgnoreSuffix);
+            if (existingHeaders != null)
+                headers = BytePtrToStringUTF8(existingHeaders->value) + headers;
+            
             _ = av_dict_set(avFmtOpts, "headers", headers, 0);
+        }
 
         _ = av_dict_set(avFmtOpts, "protocol_whitelist", "file,http,https,tcp,tls,crypto", 0);
 
@@ -682,7 +688,13 @@ public unsafe class Demuxer : RunThreadBase
         }
 
         if (headers != "")
+        {
+            AVDictionaryEntry* existingHeaders = av_dict_get(avopt, "headers", null, DictReadFlags.IgnoreSuffix);
+            if (existingHeaders != null)
+                headers = BytePtrToStringUTF8(existingHeaders->value) + headers;
+
             _ = av_dict_set(&avopt, "headers", headers, 0);
+        }
 
         _ = av_dict_set(&avopt, "protocol_whitelist", "file,http,https,tcp,tls,crypto", 0);
 

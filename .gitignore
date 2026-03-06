@@ -6,7 +6,9 @@ publish/
 publish_test/
 *.zip
 *.log
-Dependencies/
+# Dependencies
+Dependencies/*
+!Dependencies/yt-dlp.exe
 test_deps/
 *.user
 

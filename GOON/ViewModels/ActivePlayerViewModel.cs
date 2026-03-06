@@ -13,6 +13,7 @@ namespace GOON.ViewModels {
         }
 
         public bool IsPlaying => _playerVm?.MediaState == System.Windows.Controls.MediaState.Play;
+        public string CurrentVideoTitle => _playerVm?.CurrentItem?.FileName ?? "Loading...";
 
         public HypnoViewModel Player => _playerVm;
 
@@ -26,6 +27,8 @@ namespace GOON.ViewModels {
                 _playerVm.PropertyChanged += (s, e) => {
                     if (e.PropertyName == nameof(HypnoViewModel.MediaState)) {
                         OnPropertyChanged(nameof(IsPlaying));
+                    } else if (e.PropertyName == nameof(HypnoViewModel.CurrentItem)) {
+                        OnPropertyChanged(nameof(CurrentVideoTitle));
                     }
                 };
             }

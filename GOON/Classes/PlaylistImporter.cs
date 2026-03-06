@@ -54,9 +54,6 @@ namespace GOON.Classes {
                     videoPageUrls = await ExtractRule34VideoPlaylistAsync(playlistUrl, cancellationToken);
                 } else if (host.Contains("pmvhaven.com")) {
                     videoPageUrls = await ExtractPmvHavenPlaylistAsync(playlistUrl, cancellationToken);
-                } else if (host.Contains("redgifs.com")) {
-                    Logger.Info($"[PlaylistImporter] Detected RedGifs URL: {playlistUrl}");
-                    videoPageUrls = await ExtractRedgifsPlaylistAsync(playlistUrl, cancellationToken);
                 } else {
                     // Generic extraction
                     videoPageUrls = await ExtractGenericPlaylistAsync(playlistUrl, cancellationToken);
@@ -180,111 +177,6 @@ namespace GOON.Classes {
 
 
 
-        private async Task<List<string>> ExtractRedgifsPlaylistAsync(string url, CancellationToken cancellationToken) {
-            var videoUrls = new List<string>();
-            try {
-                Logger.Info($"[RedGifs] Starting playlist extraction for {url}");
-
-                // Match the last part of the URL (either display name or ID)
-                var uri = new Uri(url);
-                var usernameMatch = Regex.Match(uri.AbsolutePath, @"/users/([^/?&]+)", RegexOptions.IgnoreCase);
-                if (!usernameMatch.Success) {
-                    Logger.Warning("[RedGifs] Could not extract username from URL - pattern mismatch");
-                    return videoUrls;
-                }
-                var username = usernameMatch.Groups[1].Value;
-                Logger.Info($"[RedGifs] Extracted username from URL: {username}");
-
-                using var httpClient = new HttpClient();
-                httpClient.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36");
-
-                // 1. Get temp token
-                var authResponse = await httpClient.GetStringAsync("https://api.redgifs.com/v2/auth/temporary");
-                var tokenMatch = Regex.Match(authResponse, @"""token""\s*:\s*""([^""]+)""");
-                if (!tokenMatch.Success) {
-                    // Try alternative pattern if direct match fails
-                    tokenMatch = Regex.Match(authResponse, @"access_token""\s*:\s*""([^""]+)""");
-                }
-
-                if (!tokenMatch.Success) {
-                    Logger.Warning($"[RedGifs] Failed to extract auth token from: {authResponse.Substring(0, Math.Min(authResponse.Length, 100))}");
-                    return videoUrls;
-                }
-                var token = tokenMatch.Groups[1].Value;
-
-                // 2. Fetch User GIFs
-                // We'll try the username first, then if it fails or returns 0, we could potentially try to find the real ID from the page
-                var apiUrl = $"https://api.redgifs.com/v2/users/{username}/search?order=new&count=100";
-                var request = new HttpRequestMessage(HttpMethod.Get, apiUrl);
-                request.Headers.Add("Authorization", $"Bearer {token}");
-
-                var response = await httpClient.SendAsync(request, cancellationToken);
-                if (!response.IsSuccessStatusCode) {
-                    Logger.Warning($"[RedGifs] API failed for {username} with status: {response.StatusCode}");
-                    return videoUrls;
-                }
-                
-                var json = await response.Content.ReadAsStringAsync();
-                
-                // 3. Extract IDs - Safely parse JSON to isolate the 'gifs' array
-                var uniqueIds = new HashSet<string>();
-                try {
-                    using (JsonDocument doc = JsonDocument.Parse(json)) {
-                        if (doc.RootElement.TryGetProperty("gifs", out JsonElement gifsElement) && 
-                            gifsElement.ValueKind == JsonValueKind.Array) {
-                            
-                            foreach (JsonElement gif in gifsElement.EnumerateArray()) {
-                                if (gif.TryGetProperty("id", out JsonElement idElement)) {
-                                    string id = idElement.GetString();
-                                    if (!string.IsNullOrEmpty(id) && !uniqueIds.Contains(id)) {
-                                        uniqueIds.Add(id);
-                                        videoUrls.Add($"https://www.redgifs.com/watch/{id}");
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } catch (Exception jsonEx) {
-                    Logger.Warning($"[RedGifs] JSON parsing failed: {jsonEx.Message}. Falling back to regex...");
-                    // Emergency regex fallback if JSON is malformed
-                    var idMatches = Regex.Matches(json, @"""id""\s*:\s*""([^""]+)""");
-                    foreach (Match match in idMatches) {
-                        if (match.Success && match.Groups.Count > 1) {
-                            var id = match.Groups[1].Value;
-                            if (!string.IsNullOrEmpty(id) && !uniqueIds.Contains(id)) {
-                                uniqueIds.Add(id);
-                                videoUrls.Add($"https://www.redgifs.com/watch/{id}");
-                            }
-                        }
-                    }
-                }
-
-                if (videoUrls.Count == 0) {
-                    Logger.Info($"[RedGifs] No videos found for {username} via API. Attempting HTML fallback...");
-                    // Fallback to HTML extraction if API returns nothing (e.g. if username differs from profile URL)
-                    var html = await response.Content.ReadAsStringAsync(); // Reuse response or fetch fresh?
-                    // Fetch fresh HTML from the user profile page directly
-                    var profileHtml = await httpClient.GetStringAsync(url);
-                    // Extract IDs from thumbnail sources (as found by browser subagent)
-                    var thumbPattern = @"media\.redgifs\.com/([^""'-]+)-mobile\.jpg";
-                    var thumbMatches = Regex.Matches(profileHtml, thumbPattern, RegexOptions.IgnoreCase);
-                    foreach (Match m in thumbMatches) {
-                        var id = m.Groups[1].Value;
-                        if (!uniqueIds.Contains(id)) {
-                            uniqueIds.Add(id);
-                            videoUrls.Add($"https://www.redgifs.com/watch/{id}");
-                        }
-                    }
-                }
-
-                Logger.Info($"[RedGifs] Total extracted {videoUrls.Count} videos for user {username}");
-                return videoUrls;
-
-            } catch (Exception ex) {
-                Logger.Warning($"Error extracting RedGifs playlist: {ex.Message}");
-                return videoUrls;
-            }
-        }
 
         private async Task<List<string>> ExtractRule34VideoPlaylistAsync(string url, CancellationToken cancellationToken) {
             var allVideoUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);

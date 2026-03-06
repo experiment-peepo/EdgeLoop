@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -52,6 +53,9 @@ namespace GOON.Classes {
                 
                 // Check if we should use cookies for this URL
                 OptionSet options = new OptionSet();
+                if (!string.IsNullOrEmpty(App.Settings?.UserAgent)) {
+                    options.AddHeaders = new[] { $"User-Agent:{App.Settings.UserAgent}" };
+                }
                 string cookieFile = null;
                 
                 try {
@@ -146,18 +150,34 @@ namespace GOON.Classes {
         /// Finds yt-dlp.exe in common locations
         /// </summary>
         private string FindYtDlpExecutable() {
-            // Check in application directory
             var appDir = AppDomain.CurrentDomain.BaseDirectory;
-            var paths = new[] {
+            var searchPaths = new List<string> {
                 Path.Combine(appDir, "yt-dlp.exe"),
                 Path.Combine(appDir, "bin", "yt-dlp.exe"),
-                Path.Combine(appDir, "tools", "yt-dlp.exe"),
-                "yt-dlp.exe" // Check PATH
+                Path.Combine(appDir, "tools", "yt-dlp.exe")
             };
 
-            foreach (var path in paths) {
+            // Developer fallback: Look for Dependencies folder in parent directories
+            try {
+                var current = appDir;
+                for (int i = 0; i < 5; i++) {
+                    var parent = Path.GetDirectoryName(current);
+                    if (string.IsNullOrEmpty(parent)) break;
+                    
+                    var depPath = Path.Combine(parent, "Dependencies", "yt-dlp.exe");
+                    if (File.Exists(depPath)) {
+                        searchPaths.Add(depPath);
+                        break;
+                    }
+                    current = parent;
+                }
+            } catch { }
+
+            foreach (var path in searchPaths) {
                 if (File.Exists(path)) {
-                    return Path.GetFullPath(path);
+                    var fullPath = Path.GetFullPath(path);
+                    Logger.Debug($"[YtDlpService] Found yt-dlp.exe at: {fullPath}");
+                    return fullPath;
                 }
             }
 
@@ -166,16 +186,21 @@ namespace GOON.Classes {
                 var pathEnv = Environment.GetEnvironmentVariable("PATH");
                 if (!string.IsNullOrEmpty(pathEnv)) {
                     foreach (var dir in pathEnv.Split(';')) {
-                        var fullPath = Path.Combine(dir.Trim(), "yt-dlp.exe");
+                        var trimmedDir = dir.Trim();
+                        if (string.IsNullOrEmpty(trimmedDir)) continue;
+                        
+                        var fullPath = Path.Combine(trimmedDir, "yt-dlp.exe");
                         if (File.Exists(fullPath)) {
+                            Logger.Debug($"[YtDlpService] Found yt-dlp.exe in PATH: {fullPath}");
                             return fullPath;
                         }
                     }
                 }
-            } catch {
-                // Ignore path search errors
+            } catch (Exception ex) {
+                Logger.Debug($"[YtDlpService] Error searching PATH: {ex.Message}");
             }
 
+            Logger.Warning($"[YtDlpService] yt-dlp.exe not found in searched locations: {string.Join(", ", searchPaths)}");
             return null;
         }
 
@@ -185,7 +210,8 @@ namespace GOON.Classes {
         /// </summary>
         private string CreateTempCookieFile(string cookieString, string domain) {
             try {
-                var tempFile = Path.Combine(Path.GetTempPath(), $"goon_cookies_{domain.Replace(".", "_")}.txt");
+                var uniqueId = Guid.NewGuid().ToString().Substring(0, 8);
+                var tempFile = Path.Combine(Path.GetTempPath(), $"goon_cookies_{domain.Replace(".", "_")}_{Environment.ProcessId}_{uniqueId}.txt");
                 var lines = new System.Collections.Generic.List<string> {
                     "# Netscape HTTP Cookie File",
                     "# https://curl.haxx.se/docs/http-cookies.html"

@@ -430,6 +430,7 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
 
     public bool CanOpen()
     {
+        return false; // GOON uses its own extraction service (YtDlpService)
         try
         {
             if (Playlist.IOStream != null)

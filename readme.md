@@ -1,4 +1,4 @@
-# GOØN v1.0.5
+# GOØN v1.1.0
 
 A specialized video player designed for multi-monitor playback with high-performance overlay capabilities for desktop.
 
@@ -20,8 +20,9 @@ Some sites (e.g., Hypnotube) require authentication to access high-quality strea
 3.  **Enjoy**: High-resolution streams will now work automatically.
 
 ## Dependencies
-- **.NET 8 Desktop Runtime**: This app requires the [.NET 8 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/8.0) to be installed.
-- **Bundled Tools**: `ffmpeg` and `yt-dlp` are already included in this package.
+- **.NET 10 Desktop Runtime**: This app requires the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0) to be installed.
+- **Bundled Tools**: `yt-dlp` is already included for web video extraction.
+- **Media Engine**: Powered by high-efficiency internal FFmpeg shared libraries (no external installation required).
 
 ## Quick Start
 1. Extract the contents of this zip to a folder.
@@ -29,7 +30,7 @@ Some sites (e.g., Hypnotube) require authentication to access high-quality strea
 3. Drag and drop videos or paste URLs to get started.
 
 ## Notes
-- **Distribution**: Distributed as a folder-based bundle for maximum UI stability on .NET 8.
+- **Distribution**: Distributed as a folder-based bundle for maximum UI stability on .NET 10.
 - **Data Storage**: If the app cannot create a local `Data/` folder, it will fall back to using `%AppData%\GOON`.
 
 ---

@@ -30,6 +30,15 @@ namespace GOON.Classes {
             IsAllScreens = false;
         }
 
+        public int ScreenIndex {
+            get {
+                if (IsAllScreens) return 0;
+                if (string.IsNullOrEmpty(DeviceName)) return 100;
+                var match = System.Text.RegularExpressions.Regex.Match(DeviceName, @"DISPLAY(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                return match.Success && int.TryParse(match.Groups[1].Value, out int num) ? num : 100;
+            }
+        }
+
         public static ScreenViewer CreateAllScreens() {
             return new ScreenViewer(null) {
                 DeviceName = "ALL_SCREENS",
@@ -44,13 +53,7 @@ namespace GOON.Classes {
             if (IsAllScreens) return "All Monitors";
 
             // Extract screen number from DeviceName (e.g., "\\\\.\\DISPLAY1" -> "Screen 1")
-            int screenNumber = 1;
-            if (!string.IsNullOrEmpty(DeviceName)) {
-                var match = Regex.Match(DeviceName, @"DISPLAY(\d+)", RegexOptions.IgnoreCase);
-                if (match.Success && int.TryParse(match.Groups[1].Value, out int num)) {
-                    screenNumber = num;
-                }
-            }
+            int screenNumber = ScreenIndex;
             
             var bounds = Screen?.Bounds;
             var res = bounds.HasValue ? ($"{bounds.Value.Width}x{bounds.Value.Height}") : "Unknown";

@@ -61,7 +61,15 @@ namespace GOON.Classes {
         /// </summary>
         public string GetCachedFilePath(string url) {
             var path = GetCachePath(url);
-            if (File.Exists(path)) return path;
+            if (File.Exists(path)) {
+                // Validate that the cached file isn't actually a manifest (common error)
+                if (FileValidator.IsCorruptedCacheFile(path)) {
+                    Logger.Warning($"[VideoCache] Detected corrupted cache file (manifest): {path}. Deleting.");
+                    try { File.Delete(path); } catch { }
+                    return null;
+                }
+                return path;
+            }
             
             // Check for active download (concurrent playback)
             var downloadingPath = path + ".downloading";
@@ -109,6 +117,13 @@ namespace GOON.Classes {
                             response.EnsureSuccessStatusCode();
                             
                             var totalBytes = response.Content.Headers.ContentLength ?? 0;
+                            var contentType = response.Content.Headers.ContentType?.MediaType;
+                            
+                            if (contentType != null && (contentType.Contains("mpegurl") || contentType.Contains("dash+xml"))) {
+                                Logger.Warning($"[VideoCache] Aborting download: URL resolved to a manifest ({contentType}): {url}");
+                                return null;
+                            }
+                            
                             Logger.Info($"[VideoCache] Starting download: {totalBytes / (1024 * 1024):F1} MB");
                             
                             using (var contentStream = await response.Content.ReadAsStreamAsync())
@@ -118,6 +133,14 @@ namespace GOON.Classes {
                                 int bytesRead;
                                 
                                 while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) > 0) {
+                                    if (totalRead == 0 && bytesRead >= 7) {
+                                        string head = Encoding.UTF8.GetString(buffer, 0, 7);
+                                        if (head.StartsWith("#EXTM3U", StringComparison.OrdinalIgnoreCase) || head.StartsWith("<?xml", StringComparison.OrdinalIgnoreCase)) {
+                                            Logger.Warning($"[VideoCache] Aborting download: Content is a manifest (HLS/DASH).");
+                                            return null;
+                                        }
+                                    }
+
                                     await fileStream.WriteAsync(buffer, 0, bytesRead, cancellationToken);
                                     totalRead += bytesRead;
                                 }
@@ -207,6 +230,13 @@ namespace GOON.Classes {
                             }
                             
                             var totalBytes = response.Content.Headers.ContentLength ?? maxBytes;
+                            var contentType = response.Content.Headers.ContentType?.MediaType;
+                            
+                            if (contentType != null && (contentType.Contains("mpegurl") || contentType.Contains("dash+xml"))) {
+                                Logger.Warning($"[VideoCache] Aborting partial: Resolved to manifest ({contentType})");
+                                return null;
+                            }
+
                             var isFullDownload = response.StatusCode == System.Net.HttpStatusCode.OK;
                             
                             Logger.Info($"[VideoCache] Partial download started: {totalBytes / (1024 * 1024):F1} MB (full: {isFullDownload})");
@@ -218,6 +248,14 @@ namespace GOON.Classes {
                                 int bytesRead;
                                 
                                 while ((bytesRead = await contentStream.ReadAsync(buffer, 0, buffer.Length, cancellationToken)) > 0) {
+                                    if (totalRead == 0 && bytesRead >= 7) {
+                                        string head = Encoding.UTF8.GetString(buffer, 0, 7);
+                                        if (head.StartsWith("#EXTM3U", StringComparison.OrdinalIgnoreCase) || head.StartsWith("<?xml", StringComparison.OrdinalIgnoreCase)) {
+                                            Logger.Warning($"[VideoCache] Aborting partial: Content is a manifest.");
+                                            return null;
+                                        }
+                                    }
+
                                     await fileStream.WriteAsync(buffer, 0, bytesRead, cancellationToken);
                                     totalRead += bytesRead;
                                     
