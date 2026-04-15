@@ -1,0 +1,1545 @@
+﻿diff --git a/Dependencies/yt-dlp.exe b/Dependencies/yt-dlp.exe
+index ac0e0d8..828f154 100644
+Binary files a/Dependencies/yt-dlp.exe and b/Dependencies/yt-dlp.exe differ
+diff --git a/FlyleafLib/FORK_CHANGES.md b/FlyleafLib/FORK_CHANGES.md
+index 6da753d..a9bc2db 100644
+--- a/FlyleafLib/FORK_CHANGES.md
++++ b/FlyleafLib/FORK_CHANGES.md
+@@ -195,7 +195,28 @@ Key features:
+ 
+ ---
+ 
+-### 4. Test Files
++### 4. yt-dlp Future Compatibility (March 2026)
++
++#### `Plugins/YoutubeDL/YoutubeDLJson.cs`
++**Changes**:
++- Added `[JsonExtensionData]` on `Format` class to capture unknown fields from future yt-dlp versions
++- Added `RobustJsonOptions` static property with `AllowReadingFromString`, `PropertyNameCaseInsensitive`, `AllowTrailingCommas`
++
++**Conflict Risk**: ≡ƒƒó Low - Additive properties only.
++
++#### `Plugins/YoutubeDL/YoutubeDL.cs`
++**Changes**:
++- JSON deserialization now uses `YoutubeDLJson.RobustJsonOptions` instead of basic options
++- Null-safe `HasVideo()`/`HasAudio()` ΓÇö checks `!= null` before `"none"` sentinel comparison
++- Null-safe protocol regex in `GetBestMatch()` LINQ query
++- Default codec values changed from `""` to `"none"` for consistency
++- Added null check for `fmt.url`
++
++**Conflict Risk**: ≡ƒƒí Medium - Format handling logic, but changes are defensive additions.
++
++---
++
++### 5. Test Files
+ 
+ #### `Tests/FlyleafLib.Tests/ClockSyncTests.cs` (NEW FILE)
+ **Purpose**: Unit tests for external clock synchronization
+@@ -216,8 +237,10 @@ Tests included:
+ 2. **Check these files for conflicts**:
+    - `Player.Screamers.VASD.cs` (most likely to conflict)
+    - `Renderer.Present.cs` (second most likely)
++   - `Plugins/YoutubeDL/YoutubeDLJson.cs` (if upstream changes JSON model)
+ 3. **Run tests after merge**: Execute `ClockSyncTests` to verify sync still works
+ 4. **Manual verification**: Test D3DImage rendering with transparent window
++5. **yt-dlp JSON check**: If upstream updates `YoutubeDLJson.cs`, ensure `[JsonExtensionData]` and `RobustJsonOptions` are preserved
+ 
+ ### Upstream Changes to Watch For
+ 
+@@ -227,6 +250,8 @@ Tests included:
+ | Vortice.Windows update | ≡ƒƒí Medium | Check D3DImageManager |
+ | Screamer refactoring | ≡ƒö┤ High | Manual conflict resolution |
+ | New renderer architecture | ≡ƒö┤ High | May require D3DImage rewrite |
++| YoutubeDLJson model update | ≡ƒƒí Medium | Re-apply `[JsonExtensionData]` and `RobustJsonOptions` |
++| yt-dlp JSON schema change | ≡ƒƒó Low | `[JsonExtensionData]` absorbs unknown fields automatically |
+ 
+ ---
+ 
+@@ -235,9 +260,9 @@ Tests included:
+ | Metric | Count |
+ |--------|-------|
+ | New files created | 4 |
+-| Existing files modified | 10 |
+-| Lines added (estimated) | ~600 |
+-| Lines modified (estimated) | ~50 |
++| Existing files modified | 12 |
++| Lines added (estimated) | ~700 |
++| Lines modified (estimated) | ~65 |
+ 
+ ---
+ 
+@@ -251,6 +276,8 @@ After any merge from upstream, verify:
+ - [ ] Speed changes propagate to all synchronized players
+ - [ ] No memory leaks in D3DImageManager (use diagnostic tools)
+ - [ ] `ClockSyncTests` pass
++- [ ] yt-dlp extraction works with latest yt-dlp binary (`YtDlpCompatibilityTests`)
++- [ ] `YtDlpService.DetectedVersion` reports correct version at startup
+ 
+ ---
+ 
+@@ -259,7 +286,8 @@ After any merge from upstream, verify:
+ - The fork maintains API compatibility with upstream where possible
+ - Custom changes are isolated to specific subsystems to minimize merge conflicts
+ - Consider contributing `IClock` interface upstream if stable
++- `[JsonExtensionData]` on `Format` is critical ΓÇö never remove it when merging upstream
+ 
+ ---
+ 
+-*Last updated: January 2026*
++*Last updated: March 2026*
+diff --git a/FlyleafLib/Plugins/YoutubeDL/YoutubeDL.cs b/FlyleafLib/Plugins/YoutubeDL/YoutubeDL.cs
+index 90af127..7ce7031 100644
+--- a/FlyleafLib/Plugins/YoutubeDL/YoutubeDL.cs
++++ b/FlyleafLib/Plugins/YoutubeDL/YoutubeDL.cs
+@@ -1,4 +1,4 @@
+-∩╗┐using System;
++using System;
+ using System.Collections.Generic;
+ using System.Diagnostics;
+ using System.IO;
+@@ -35,8 +35,9 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
+ 
+     public new int      Priority        { get; set; } = 1999;
+     static string       plugin_path     = "yt-dlp.exe";
++    // Use robust JSON options from YoutubeDLJson to handle future yt-dlp schema changes
+     static JsonSerializerOptions
+-                        jsonSettings    = new() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
++                        jsonSettings    = YoutubeDLJson.RobustJsonOptions;
+ 
+     FileSystemWatcher   watcher;
+     string              workingDir;
+@@ -89,8 +90,8 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
+             where
+                 HasVideo(format) &&
+                 format.height <= Config.Video.MaxVerticalResolution &&
+-                (!HasAudio(format) || Config.Audio.Languages.Contains(Language.Get(format.language))) && // TBR: Does not respect audio language priority
+-                (!Regex.IsMatch(format.protocol, "dash", RegexOptions.IgnoreCase) || format.vcodec.Equals("vp9", StringComparison.OrdinalIgnoreCase))
++            (!HasAudio(format) || Config.Audio.Languages.Contains(Language.Get(format.language))) && // TBR: Does not respect audio language priority
++                (!string.IsNullOrEmpty(format.protocol) && !Regex.IsMatch(format.protocol, "dash", RegexOptions.IgnoreCase) || (!string.IsNullOrEmpty(format.vcodec) && format.vcodec.Equals("vp9", StringComparison.OrdinalIgnoreCase)))
+ 
+             orderby format.width    descending,
+                     format.height   descending,
+@@ -150,14 +151,14 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
+     
+     private static bool HasVideo(Format fmt)
+     {
+-        if (fmt.height > 0 || fmt.vbr > 0 || fmt.vcodec != "none")
++        if (fmt.height > 0 || fmt.vbr > 0 || (fmt.vcodec != null && fmt.vcodec != "none"))
+             return true;
+ 
+         return false;
+     }
+     private static bool HasAudio(Format fmt)
+     {
+-        if (fmt.abr > 0 || fmt.acodec != "none")
++        if (fmt.abr > 0 || (fmt.acodec != null && fmt.acodec != "none"))
+             return true;
+ 
+         return false;
+@@ -274,14 +275,17 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
+             Format fmt = ytdl.formats[i];
+ 
+             if (fmt.vcodec == null)
+-                fmt.vcodec = "";
++                fmt.vcodec = "none";
+ 
+             if (fmt.acodec == null)
+-                fmt.acodec = "";
++                fmt.acodec = "none";
+ 
+             if (fmt.protocol == null)
+                 fmt.protocol = "";
+ 
++            if (fmt.url == null)
++                fmt.url = "";
++
+             bool hasAudio = HasAudio(fmt);
+             bool hasVideo = HasVideo(fmt);
+ 
+diff --git a/FlyleafLib/Plugins/YoutubeDL/YoutubeDLJson.cs b/FlyleafLib/Plugins/YoutubeDL/YoutubeDLJson.cs
+index f21cf03..6603f55 100644
+--- a/FlyleafLib/Plugins/YoutubeDL/YoutubeDLJson.cs
++++ b/FlyleafLib/Plugins/YoutubeDL/YoutubeDLJson.cs
+@@ -1,4 +1,5 @@
+-∩╗┐using System.Collections.Generic;
++using System.Collections.Generic;
++using System.Text.Json;
+ using System.Text.Json.Serialization;
+ 
+ namespace FlyleafLib.Plugins;
+@@ -95,6 +96,20 @@ public class YoutubeDLJson : Format
+         public string url   { get; set; }
+         public string name  { get; set; }
+     }
++
++    /// <summary>
++    /// JsonSerializerOptions that handle future yt-dlp JSON output changes.
++    /// Uses AllowReadingFromString for numeric fields (yt-dlp sometimes outputs
++    /// numbers as strings) and PropertyNameCaseInsensitive for field name changes.
++    /// </summary>
++    public static readonly JsonSerializerOptions RobustJsonOptions = new()
++    {
++        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
++        PropertyNameCaseInsensitive = true,
++        NumberHandling = JsonNumberHandling.AllowReadingFromString,
++        AllowTrailingCommas = true,
++        ReadCommentHandling = JsonCommentHandling.Skip
++    };
+ }
+ 
+ public class Format
+@@ -128,4 +143,11 @@ public class Format
+     public double   height      { get; set; }
+     public double   width       { get; set; }
+     public double   vbr         { get; set; }
++
++    /// <summary>
++    /// Captures any unknown/new properties that future yt-dlp versions may add.
++    /// This prevents deserialization failures when the JSON schema changes.
++    /// </summary>
++    [JsonExtensionData]
++    public Dictionary<string, JsonElement> ExtensionData { get; set; }
+ }
+diff --git a/GOON.Tests/Stability/ConfigVarietyTests.cs b/GOON.Tests/Stability/ConfigVarietyTests.cs
+index cbdcafd..dacb131 100644
+--- a/GOON.Tests/Stability/ConfigVarietyTests.cs
++++ b/GOON.Tests/Stability/ConfigVarietyTests.cs
+@@ -78,7 +78,8 @@ namespace GOON.Tests.Stability {
+         public async Task HypnotubeCookies_ShouldBeInjectedIntoHeaders() {
+             // Arrange
+             var cookieValue = "session=test_session_123";
+-            MockSettings.Setup(s => s.HypnotubeCookies).Returns(cookieValue);
++            // Mock the encrypted backing property ΓÇö CookieProtector.Unprotect handles plaintext transparently
++            MockSettings.Setup(s => s.HypnotubeCookiesEncrypted).Returns(cookieValue);
+             
+             var mockFetcher = new Mock<IHtmlFetcher>();
+             mockFetcher.Setup(f => f.FetchHtmlAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+diff --git a/GOON/App.xaml.cs b/GOON/App.xaml.cs
+index 0d31db7..c42780a 100644
+--- a/GOON/App.xaml.cs
++++ b/GOON/App.xaml.cs
+@@ -129,6 +129,29 @@ namespace GOON {
+                 }
+             });
+ 
++            // Security: Clean up any orphaned temp cookie files from previous sessions
++            System.Threading.Tasks.Task.Run(() => {
++                try {
++                    var tempDir = System.IO.Path.GetTempPath();
++                    foreach (var file in System.IO.Directory.GetFiles(tempDir, "goon_cookies_*.txt")) {
++                        try { System.IO.File.Delete(file); } catch { }
++                    }
++                } catch (Exception ex) {
++                    Logger.Debug($"Cookie temp cleanup: {ex.Message}");
++                }
++            });
++
++            // Security: Migrate legacy plaintext cookies to encrypted form
++            if (settings.HypnotubeCookiesEncrypted != null && !CookieProtector.IsEncrypted(settings.HypnotubeCookiesEncrypted)) {
++                Logger.Info("Migrating plaintext cookies to encrypted storage...");
++                settings.HypnotubeCookies = settings.HypnotubeCookiesEncrypted; // Re-set triggers encryption
++                settings.Save();
++            }
++            if (settings.CookiesEncrypted != null && !CookieProtector.IsEncrypted(settings.CookiesEncrypted)) {
++                settings.Cookies = settings.CookiesEncrypted;
++                settings.Save();
++            }
++
+             // base.OnStartup starts the UI - call LAST
+             base.OnStartup(e);
+         }
+diff --git a/GOON/Classes/Constants.cs b/GOON/Classes/Constants.cs
+index 1119bd0..66765e1 100644
+--- a/GOON/Classes/Constants.cs
++++ b/GOON/Classes/Constants.cs
+@@ -22,7 +22,8 @@ namespace GOON.Classes {
+             // Video sites with specialized extractors
+             "rule34video.com",
+             "pmvhaven.com",
+-            "hypnotube.com"
++            "hypnotube.com",
++            "iwara.tv"
+         };
+ 
+         /// <summary>
+diff --git a/GOON/Classes/Metrics/PlayCountMetric.cs b/GOON/Classes/Metrics/PlayCountMetric.cs
+index e7977bd..d46e166 100644
+--- a/GOON/Classes/Metrics/PlayCountMetric.cs
++++ b/GOON/Classes/Metrics/PlayCountMetric.cs
+@@ -5,6 +5,27 @@ using GOON.Classes;
+ 
+ namespace GOON.Classes.Metrics {
+     public static class PlayCountMetric {
++        /// <summary>
++        /// Optimized overload that accepts pre-computed play counts and average.
++        /// Avoids the O(N┬▓) cost of querying every playlist path's count for each file.
++        /// </summary>
++        public static double Calculate(int thisCount, double playlistAverage) {
++            if (playlistAverage <= 0 && thisCount == 0) return 1.0; // All unplayed
++
++            // If this video is played less than average, give it a higher score
++            // If played more, lower score.
++            if (thisCount <= playlistAverage) {
++                // Return score between 0.5 and 1.0
++                return 0.5 + (playlistAverage - thisCount) / (Math.Max(1, playlistAverage) * 2);
++            } else {
++                // Return score between 0.1 and 0.5
++                return Math.Max(0.1, 0.5 - (thisCount - playlistAverage) / (Math.Max(1, playlistAverage) * 2));
++            }
++        }
++
++        /// <summary>
++        /// Legacy overload for backward compatibility. Prefer the pre-computed overload.
++        /// </summary>
+         public static double Calculate(string filePath, IEnumerable<string> playlistPaths, PlayHistoryService historyService) {
+             int thisCount = historyService.GetTotalPlayCount(filePath);
+             
+@@ -13,16 +34,7 @@ namespace GOON.Classes.Metrics {
+             if (counts.Count == 0) return 1.0;
+             
+             double average = counts.Average();
+-            
+-            // If this video is played less than average, give it a higher score
+-            // If played more, lower score.
+-            if (thisCount <= average) {
+-                // Return score between 0.5 and 1.0
+-                return 0.5 + (average - thisCount) / (Math.Max(1, average) * 2);
+-            } else {
+-                // Return score between 0.1 and 0.5
+-                return Math.Max(0.1, 0.5 - (thisCount - average) / (Math.Max(1, average) * 2));
+-            }
++            return Calculate(thisCount, average);
+         }
+     }
+ }
+diff --git a/GOON/Classes/Metrics/TimeOfDayMetric.cs b/GOON/Classes/Metrics/TimeOfDayMetric.cs
+index 819d773..bcfe5c6 100644
+--- a/GOON/Classes/Metrics/TimeOfDayMetric.cs
++++ b/GOON/Classes/Metrics/TimeOfDayMetric.cs
+@@ -1,4 +1,5 @@
+ using System;
++using System.Collections.Generic;
+ using System.Linq;
+ using GOON.Classes;
+ 
+@@ -13,9 +14,12 @@ namespace GOON.Classes.Metrics {
+             return TimeBucket.Night;
+         }
+ 
+-        public static double Calculate(string filePath, PlayHistoryService historyService) {
+-            var allRecords = historyService.GetRecentRecords(5000); // Look at last 5000 plays
+-            var fileRecords = allRecords.Where(r => r.FilePath == filePath).ToList();
++        /// <summary>
++        /// Optimized overload that accepts pre-fetched records grouped by file path.
++        /// Avoids the expensive GetRecentRecords(5000) call for every single file.
++        /// </summary>
++        public static double Calculate(string filePath, ILookup<string, VideoPlayRecord> recordsByPath) {
++            var fileRecords = recordsByPath[filePath].ToList();
+             
+             if (fileRecords.Count == 0) return 0.5;
+ 
+@@ -30,5 +34,14 @@ namespace GOON.Classes.Metrics {
+             // If they never watch it now, keep neutral (0.5)
+             return 0.5 + (ratio * 0.5);
+         }
++
++        /// <summary>
++        /// Legacy overload for backward compatibility. Prefer the pre-fetched overload.
++        /// </summary>
++        public static double Calculate(string filePath, PlayHistoryService historyService) {
++            var allRecords = historyService.GetRecentRecords(5000);
++            var lookup = allRecords.ToLookup(r => r.FilePath);
++            return Calculate(filePath, lookup);
++        }
+     }
+ }
+diff --git a/GOON/Classes/PersistentUrlCache.cs b/GOON/Classes/PersistentUrlCache.cs
+index d031f55..e3ab1d8 100644
+--- a/GOON/Classes/PersistentUrlCache.cs
++++ b/GOON/Classes/PersistentUrlCache.cs
+@@ -46,7 +46,8 @@ namespace GOON.Classes {
+         private void LoadCache() {
+             try {
+                 if (File.Exists(_cacheFilePath)) {
+-                    var json = File.ReadAllText(_cacheFilePath);
++                    var json = SafeFileReader.ReadAllTextSafe(_cacheFilePath);
++                    if (string.IsNullOrEmpty(json)) return;
+                     var dictionary = JsonSerializer.Deserialize<Dictionary<string, UrlCacheEntry>>(json);
+                     if (dictionary != null) {
+                         // Filter out already expired entries during load
+diff --git a/GOON/Classes/PlayHistoryService.cs b/GOON/Classes/PlayHistoryService.cs
+index 7c36cae..fd1073f 100644
+--- a/GOON/Classes/PlayHistoryService.cs
++++ b/GOON/Classes/PlayHistoryService.cs
+@@ -26,7 +26,8 @@ namespace GOON.Classes {
+         private void LoadHistory() {
+             try {
+                 if (File.Exists(_historyFilePath)) {
+-                    var json = File.ReadAllText(_historyFilePath);
++                    var json = SafeFileReader.ReadAllTextSafe(_historyFilePath);
++                    if (string.IsNullOrEmpty(json)) return;
+                     var loaded = JsonSerializer.Deserialize<List<VideoPlayRecord>>(json);
+                     if (loaded != null) {
+                         lock (_lock) {
+diff --git a/GOON/Classes/PlaybackPositionTracker.cs b/GOON/Classes/PlaybackPositionTracker.cs
+index 08c7e97..48efcec 100644
+--- a/GOON/Classes/PlaybackPositionTracker.cs
++++ b/GOON/Classes/PlaybackPositionTracker.cs
+@@ -55,7 +55,8 @@ namespace GOON.Classes {
+         public static PlaybackPositionTracker Load() {
+             try {
+                 if (File.Exists(_settingsPath)) {
+-                    var json = File.ReadAllText(_settingsPath);
++                    var json = SafeFileReader.ReadAllTextSafe(_settingsPath);
++                    if (string.IsNullOrEmpty(json)) return new PlaybackPositionTracker();
+                     try {
+                         var tracker = JsonSerializer.Deserialize<PlaybackPositionTracker>(json);
+                         if (tracker != null && tracker.Positions != null) {
+@@ -84,7 +85,8 @@ namespace GOON.Classes {
+                 var legacyPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, PositionsFileName);
+                 if (File.Exists(legacyPath)) {
+                     Logger.Info("[PositionTracker] Migrating legacy positions from base directory...");
+-                    var json = File.ReadAllText(legacyPath);
++                    var json = SafeFileReader.ReadAllTextSafe(legacyPath);
++                    if (string.IsNullOrEmpty(json)) return new PlaybackPositionTracker();
+                     try {
+                         var tracker = JsonSerializer.Deserialize<PlaybackPositionTracker>(json);
+                         if (tracker != null) {
+diff --git a/GOON/Classes/PlaylistImporter.cs b/GOON/Classes/PlaylistImporter.cs
+index 136c53f..4aa1c98 100644
+--- a/GOON/Classes/PlaylistImporter.cs
++++ b/GOON/Classes/PlaylistImporter.cs
+@@ -16,10 +16,12 @@ namespace GOON.Classes {
+     public class PlaylistImporter {
+         private readonly IVideoUrlExtractor _urlExtractor;
+         private readonly IHtmlFetcher _htmlFetcher;
++        private readonly YtDlpService _ytDlpService;
+ 
+-        public PlaylistImporter(IVideoUrlExtractor urlExtractor, IHtmlFetcher htmlFetcher = null) {
++        public PlaylistImporter(IVideoUrlExtractor urlExtractor, IHtmlFetcher htmlFetcher = null, YtDlpService ytDlpService = null) {
+             _urlExtractor = urlExtractor ?? throw new ArgumentNullException(nameof(urlExtractor));
+             _htmlFetcher = htmlFetcher ?? new StandardHtmlFetcher();
++            _ytDlpService = ytDlpService ?? (ServiceContainer.TryGet<YtDlpService>(out var service) ? service : null);
+         }
+ 
+         /// <summary>
+@@ -54,9 +56,16 @@ namespace GOON.Classes {
+                     videoPageUrls = await ExtractRule34VideoPlaylistAsync(playlistUrl, cancellationToken);
+                 } else if (host.Contains("pmvhaven.com")) {
+                     videoPageUrls = await ExtractPmvHavenPlaylistAsync(playlistUrl, cancellationToken);
++                } else if (host.Contains("iwara.tv") && _ytDlpService != null) {
++                    Logger.Info($"[PlaylistImporter] Using yt-dlp for iwara.tv playlist to bypass Cloudflare");
++                    videoPageUrls = await _ytDlpService.ExtractPlaylistUrlsAsync(playlistUrl, cancellationToken);
+                 } else {
+                     // Generic extraction
+                     videoPageUrls = await ExtractGenericPlaylistAsync(playlistUrl, cancellationToken);
++                    if ((videoPageUrls == null || videoPageUrls.Count == 0) && _ytDlpService != null) {
++                        Logger.Info($"[PlaylistImporter] Generic scrape failed or returned 0, falling back to yt-dlp for {host}");
++                        videoPageUrls = await _ytDlpService.ExtractPlaylistUrlsAsync(playlistUrl, cancellationToken);
++                    }
+                 }
+ 
+                 if (videoPageUrls == null || videoPageUrls.Count == 0) {
+diff --git a/GOON/Classes/ShuffleScoringEngine.cs b/GOON/Classes/ShuffleScoringEngine.cs
+index 366da50..7888af4 100644
+--- a/GOON/Classes/ShuffleScoringEngine.cs
++++ b/GOON/Classes/ShuffleScoringEngine.cs
+@@ -12,7 +12,9 @@ namespace GOON.Classes {
+         // Track recently picked videos IN MEMORY (survives between picks in a session)
+         // This is critical for fresh sessions with no history file
+         private readonly Queue<string> _recentPicksQueue = new Queue<string>();
+-        private const int MaxRecentPicks = 10; // Track last 10 picks
++        
++        // Dynamic max: scaled per playlist in SelectBestVideo
++        private int _currentMaxRecentPicks = 10;
+ 
+         public ShuffleScoringEngine(PlayHistoryService historyService) {
+             _historyService = historyService;
+@@ -22,14 +24,36 @@ namespace GOON.Classes {
+             if (files == null || files.Length == 0) return 0;
+             if (files.Length == 1) return 0;
+ 
+-            var candidates = new List<(int index, double score)>();
+-            var recentRecords = _historyService.GetRecentRecords(10);
+-            var playlistPaths = files.Select(f => f.FilePath).ToList();
++            // --- PRE-COMPUTE SHARED DATA (avoids O(N┬▓) per-file lookups) ---
+             
+-            // Get paths we've recently picked (in-memory, survives across picks)
++            // Scale recent-picks queue proportionally to playlist size
++            _currentMaxRecentPicks = Math.Clamp(files.Length / 3, 5, 30);
++            while (_recentPicksQueue.Count > _currentMaxRecentPicks) {
++                _recentPicksQueue.Dequeue();
++            }
++
++            var recentRecords = _historyService.GetRecentRecords(10);
++
++            // Pre-fetch all history records once for TimeOfDay metric
++            var allRecords = _historyService.GetRecentRecords(5000);
++            var recordsByPath = allRecords.ToLookup(r => r.FilePath);
++
++            // Pre-compute play counts for PlayCount metric (avoid O(N┬▓))
++            var playCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
++            foreach (var file in files) {
++                if (file == null) continue;
++                if (!playCounts.ContainsKey(file.FilePath)) {
++                    playCounts[file.FilePath] = _historyService.GetTotalPlayCount(file.FilePath);
++                }
++            }
++            double playCountAverage = playCounts.Count > 0 ? playCounts.Values.Average() : 0;
++
++            // Pre-build in-memory recent picks data
+             var recentPicks = _recentPicksQueue.ToHashSet();
+             var recentPicksList = _recentPicksQueue.ToList(); // For position-based penalty
+ 
++            var candidates = new List<(int index, double score)>();
++
+             for (int i = 0; i < files.Length; i++) {
+                 var file = files[i];
+                 if (file == null) continue;
+@@ -37,10 +61,13 @@ namespace GOON.Classes {
+                 // CRITICAL: Skip the currently playing video
+                 if (i == currentIndex) continue;
+ 
+-                // 1. Calculate Individual Scores from history
++                // 1. Calculate Individual Scores using pre-fetched data where possible
+                 double m1 = RecencyMetric.Calculate(file.FilePath, _historyService);
+                 double m2 = WatchTimeMetric.Calculate(file.FilePath, _historyService);
+-                double m3 = PlayCountMetric.Calculate(file.FilePath, playlistPaths, _historyService);
++                double m3 = PlayCountMetric.Calculate(
++                    playCounts.GetValueOrDefault(file.FilePath, 0), 
++                    playCountAverage
++                );
+                 
+                 double durationMs = 0;
+                 var lastPlay = _historyService.GetLastPlay(file.FilePath);
+@@ -50,7 +77,7 @@ namespace GOON.Classes {
+                 
+                 double m4 = LengthVarietyMetric.Calculate(durationMs, recentRecords);
+                 double m5 = CreatorVarietyMetric.Calculate(file.FilePath, recentRecords);
+-                double m6 = TimeOfDayMetric.Calculate(file.FilePath, _historyService);
++                double m6 = TimeOfDayMetric.Calculate(file.FilePath, recordsByPath);
+ 
+                 // 2. Combine with Weights
+                 double score = 
+@@ -61,11 +88,25 @@ namespace GOON.Classes {
+                     (m4 * settings.ShuffleLengthWeight) + 
+                     (m5 * settings.ShuffleVarietyWeight);
+ 
+-                // 3. CRITICAL IN-MEMORY PENALTY: Apply harsh penalty for recently picked videos
++                // 3. "Never Played" discovery boost ΓÇö surface new additions more aggressively
++                bool neverPlayed = _historyService.GetTotalPlayCount(file.FilePath) == 0;
++                if (neverPlayed && !recentPicks.Contains(file.FilePath)) {
++                    score *= 1.4; // 40% boost for undiscovered videos
++                }
++
++                // 4. Skip-rate penalty ΓÇö demote videos that are consistently skipped
++                double skipRate = _historyService.GetSkipRate(file.FilePath);
++                if (skipRate > 0.6 && _historyService.GetTotalPlayCount(file.FilePath) >= 3) {
++                    // Only apply if we have enough data (3+ plays) and skip rate is high
++                    double skipPenalty = 1.0 - ((skipRate - 0.6) * 0.75); // 60% skip = 1.0x, 100% skip = 0.7x
++                    score *= Math.Max(0.5, skipPenalty);
++                }
++
++                // 5. CRITICAL IN-MEMORY PENALTY: Apply harsh penalty for recently picked videos
+                 // This works even in fresh sessions with no history file
+                 if (recentPicks.Contains(file.FilePath)) {
+                     int positionInQueue = recentPicksList.LastIndexOf(file.FilePath);
+-                    int recency = recentPicksList.Count - positionInQueue; // 1 = most recent, 10 = oldest
++                    int recency = recentPicksList.Count - positionInQueue; // 1 = most recent, N = oldest
+                     
+                     // Most recent = 0.01 (99% penalty), oldest = 0.5 (50% penalty)
+                     double penalty = 0.01 + (recency - 1) * 0.05;
+@@ -77,13 +118,15 @@ namespace GOON.Classes {
+                     }
+                 }
+ 
+-                // 4. Add Noise (┬▒10% instead of ┬▒5% for more variety)
+-                score *= (0.90 + _random.NextDouble() * 0.20);
++                // Ensure score is positive for weighted selection
++                score = Math.Max(score, 0.001);
+ 
+                 candidates.Add((i, score));
+ 
+                 if (settings.EnableShuffleDebugLog) {
+-                    Logger.Debug($"[ShuffleScoring] {file.Title}: Score={score:F2} (R={m1:F2}, W={m2:F2}, P={m3:F2}, L={m4:F2}, V={m5:F2}, T={m6:F2})");
++                    string extras = neverPlayed ? " [NEW]" : "";
++                    if (skipRate > 0.6) extras += $" [SKIP:{skipRate:P0}]";
++                    Logger.Debug($"[ShuffleScoring] {file.Title}: Score={score:F3} (R={m1:F2}, W={m2:F2}, P={m3:F2}, L={m4:F2}, V={m5:F2}, T={m6:F2}){extras}");
+                 }
+             }
+ 
+@@ -92,22 +135,61 @@ namespace GOON.Classes {
+                 return (currentIndex + 1) % files.Length;
+             }
+ 
+-            // Pick the best one
+-            int selectedIndex = candidates.OrderByDescending(c => c.score).First().index;
++            // --- WEIGHTED RANDOM SELECTION (softmax-style) ---
++            // Instead of always picking the top scorer, use scores as probabilities.
++            // Higher scores are proportionally more likely, but not guaranteed.
++            // This eliminates the determinism problem where ┬▒10% noise was the only variety.
++            int selectedIndex = WeightedRandomSelect(candidates);
++
+             string selectedPath = files[selectedIndex]?.FilePath;
+             
+             // Remember this pick in our in-memory queue
+             if (selectedPath != null) {
+                 _recentPicksQueue.Enqueue(selectedPath);
+-                while (_recentPicksQueue.Count > MaxRecentPicks) {
++                while (_recentPicksQueue.Count > _currentMaxRecentPicks) {
+                     _recentPicksQueue.Dequeue();
+                 }
+             }
+-            
+-            Logger.Info($"[ShuffleScoring] Selected #{selectedIndex} ({files[selectedIndex]?.FileName}) from {candidates.Count} candidates");
++
++            if (settings.EnableShuffleDebugLog) {
++                double totalScore = candidates.Sum(c => c.score);
++                double selectedScore = candidates.First(c => c.index == selectedIndex).score;
++                double probability = totalScore > 0 ? selectedScore / totalScore * 100 : 0;
++                Logger.Info($"[ShuffleScoring] Selected #{selectedIndex} ({files[selectedIndex]?.FileName}) " +
++                           $"from {candidates.Count} candidates (score={selectedScore:F3}, prob={probability:F1}%)");
++            } else {
++                Logger.Info($"[ShuffleScoring] Selected #{selectedIndex} ({files[selectedIndex]?.FileName}) from {candidates.Count} candidates");
++            }
+             
+             return selectedIndex;
+         }
++
++        /// <summary>
++        /// Selects a candidate using weighted random selection (roulette wheel).
++        /// Higher-scored candidates are proportionally more likely to be selected,
++        /// but every candidate has a chance ΓÇö producing genuine variety.
++        /// </summary>
++        private int WeightedRandomSelect(List<(int index, double score)> candidates) {
++            double totalScore = candidates.Sum(c => c.score);
++            
++            if (totalScore <= 0) {
++                // Fallback to uniform random if all scores are zero
++                return candidates[_random.Next(candidates.Count)].index;
++            }
++
++            double roll = _random.NextDouble() * totalScore;
++            double cumulative = 0;
++
++            for (int i = 0; i < candidates.Count; i++) {
++                cumulative += candidates[i].score;
++                if (roll <= cumulative) {
++                    return candidates[i].index;
++                }
++            }
++
++            // Fallback (shouldn't happen due to floating point, but be safe)
++            return candidates[candidates.Count - 1].index;
++        }
+         
+         /// <summary>
+         /// Clears in-memory recent picks. Call when playlist changes.
+diff --git a/GOON/Classes/StandardHtmlFetcher.cs b/GOON/Classes/StandardHtmlFetcher.cs
+index ec9244f..ce57501 100644
+--- a/GOON/Classes/StandardHtmlFetcher.cs
++++ b/GOON/Classes/StandardHtmlFetcher.cs
+@@ -51,7 +51,7 @@ namespace GOON.Classes {
+                         var cookies = App.Settings.HypnotubeCookies.Trim();
+                         if (cookies.Contains("=")) {
+                             request.Headers.TryAddWithoutValidation("Cookie", cookies);
+-                            Logger.Info($"[Hypnotube] Applied session cookies for request to {url}");
++                            Logger.Debug($"[Hypnotube] Applied session cookies for request");
+                         }
+                     }
+ 
+@@ -65,7 +65,7 @@ namespace GOON.Classes {
+                     if (url.Contains("hypnotube.com") && !string.IsNullOrEmpty(App.Settings?.HypnotubeCookies)) {
+                         // Check for indicators of authenticated session (e.g., logout link, user profile)
+                         var isAuthenticated = html.Contains("logout") || html.Contains("my_profile") || html.Contains("user-menu");
+-                        Logger.Info($"[Hypnotube] Authentication status: {(isAuthenticated ? "Authenticated" : "Guest/Unauthenticated")}");
++                        Logger.Debug($"[Hypnotube] Authentication status: {(isAuthenticated ? "Authenticated" : "Guest/Unauthenticated")}");
+                     }
+                     
+                     // Cache the result
+@@ -102,7 +102,7 @@ namespace GOON.Classes {
+                     // Add Hypnotube cookies if applicable
+                     if (url.Contains("hypnotube.com") && App.Settings != null && !string.IsNullOrEmpty(App.Settings.HypnotubeCookies)) {
+                         request.Headers.TryAddWithoutValidation("Cookie", App.Settings.HypnotubeCookies);
+-                        Logger.Info("Adding session cookies for Hypnotube redirect resolution");
++                        Logger.Debug("Adding session cookies for redirect resolution");
+                     }
+ 
+                     
+diff --git a/GOON/Classes/StashPatternExtractor.cs b/GOON/Classes/StashPatternExtractor.cs
+index 9a78acf..75d5bfc 100644
+--- a/GOON/Classes/StashPatternExtractor.cs
++++ b/GOON/Classes/StashPatternExtractor.cs
+@@ -159,8 +159,10 @@ namespace GOON.Classes {
+                 @"\s*[""']?(\d+)[pP]?[""']?\s*:\s*[""']([^""']+)[""']" // Simple "720": "url" map
+             };
+ 
++            var regexTimeout = TimeSpan.FromSeconds(5);
++
+             foreach (var pattern in jsonPatterns) {
+-                var matches = Regex.Matches(html, pattern, RegexOptions.IgnoreCase);
++                var matches = Regex.Matches(html, pattern, RegexOptions.IgnoreCase, regexTimeout);
+                 foreach (Match match in matches) {
+                     if (match.Success && match.Groups.Count >= 3) {
+                         try {
+diff --git a/GOON/Classes/TelemetryService.cs b/GOON/Classes/TelemetryService.cs
+index 1ce55ab..7e5dbb6 100644
+--- a/GOON/Classes/TelemetryService.cs
++++ b/GOON/Classes/TelemetryService.cs
+@@ -24,7 +24,8 @@ namespace GOON.Classes {
+         private TelemetryData LoadTelemetry() {
+             try {
+                 if (File.Exists(_telemetryPath)) {
+-                    string json = File.ReadAllText(_telemetryPath);
++                    string json = SafeFileReader.ReadAllTextSafe(_telemetryPath);
++                    if (string.IsNullOrEmpty(json)) return new TelemetryData();
+                     return JsonSerializer.Deserialize<TelemetryData>(json) ?? new TelemetryData();
+                 }
+             } catch (Exception ex) {
+diff --git a/GOON/Classes/UserSettings.cs b/GOON/Classes/UserSettings.cs
+index 3269919..aa35a24 100644
+--- a/GOON/Classes/UserSettings.cs
++++ b/GOON/Classes/UserSettings.cs
+@@ -1,6 +1,7 @@
+ using System;
+ using System.IO;
+ using System.Text.Json;
++using System.Text.Json.Serialization;
+ 
+ namespace GOON.Classes {
+     public enum ShuffleMode {
+@@ -21,9 +22,36 @@ namespace GOON.Classes {
+         public double DefaultOpacity { get; set; } = 0.9;
+         public double DefaultVolume { get; set; } = 0.5;
+         public string DefaultMonitorDeviceName { get; set; } = null;
+-        public virtual string HypnotubeCookies { get; set; } = null;
++        // --- Cookie storage: encrypted at rest via DPAPI ---
++        // The JSON file stores the DPAPI-encrypted value.
++        // Use the Get/Set helpers below for plaintext access at runtime.
++
++        [JsonPropertyName("HypnotubeCookies")]
++        public virtual string HypnotubeCookiesEncrypted { get; set; } = null;
++
++        [JsonPropertyName("Cookies")]
++        public virtual string CookiesEncrypted { get; set; } = null;
++
+         public virtual string UserAgent { get; set; } = null;
+-        public virtual string Cookies { get; set; } = null;
++
++        /// <summary>
++        /// Gets the decrypted Hypnotube cookies for runtime use.
++        /// Handles both legacy plaintext and DPAPI-encrypted values.
++        /// </summary>
++        [JsonIgnore]
++        public string HypnotubeCookies {
++            get => CookieProtector.Unprotect(HypnotubeCookiesEncrypted);
++            set => HypnotubeCookiesEncrypted = CookieProtector.Protect(value);
++        }
++
++        /// <summary>
++        /// Gets the decrypted global cookies for runtime use.
++        /// </summary>
++        [JsonIgnore]
++        public string Cookies {
++            get => CookieProtector.Unprotect(CookiesEncrypted);
++            set => CookiesEncrypted = CookieProtector.Protect(value);
++        }
+         
+         
+         // Panic hotkey configuration
+@@ -113,7 +141,8 @@ namespace GOON.Classes {
+                 }
+ 
+                 if (File.Exists(SettingsFilePath)) {
+-                    string json = File.ReadAllText(SettingsFilePath);
++                    string json = SafeFileReader.ReadAllTextSafe(SettingsFilePath);
++                    if (string.IsNullOrEmpty(json)) return new UserSettings();
+                     try {
+                         var settings = JsonSerializer.Deserialize<UserSettings>(json) ?? new UserSettings();
+                         
+@@ -303,7 +332,8 @@ namespace GOON.Classes {
+         public void LoadSession() {
+             try {
+                 if (File.Exists(SessionFilePath)) {
+-                    string json = File.ReadAllText(SessionFilePath);
++                    string json = SafeFileReader.ReadAllTextSafe(SessionFilePath);
++                    if (string.IsNullOrEmpty(json)) return;
+                     CurrentSessionPlaylist = JsonSerializer.Deserialize<Playlist>(json) ?? new Playlist();
+                     
+                     // Migration logic
+diff --git a/GOON/Classes/VideoUrlExtractor.cs b/GOON/Classes/VideoUrlExtractor.cs
+index 14e5ea4..829c179 100644
+--- a/GOON/Classes/VideoUrlExtractor.cs
++++ b/GOON/Classes/VideoUrlExtractor.cs
+@@ -56,42 +56,50 @@ namespace GOON.Classes {
+             }
+ 
+             try {
+-                // Fetch HTML
++                // Fetch HTML but don't fail immediately, some sites block scrapers but work with yt-dlp
+                 var html = await FetchHtmlAsync(normalizedUrl, cancellationToken);
+-                if (string.IsNullOrWhiteSpace(html)) return new VideoMetadata();
++                bool hasHtml = !string.IsNullOrWhiteSpace(html);
+ 
+                 string videoUrl = null;
+                 string title = null;
+ 
+-                // Use cached URL if available, otherwise extract
+-                if (!string.IsNullOrEmpty(cachedUrl)) {
+-                    videoUrl = cachedUrl;
+-                } else {
+-                    // Extraction logic...
+-                    if (host.Contains("rule34video.com")) {
+-                        if (_ytDlpService != null && _ytDlpService.IsAvailable) {
+-                            try {
+-                                Logger.Info($"[VideoUrlExtractor] Using yt-dlp extraction for Rule34Video: {normalizedUrl}");
+-                                videoUrl = await _ytDlpService.GetBestVideoUrlAsync(normalizedUrl, cancellationToken);
+-                            } catch (Exception ex) {
+-                                Logger.Warning($"[VideoUrlExtractor] yt-dlp failed for Rule34Video: {ex.Message}");
+-                            }
++                // Use yt-dlp for video metadata if site is supported by it and blocks scraping
++                bool useYtDlpFirst = host.Contains("rule34video.com") || host.Contains("iwara.tv");
++
++                if (useYtDlpFirst && _ytDlpService != null && _ytDlpService.IsAvailable) {
++                    try {
++                        Logger.Info($"[VideoUrlExtractor] Extracting full metadata using yt-dlp for {host}");
++                        var info = await _ytDlpService.ExtractVideoInfoAsync(normalizedUrl, cancellationToken);
++                        if (info != null) {
++                            if (!string.IsNullOrWhiteSpace(info.Url)) videoUrl = info.Url;
++                            if (!string.IsNullOrWhiteSpace(info.Title) && info.Title != "Unknown") title = info.Title;
+                         }
+-                        
+-                        // Fallback to specialized scraper if yt-dlp failed or is missing
+-                        if (string.IsNullOrEmpty(videoUrl)) {
++                    } catch (Exception ex) {
++                        Logger.Warning($"[VideoUrlExtractor] yt-dlp full metadata extraction failed for {host}: {ex.Message}");
++                    }
++                }
++
++                // If yt-dlp failed or was skipped, try getting the URL normally
++                if (string.IsNullOrEmpty(videoUrl)) {
++                    if (!string.IsNullOrEmpty(cachedUrl)) {
++                        videoUrl = cachedUrl;
++                    } else if (useYtDlpFirst) {
++                        // We already tried ExtractVideoInfoAsync and it failed, but let's strictly fallback
++                        if (host.Contains("rule34video.com")) {
+                             videoUrl = await ExtractRule34VideoUrlAsync(normalizedUrl, cancellationToken);
++                        } else {
++                            if (hasHtml) videoUrl = await ExtractGenericVideoUrlAsync(normalizedUrl, cancellationToken);
+                         }
+                     } else if (host.Contains("pmvhaven.com")) {
+                         videoUrl = await ExtractPmvHavenUrlAsync(normalizedUrl, cancellationToken);
+                     } else if (host.Contains("hypnotube.com")) {
+                         videoUrl = await ExtractHypnotubeUrlAsync(normalizedUrl, cancellationToken);
+                     } else {
+-                        videoUrl = await ExtractGenericVideoUrlAsync(normalizedUrl, cancellationToken);
++                        if (hasHtml) videoUrl = await ExtractGenericVideoUrlAsync(normalizedUrl, cancellationToken);
+                     }
+                 }
+ 
+-                if (string.IsNullOrEmpty(title)) title = ExtractTitleFromHtml(html, host);
++                if (string.IsNullOrEmpty(title) && hasHtml) title = ExtractTitleFromHtml(html, host);
+                 
+                 if (videoUrl != null) {
+                     PersistentUrlCache.Instance.Set(pageUrl, videoUrl);
+@@ -460,6 +468,8 @@ namespace GOON.Classes {
+             return null;
+         }
+ 
++        private static readonly TimeSpan _regexTimeout = TimeSpan.FromSeconds(5);
++
+         private string ExtractVideoFromHtml(string html, string baseUrl) {
+             if (string.IsNullOrWhiteSpace(html)) return null;
+ 
+@@ -469,7 +479,7 @@ namespace GOON.Classes {
+                 // Method 1: Look for <video> tags with src attribute
+                 Logger.Info("Trying Method 1: <video> tag with src attribute");
+                 var videoSrcPattern = @"<video[^>]+src\s*=\s*[""']([^""']+)[""']";
+-                var match = Regex.Match(html, videoSrcPattern, RegexOptions.IgnoreCase);
++                var match = Regex.Match(html, videoSrcPattern, RegexOptions.IgnoreCase, _regexTimeout);
+                 if (match.Success && match.Groups.Count > 1) {
+                     var videoUrl = match.Groups[1].Value;
+                     var resolved = ResolveUrl(videoUrl, baseUrl);
+@@ -480,7 +490,7 @@ namespace GOON.Classes {
+                 // Method 2: Look for <source> tags within video elements
+                 Logger.Info("Trying Method 2: <source> tags");
+                 var sourcePattern = @"<source[^>]+src\s*=\s*[""']([^""']+)[""']";
+-                var sourceMatches = Regex.Matches(html, sourcePattern, RegexOptions.IgnoreCase);
++                var sourceMatches = Regex.Matches(html, sourcePattern, RegexOptions.IgnoreCase, _regexTimeout);
+                 Logger.Info($"Method 2: Found {sourceMatches.Count} <source> tags");
+                 foreach (Match sourceMatch in sourceMatches) {
+                     if (sourceMatch.Success && sourceMatch.Groups.Count > 1) {
+@@ -497,7 +507,7 @@ namespace GOON.Classes {
+                 // Method 3: Look for data-url or data-src attributes
+                 Logger.Info("Trying Method 3: data attributes");
+                 var dataUrlPattern = @"(?:data-url|data-src|data-video-src|data-config)\s*=\s*[""']([^""']+)[""']";
+-                var dataMatches = Regex.Matches(html, dataUrlPattern, RegexOptions.IgnoreCase);
++                var dataMatches = Regex.Matches(html, dataUrlPattern, RegexOptions.IgnoreCase, _regexTimeout);
+                 foreach (Match dataMatch in dataMatches) {
+                     if (dataMatch.Success && dataMatch.Groups.Count > 1) {
+                         var url = CleanExtractedUrl(dataMatch.Groups[1].Value);
+@@ -522,7 +532,7 @@ namespace GOON.Classes {
+                 var potentialUrls = new List<string>();
+ 
+                 foreach (var pattern in jsVideoPatterns) {
+-                    var jsMatches = Regex.Matches(html, pattern, RegexOptions.IgnoreCase);
++                    var jsMatches = Regex.Matches(html, pattern, RegexOptions.IgnoreCase, _regexTimeout);
+                     Logger.Info($"Method 4: Pattern {pattern} found {jsMatches.Count} potential matches");
+                     foreach (Match jsMatch in jsMatches) {
+                         if (jsMatch.Success && jsMatch.Groups.Count > 1) {
+@@ -562,7 +572,7 @@ namespace GOON.Classes {
+                 // Method 5: Look for HLS streams (m3u8)
+                 Logger.Info("Trying Method 5: HLS streams");
+                 var hlsPattern = @"[""']([^""']+\.m3u8(?:[^""']*)?)[""']";
+-                var hlsMatches = Regex.Matches(html, hlsPattern, RegexOptions.IgnoreCase);
++                var hlsMatches = Regex.Matches(html, hlsPattern, RegexOptions.IgnoreCase, _regexTimeout);
+                 Logger.Info($"Method 5: Found {hlsMatches.Count} potential HLS streams");
+                 foreach (Match hlsMatch in hlsMatches) {
+                     if (hlsMatch.Success && hlsMatch.Groups.Count > 1) {
+@@ -576,7 +586,7 @@ namespace GOON.Classes {
+                 // Method 6: Look for Plyr source configuration
+                 Logger.Info("Trying Method 6: Plyr configuration");
+                 var plyrPattern = @"plyr_player\.source\s*=\s*\{[\s\S]*?sources\s*:\s*\[\s*\{\s*[""']?src[""']?\s*:\s*[""']([^""']+)[""']";
+-                var plyrMatch = Regex.Match(html, plyrPattern, RegexOptions.IgnoreCase);
++                var plyrMatch = Regex.Match(html, plyrPattern, RegexOptions.IgnoreCase, _regexTimeout);
+                 if (plyrMatch.Success && plyrMatch.Groups.Count > 1) {
+                     var videoUrl = CleanExtractedUrl(plyrMatch.Groups[1].Value);
+                     var resolved = ResolveUrl(videoUrl, baseUrl);
+@@ -624,7 +634,7 @@ namespace GOON.Classes {
+                 // Look for JSON-like structures that might contain video URLs
+                 // This version is more lenient with whitespace and escaped characters
+                 var jsonPattern = @"""(?:src|url|source|file|videoUrl)""\s*:\s*""([^""]+\.(?:mp4|webm|mkv|avi|mov|wmv|m4v|mpg|mpeg|ts|m2ts)[^""]*)""";
+-                var matches = Regex.Matches(html, jsonPattern, RegexOptions.IgnoreCase);
++                var matches = Regex.Matches(html, jsonPattern, RegexOptions.IgnoreCase, _regexTimeout);
+                 
+                 foreach (Match match in matches) {
+                     if (match.Success && match.Groups.Count > 1) {
+@@ -710,10 +720,39 @@ namespace GOON.Classes {
+ 
+             try {
+                 var normalizedUrl = FileValidator.NormalizeUrl(pageUrl);
++                var uri = new Uri(normalizedUrl);
++                var host = uri.Host.ToLowerInvariant();
++
++                // Fast path for sites that require CF bypass / yt-dlp to get title
++                if (host.Contains("rule34video.com") || host.Contains("iwara.tv")) {
++                    if (_ytDlpService != null && _ytDlpService.IsAvailable) {
++                        try {
++                            Logger.Info($"[VideoUrlExtractor] Extracting title using yt-dlp for {host}");
++                            var info = await _ytDlpService.ExtractVideoInfoAsync(normalizedUrl, cancellationToken);
++                            if (info != null && !string.IsNullOrWhiteSpace(info.Title) && info.Title != "Unknown") {
++                                return info.Title;
++                            }
++                        } catch (Exception ex) {
++                            Logger.Warning($"[VideoUrlExtractor] yt-dlp title extraction failed for {host}: {ex.Message}");
++                        }
++                    }
++                }
++
+                 var html = await FetchHtmlAsync(normalizedUrl, cancellationToken);
+-                if (string.IsNullOrWhiteSpace(html)) return null;
++                if (string.IsNullOrWhiteSpace(html)) {
++                    // Fallback to yt-dlp if HTML fetch failed and yt-dlp is available
++                    if (_ytDlpService != null && _ytDlpService.IsAvailable) {
++                        try {
++                            Logger.Info($"[VideoUrlExtractor] HTML fetch failed, fallback to yt-dlp title extraction for {normalizedUrl}");
++                            var info = await _ytDlpService.ExtractVideoInfoAsync(normalizedUrl, cancellationToken);
++                            if (info != null && !string.IsNullOrWhiteSpace(info.Title) && info.Title != "Unknown") {
++                                return info.Title;
++                            }
++                        } catch { }
++                    }
++                    return null;
++                }
+ 
+-                var uri = new Uri(normalizedUrl);
+                 return ExtractTitleFromHtml(html, uri.Host);
+             } catch (Exception ex) {
+                 Logger.Warning($"Error extracting video title from {pageUrl}: {ex.Message}");
+diff --git a/GOON/Classes/YtDlpService.cs b/GOON/Classes/YtDlpService.cs
+index 63a40e7..0ce3bfc 100644
+--- a/GOON/Classes/YtDlpService.cs
++++ b/GOON/Classes/YtDlpService.cs
+@@ -1,10 +1,10 @@
+ using System;
+ using System.Collections.Generic;
++using System.Diagnostics;
+ using System.IO;
+ using System.Linq;
+ using System.Threading;
+ using System.Threading.Tasks;
+-using System.Reflection;
+ using YoutubeDLSharp;
+ using YoutubeDLSharp.Options;
+ 
+@@ -17,12 +17,15 @@ namespace GOON.Classes {
+         private readonly YoutubeDL _ytdl;
+         private bool _isAvailable;
+         private readonly string _ytDlpPath;
++        private string _detectedVersion;
++        private const int MaxRetries = 2;
++        private static readonly TimeSpan ExtractionTimeout = TimeSpan.FromSeconds(60);
+ 
+         public YtDlpService(string ytDlpPath = null) {
+             // Try to find yt-dlp.exe in common locations
+             _ytDlpPath = ytDlpPath ?? FindYtDlpExecutable();
+             
+-            if (string.IsNullOrEmpty(_ytDlpPath)) {
++            if (string.IsNullOrEmpty(_ytDlpPath) || !File.Exists(_ytDlpPath)) {
+                 Logger.Warning("yt-dlp.exe not found. Video extraction will fall back to scraping.");
+                 _isAvailable = false;
+                 return;
+@@ -33,6 +36,10 @@ namespace GOON.Classes {
+                 _ytdl.YoutubeDLPath = _ytDlpPath;
+                 _ytdl.OutputFolder = Path.GetTempPath();
+                 _isAvailable = true;
++                
++                // Detect version asynchronously (non-blocking)
++                _ = DetectVersionAsync();
++                
+                 Logger.Info($"yt-dlp service initialized: {_ytDlpPath}");
+             } catch (Exception ex) {
+                 Logger.Error("Failed to initialize yt-dlp service", ex);
+@@ -40,6 +47,11 @@ namespace GOON.Classes {
+             }
+         }
+ 
++        /// <summary>
++        /// The detected yt-dlp version string (e.g. "2026.03.03"), or null if not yet detected
++        /// </summary>
++        public string DetectedVersion => _detectedVersion;
++
+         public bool IsAvailable => _isAvailable;
+ 
+         /// <summary>
+@@ -48,68 +60,95 @@ namespace GOON.Classes {
+         public async Task<string> GetBestVideoUrlAsync(string url, CancellationToken cancellationToken = default) {
+             if (!_isAvailable) return null;
+ 
+-            try {
+-                Logger.Info($"[yt-dlp] Extracting video URL: {url}");
+-                
+-                // Check if we should use cookies for this URL
+-                OptionSet options = new OptionSet();
+-                if (!string.IsNullOrEmpty(App.Settings?.UserAgent)) {
+-                    options.AddHeaders = new[] { $"User-Agent:{App.Settings.UserAgent}" };
+-                }
++            for (int attempt = 0; attempt <= MaxRetries; attempt++) {
+                 string cookieFile = null;
+-                
+                 try {
+-                    var uri = new Uri(url);
+-                    var host = uri.Host.ToLowerInvariant();
++                    if (attempt > 0) {
++                        Logger.Info($"[yt-dlp] Retry attempt {attempt}/{MaxRetries} for: {url}");
++                        await Task.Delay(500 * attempt, cancellationToken);
++                    }
++
++                    Logger.Info($"[yt-dlp] Extracting video URL: {url}");
++                    
++                    OptionSet options = BuildOptionsForUrl(url, out cookieFile);
++                    
++                    // Enforce a timeout to prevent hung processes
++                    using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
++                    timeoutCts.CancelAfter(ExtractionTimeout);
++                    
++                    var result = await _ytdl.RunVideoDataFetch(url, ct: timeoutCts.Token, overrideOptions: options);
+                     
+-                    if (host.Contains("hypnotube.com") && !string.IsNullOrEmpty(App.Settings?.HypnotubeCookies)) {
+-                        Logger.Info($"[yt-dlp] Using Hypnotube cookies for extraction");
+-                        cookieFile = CreateTempCookieFile(App.Settings.HypnotubeCookies, "hypnotube.com");
+-                    } else if (!string.IsNullOrEmpty(App.Settings?.Cookies)) {
+-                        // Check if global cookies contain this domain
+-                        if (App.Settings.Cookies.Contains(host) || host.Split('.').Any(part => App.Settings.Cookies.Contains(part))) {
+-                            Logger.Info($"[yt-dlp] Using global cookies for extraction on {host}");
+-                            cookieFile = CreateTempCookieFile(App.Settings.Cookies, host);
++                    if (!result.Success) {
++                        var errorMsg = result.ErrorOutput?.FirstOrDefault() ?? "Unknown error";
++                        Logger.Warning($"[yt-dlp] Extraction failed for {url}: {errorMsg}");
++                        
++                        // Don't retry on definitive errors (e.g., "Video unavailable" or "Video requires login")
++                        if (IsDefinitiveError(errorMsg) || errorMsg.Contains("requires login", StringComparison.OrdinalIgnoreCase)) {
++                            // Let the UI know about the definitive error
++                            if (errorMsg.Contains("requires login", StringComparison.OrdinalIgnoreCase)) {
++                                Logger.Error($"[VideoUrlExtractor] Authentication required for {url}. Video cannot be downloaded unconditionally.");
++                            }
++                            break;
+                         }
++                        continue;
+                     }
+-                    
+-                    if (!string.IsNullOrEmpty(cookieFile) && File.Exists(cookieFile)) {
+-                        options.Cookies = cookieFile;
++
++                    var videoUrl = result.Data?.Url;
++                    if (!string.IsNullOrEmpty(videoUrl)) {
++                        Logger.Info($"[yt-dlp] Successfully extracted URL");
++                        LogVideoQuality(result.Data);
+                     }
++                    
++                    return videoUrl;
++                } catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) {
++                    Logger.Warning($"[yt-dlp] Extraction timed out after {ExtractionTimeout.TotalSeconds}s");
++                    continue; // Retry on timeout
++                } catch (OperationCanceledException) {
++                    return null; // Caller cancelled ΓÇö don't retry
+                 } catch (Exception ex) {
+-                    Logger.Warning($"[yt-dlp] Error setting up cookies: {ex.Message}");
++                    Logger.Warning($"[yt-dlp] Exception during extraction (attempt {attempt}): {ex.Message}");
++                    if (attempt >= MaxRetries) return null;
++                } finally {
++                    CleanupCookieFile(cookieFile);
+                 }
++            }
++            return null;
++        }
++
++        private OptionSet BuildOptionsForUrl(string url, out string cookieFile) {
++            cookieFile = null;
++            OptionSet options = new OptionSet();
++            if (!string.IsNullOrEmpty(App.Settings?.UserAgent)) {
++                options.AddHeaders = new[] { $"User-Agent:{App.Settings.UserAgent}" };
++            }
++            
++            try {
++                var uri = new Uri(url);
++                var host = uri.Host.ToLowerInvariant();
+                 
+-                var result = await _ytdl.RunVideoDataFetch(url, ct: cancellationToken, overrideOptions: options);
++                if (host.Contains("hypnotube.com") && !string.IsNullOrEmpty(App.Settings?.HypnotubeCookies)) {
++                    Logger.Debug($"[yt-dlp] Using Hypnotube cookies for extraction");
++                    cookieFile = CreateTempCookieFile(App.Settings.HypnotubeCookies, "hypnotube.com");
++                } else if (!string.IsNullOrEmpty(App.Settings?.Cookies)) {
++                    if (App.Settings.Cookies.Contains(host) || host.Split('.').Any(part => App.Settings.Cookies.Contains(part))) {
++                        Logger.Debug($"[yt-dlp] Using global cookies for extraction on {host}");
++                        cookieFile = CreateTempCookieFile(App.Settings.Cookies, host);
++                    }
++                }
+                 
+-                // Cleanup temp cookie file
+                 if (!string.IsNullOrEmpty(cookieFile) && File.Exists(cookieFile)) {
+-                    try { File.Delete(cookieFile); } catch { /* ignore */ }
+-                }
+-
+-                if (!result.Success) {
+-                    Logger.Warning($"[yt-dlp] Extraction failed: {result.ErrorOutput?.FirstOrDefault()}");
+-                    return null;
+-                }
+-
+-                var videoUrl = result.Data?.Url;
+-                if (!string.IsNullOrEmpty(videoUrl)) {
+-                    Logger.Info($"[yt-dlp] Successfully extracted URL");
+-                    try {
+-                        var data = result.Data;
+-                        var props = data.GetType().GetProperties();
+-                        var w = props.FirstOrDefault(p => p.Name.Equals("width", StringComparison.OrdinalIgnoreCase))?.GetValue(data);
+-                        var h = props.FirstOrDefault(p => p.Name.Equals("height", StringComparison.OrdinalIgnoreCase))?.GetValue(data);
+-                        var f = props.FirstOrDefault(p => p.Name.Equals("format", StringComparison.OrdinalIgnoreCase))?.GetValue(data);
+-                        Logger.Info($"[yt-dlp] Quality Info: {w}x{h}, Format: {f}");
+-                    } catch { /* ignore reflection errors */ }
++                    options.Cookies = cookieFile;
+                 }
+                 
+-                return videoUrl;
++                // Fix for Iwara Cloudflare JSONDecodeError
++                if (host.Contains("iwara.tv")) {
++                    options.AddCustomOption<string>("--impersonate", "chrome");
++                    Logger.Info($"[yt-dlp] Added --impersonate chrome for {host} to bypass Cloudflare");
++                }
+             } catch (Exception ex) {
+-                Logger.Warning($"[yt-dlp] Exception during extraction: {ex.Message}");
+-                return null;
++                Logger.Warning($"[yt-dlp] Error setting up cookies/options: {ex.Message}");
+             }
++            return options;
+         }
+ 
+         /// <summary>
+@@ -118,10 +157,16 @@ namespace GOON.Classes {
+         public async Task<YtDlpVideoInfo> ExtractVideoInfoAsync(string url, CancellationToken cancellationToken = default) {
+             if (!_isAvailable) return null;
+ 
++            string cookieFile = null;
+             try {
+                 Logger.Info($"[yt-dlp] Extracting video info: {url}");
+                 
+-                var result = await _ytdl.RunVideoDataFetch(url, ct: cancellationToken);
++                OptionSet options = BuildOptionsForUrl(url, out cookieFile);
++                
++                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
++                timeoutCts.CancelAfter(ExtractionTimeout);
++                
++                var result = await _ytdl.RunVideoDataFetch(url, ct: timeoutCts.Token, overrideOptions: options);
+                 
+                 if (!result.Success || result.Data == null) {
+                     Logger.Warning($"[yt-dlp] Info extraction failed: {result.ErrorOutput?.FirstOrDefault()}");
+@@ -130,19 +175,115 @@ namespace GOON.Classes {
+ 
+                 var data = result.Data;
+                 var info = new YtDlpVideoInfo {
+-                    Url = data.Url ?? string.Empty,
+-                    Title = data.Title ?? "Unknown",
+-                    Duration = (int)(data.Duration ?? 0),
+-                    Thumbnail = data.Thumbnail,
+-                    Description = data.Description,
+-                    Uploader = data.Uploader
++                    Url = SafeGetProperty(data, nameof(data.Url), string.Empty),
++                    Title = SafeGetProperty(data, nameof(data.Title), "Unknown"),
++                    Duration = (int)(SafeGetProperty<float?>(data, nameof(data.Duration), null) ?? 0),
++                    Thumbnail = SafeGetProperty<string>(data, nameof(data.Thumbnail), null),
++                    Description = SafeGetProperty<string>(data, nameof(data.Description), null),
++                    Uploader = SafeGetProperty<string>(data, nameof(data.Uploader), null)
+                 };
+ 
+                 Logger.Info($"[yt-dlp] Successfully extracted info: {info.Title}");
+                 return info;
++            } catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) {
++                Logger.Warning($"[yt-dlp] Info extraction timed out");
++                return null;
+             } catch (Exception ex) {
+                 Logger.Warning($"[yt-dlp] Exception during info extraction: {ex.Message}");
+                 return null;
++            } finally {
++                CleanupCookieFile(cookieFile);
++            }
++        }
++
++        /// <summary>
++        /// Extracts a list of video URLs from a playlist or profile URL using yt-dlp natively.
++        /// </summary>
++        public async Task<List<string>> ExtractPlaylistUrlsAsync(string url, CancellationToken cancellationToken = default) {
++            var urls = new List<string>();
++            if (!_isAvailable) return urls;
++
++            string cookieFile = null;
++            try {
++                Logger.Info($"[yt-dlp] Extracting playlist URLs: {url}");
++                
++                var args = new List<string> {
++                    "--flat-playlist",
++                    "--print", "url"
++                };
++
++                // Manually handle User-Agent if configured
++                if (!string.IsNullOrEmpty(App.Settings?.UserAgent)) {
++                    args.Add("--add-header");
++                    args.Add($"User-Agent:{App.Settings.UserAgent}");
++                }
++
++                // Add configured options manually
++                OptionSet options = BuildOptionsForUrl(url, out cookieFile);
++                if (!string.IsNullOrEmpty(options.Cookies)) {
++                    args.Add("--cookies");
++                    args.Add(options.Cookies);
++                }
++                
++                // Add Cloudflare bypass logic
++                var uri = new Uri(url);
++                var host = uri.Host.ToLowerInvariant();
++                if (host.Contains("iwara.tv")) {
++                    args.Add("--impersonate");
++                    args.Add("chrome");
++                }
++
++                args.Add(url);
++
++                var psi = new ProcessStartInfo {
++                    FileName = _ytDlpPath,
++                    CreateNoWindow = true,
++                    UseShellExecute = false,
++                    RedirectStandardOutput = true,
++                    RedirectStandardError = true,
++                    WindowStyle = ProcessWindowStyle.Hidden
++                };
++
++                foreach (var arg in args) {
++                    psi.ArgumentList.Add(arg);
++                }
++
++                using var proc = Process.Start(psi);
++                if (proc == null) return urls;
++
++                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
++                timeoutCts.CancelAfter(TimeSpan.FromSeconds(120));
++
++                using (timeoutCts.Token.Register(() => {
++                    try { if (!proc.HasExited) proc.Kill(); } catch { }
++                })) {
++                    string line;
++                    while ((line = await proc.StandardOutput.ReadLineAsync()) != null) {
++                        if (string.IsNullOrWhiteSpace(line)) continue;
++                        var trimmed = line.Trim();
++                        // Assume any URL returned is a valid video link (yt-dlp extracts proper links)
++                        if (trimmed.StartsWith("http", StringComparison.OrdinalIgnoreCase)) {
++                            urls.Add(trimmed);
++                        }
++                    }
++                    
++                    await proc.WaitForExitAsync(cancellationToken);
++                    if (proc.ExitCode != 0) {
++                        var err = await proc.StandardError.ReadToEndAsync();
++                        Logger.Warning($"[yt-dlp] Playlist extraction returned {proc.ExitCode}: {err}");
++                    }
++                }
++
++                Logger.Info($"[yt-dlp] Successfully extracted {urls.Count} URLs from playlist.");
++                return urls;
++            } catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) {
++                Logger.Warning($"[yt-dlp] Playlist extraction timed out");
++                return urls;
++            } catch (Exception ex) {
++                Logger.Warning($"[yt-dlp] Exception during playlist extraction: {ex.Message}");
++                return urls;
++            } finally {
++                CleanupCookieFile(cookieFile);
+             }
+         }
+ 
+@@ -246,6 +387,141 @@ namespace GOON.Classes {
+             }
+         }
+ 
++        /// <summary>
++        /// Detects the installed yt-dlp version by running `--version`
++        /// </summary>
++        private async Task DetectVersionAsync() {
++            try {
++                var psi = new ProcessStartInfo {
++                    FileName = _ytDlpPath,
++                    Arguments = "--version",
++                    CreateNoWindow = true,
++                    UseShellExecute = false,
++                    RedirectStandardOutput = true,
++                    WindowStyle = ProcessWindowStyle.Hidden
++                };
++                
++                using var proc = Process.Start(psi);
++                if (proc == null) return;
++                
++                var version = (await proc.StandardOutput.ReadToEndAsync()).Trim();
++                var completed = proc.WaitForExit(5000);
++                
++                if (completed && proc.ExitCode == 0 && !string.IsNullOrEmpty(version)) {
++                    _detectedVersion = version;
++                    Logger.Info($"[yt-dlp] Detected version: {version}");
++                } else {
++                    Logger.Warning($"[yt-dlp] Version detection failed (exit code: {(completed ? proc.ExitCode.ToString() : "timeout")})");
++                }
++            } catch (Exception ex) {
++                Logger.Debug($"[yt-dlp] Version detection error: {ex.Message}");
++            }
++        }
++
++        /// <summary>
++        /// Attempts to self-update yt-dlp to the latest version.
++        /// Returns true if updated successfully.
++        /// </summary>
++        public async Task<bool> TryUpdateAsync(CancellationToken cancellationToken = default) {
++            if (string.IsNullOrEmpty(_ytDlpPath) || !File.Exists(_ytDlpPath)) return false;
++            
++            try {
++                Logger.Info("[yt-dlp] Attempting self-update...");
++                
++                var psi = new ProcessStartInfo {
++                    FileName = _ytDlpPath,
++                    Arguments = "--update",
++                    CreateNoWindow = true,
++                    UseShellExecute = false,
++                    RedirectStandardOutput = true,
++                    RedirectStandardError = true,
++                    WindowStyle = ProcessWindowStyle.Hidden
++                };
++                
++                using var proc = Process.Start(psi);
++                if (proc == null) return false;
++                
++                var output = await proc.StandardOutput.ReadToEndAsync();
++                var error = await proc.StandardError.ReadToEndAsync();
++                var completed = proc.WaitForExit(30000); // 30s timeout for update
++                
++                if (completed && proc.ExitCode == 0) {
++                    Logger.Info($"[yt-dlp] Update output: {output.Trim()}");
++                    // Re-detect version after update
++                    await DetectVersionAsync();
++                    return true;
++                } else {
++                    Logger.Warning($"[yt-dlp] Update failed: {error.Trim()}");
++                    return false;
++                }
++            } catch (Exception ex) {
++                Logger.Warning($"[yt-dlp] Update error: {ex.Message}");
++                return false;
++            }
++        }
++
++        /// <summary>
++        /// Safely accesses a property on the yt-dlp data model, returning a default
++        /// value if the property doesn't exist or has changed type in a newer version.
++        /// </summary>
++        private static T SafeGetProperty<T>(object obj, string propertyName, T defaultValue) {
++            if (obj == null) return defaultValue;
++            try {
++                var prop = obj.GetType().GetProperty(propertyName, 
++                    System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase);
++                if (prop == null) return defaultValue;
++                var value = prop.GetValue(obj);
++                if (value == null) return defaultValue;
++                if (value is T typed) return typed;
++                // Try conversion for numeric types
++                return (T)Convert.ChangeType(value, typeof(T));
++            } catch {
++                return defaultValue;
++            }
++        }
++        
++        private static string SafeGetProperty(object obj, string propertyName, string defaultValue) {
++            return SafeGetProperty<string>(obj, propertyName, defaultValue);
++        }
++
++        /// <summary>
++        /// Logs video quality information from the extraction result using safe property access.
++        /// </summary>
++        private void LogVideoQuality(object data) {
++            try {
++                var w = SafeGetProperty<object>(data, "Width", null);
++                var h = SafeGetProperty<object>(data, "Height", null);
++                var f = SafeGetProperty<string>(data, "Format", null);
++                if (w != null || h != null || f != null) {
++                    Logger.Info($"[yt-dlp] Quality Info: {w}x{h}, Format: {f}");
++                }
++            } catch { /* ignore quality logging errors ΓÇö non-critical */ }
++        }
++
++        /// <summary>
++        /// Determines if an error message indicates a permanent failure that shouldn't be retried.
++        /// </summary>
++        private static bool IsDefinitiveError(string errorMsg) {
++            if (string.IsNullOrEmpty(errorMsg)) return false;
++            var lower = errorMsg.ToLowerInvariant();
++            return lower.Contains("video unavailable") ||
++                   lower.Contains("this video is private") ||
++                   lower.Contains("this video has been removed") ||
++                   lower.Contains("unsupported url") ||
++                   lower.Contains("has been terminated") ||
++                   lower.Contains("geo restricted") ||
++                   lower.Contains("no video formats found");
++        }
++
++        /// <summary>
++        /// Safely cleans up a temporary cookie file.
++        /// </summary>
++        private static void CleanupCookieFile(string cookieFile) {
++            if (!string.IsNullOrEmpty(cookieFile) && File.Exists(cookieFile)) {
++                try { File.Delete(cookieFile); } catch { /* ignore */ }
++            }
++        }
++
+         public void Dispose() {
+             // YoutubeDL doesn't require disposal
+             _isAvailable = false;
+diff --git a/GOON/GOON.csproj b/GOON/GOON.csproj
+index d080a59..e4f24b0 100644
+--- a/GOON/GOON.csproj
++++ b/GOON/GOON.csproj
+@@ -58,6 +58,7 @@
+ 
+   <ItemGroup>
+     <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
++    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="9.0.4" />
+     <PackageReference Include="YoutubeDLSharp" Version="1.2.0" />
+   </ItemGroup>
+ 
+diff --git a/GOON/ViewModels/LauncherViewModel.cs b/GOON/ViewModels/LauncherViewModel.cs
+index 75ffa99..63ec79b 100644
+--- a/GOON/ViewModels/LauncherViewModel.cs
++++ b/GOON/ViewModels/LauncherViewModel.cs
+@@ -1348,6 +1348,10 @@ namespace GOON.ViewModels {
+             if (url.Contains("hypnotube.com") && !url.EndsWith(".m3u8")) {
+                 return true;
+             }
++
++            if (url.Contains("iwara.tv")) {
++                return true;
++            }
+             
+             return false;
+         }
+diff --git a/GOON/Windows/InputDialogWindow.xaml b/GOON/Windows/InputDialogWindow.xaml
+index eb51e1b..26c1ab8 100644
+--- a/GOON/Windows/InputDialogWindow.xaml
++++ b/GOON/Windows/InputDialogWindow.xaml
+@@ -93,7 +93,7 @@
+                          Margin="0,0,0,12"
+                          KeyDown="InputTextBox_KeyDown"
+                          ToolTip="Enter video filename or URL"/>
+-                <TextBlock Text="Supported: Hypnotube, PMVHaven, RULE34Video"
++                <TextBlock Text="Supported: Hypnotube, Iwara.tv, PMVHaven, RULE34Video"
+                            Foreground="{StaticResource TextSecondary}"
+                            FontSize="11"
+                            FontStyle="Italic"
+diff --git a/update_dependencies.ps1 b/update_dependencies.ps1
+index 7f6c6be..92abeb6 100644
+--- a/update_dependencies.ps1
++++ b/update_dependencies.ps1
+@@ -1,5 +1,6 @@
+ # Update Dependencies Script
+-# Downloads the latest versions of yt-dlp and ffmpeg to the Dependencies folder.
++# Downloads the latest versions of yt-dlp to the Dependencies folder.
++# Verifies the download and reports the installed version.
+ 
+ $ErrorActionPreference = "Stop"
+ 
+@@ -11,9 +12,49 @@ if (-not (Test-Path $depsDir)) {
+ Write-Host "Updating External Dependencies..." -ForegroundColor Cyan
+ 
+ # 1. Download yt-dlp
++$ytDlpPath = Join-Path $depsDir "yt-dlp.exe"
++$ytDlpBackup = Join-Path $depsDir "yt-dlp.exe.bak"
++
++# Backup existing version before updating
++if (Test-Path $ytDlpPath) {
++    $oldVersion = & $ytDlpPath --version 2>$null
++    Write-Host "Current yt-dlp version: $oldVersion" -ForegroundColor Gray
++    Copy-Item $ytDlpPath $ytDlpBackup -Force
++}
++
+ Write-Host "Fetching latest yt-dlp.exe..." -ForegroundColor Yellow
+-$ytDlpUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
+-Invoke-WebRequest -Uri $ytDlpUrl -OutFile (Join-Path $depsDir "yt-dlp.exe") -UserAgent "Mozilla/5.0"
+-Write-Host "yt-dlp updated." -ForegroundColor Green
++try {
++    $ytDlpUrl = "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe"
++    Invoke-WebRequest -Uri $ytDlpUrl -OutFile $ytDlpPath -UserAgent "Mozilla/5.0"
++
++    # Verify the download
++    if (Test-Path $ytDlpPath) {
++        $fileInfo = Get-Item $ytDlpPath
++        if ($fileInfo.Length -lt 1MB) {
++            throw "Downloaded file is too small ($($fileInfo.Length) bytes) - likely corrupted"
++        }
++
++        $newVersion = & $ytDlpPath --version 2>$null
++        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrEmpty($newVersion)) {
++            throw "Downloaded yt-dlp.exe failed version check"
++        }
++
++        Write-Host "yt-dlp updated to version: $newVersion" -ForegroundColor Green
++
++        # Clean up backup on success
++        if (Test-Path $ytDlpBackup) {
++            Remove-Item $ytDlpBackup -Force
++        }
++    }
++} catch {
++    Write-Host "ERROR: Failed to update yt-dlp: $_" -ForegroundColor Red
++
++    # Restore backup if available
++    if (Test-Path $ytDlpBackup) {
++        Write-Host "Restoring previous version..." -ForegroundColor Yellow
++        Move-Item $ytDlpBackup $ytDlpPath -Force
++        Write-Host "Previous version restored." -ForegroundColor Yellow
++    }
++}
+ 
+-Write-Host "`nΓ£à Dependencies updated in folder: $depsDir" -ForegroundColor Green
++Write-Host "`n`u{2705} Dependencies updated in folder: $depsDir" -ForegroundColor Green

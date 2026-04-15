@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace FlyleafLib.Plugins;
@@ -95,6 +96,20 @@ public class YoutubeDLJson : Format
         public string url   { get; set; }
         public string name  { get; set; }
     }
+
+    /// <summary>
+    /// JsonSerializerOptions that handle future yt-dlp JSON output changes.
+    /// Uses AllowReadingFromString for numeric fields (yt-dlp sometimes outputs
+    /// numbers as strings) and PropertyNameCaseInsensitive for field name changes.
+    /// </summary>
+    public static readonly JsonSerializerOptions RobustJsonOptions = new()
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        PropertyNameCaseInsensitive = true,
+        NumberHandling = JsonNumberHandling.AllowReadingFromString,
+        AllowTrailingCommas = true,
+        ReadCommentHandling = JsonCommentHandling.Skip
+    };
 }
 
 public class Format
@@ -128,4 +143,11 @@ public class Format
     public double   height      { get; set; }
     public double   width       { get; set; }
     public double   vbr         { get; set; }
+
+    /// <summary>
+    /// Captures any unknown/new properties that future yt-dlp versions may add.
+    /// This prevents deserialization failures when the JSON schema changes.
+    /// </summary>
+    [JsonExtensionData]
+    public Dictionary<string, JsonElement> ExtensionData { get; set; }
 }

@@ -14,7 +14,7 @@
     <PlatformTarget>x64</PlatformTarget>
     <Version>1.1.0</Version>
     <Description>Overlay video player for gooners</Description>
-    <Company>Damsel</Company>
+    <Company>Llamasoft</Company>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
   </PropertyGroup>
 
@@ -58,6 +58,7 @@
 
   <ItemGroup>
     <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
+    <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="9.0.4" />
     <PackageReference Include="YoutubeDLSharp" Version="1.2.0" />
   </ItemGroup>
 

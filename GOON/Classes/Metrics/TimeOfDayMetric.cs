@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using GOON.Classes;
 
@@ -13,22 +14,35 @@ namespace GOON.Classes.Metrics {
             return TimeBucket.Night;
         }
 
-        public static double Calculate(string filePath, PlayHistoryService historyService) {
-            var allRecords = historyService.GetRecentRecords(5000); // Look at last 5000 plays
-            var fileRecords = allRecords.Where(r => r.FilePath == filePath).ToList();
+        /// <summary>
+        /// Optimized overload that accepts pre-fetched records grouped by file path.
+        /// Avoids the expensive GetRecentRecords(5000) call for every single file.
+        /// </summary>
+        public static double Calculate(string filePath, ILookup<string, VideoPlayRecord> recordsByPath) {
+            var fileRecords = recordsByPath[filePath];
             
-            if (fileRecords.Count == 0) return 0.5;
+            int totalCount = fileRecords.Count();
+            if (totalCount == 0) return 0.5;
 
             var currentBucket = GetBucket(DateTime.Now.Hour);
             
             int bucketPlays = fileRecords.Count(r => GetBucket(r.PlayedAt.Hour) == currentBucket);
             
             // Percentage of this video's plays that happened in this time bucket
-            double ratio = (double)bucketPlays / fileRecords.Count;
+            double ratio = (double)bucketPlays / totalCount;
             
             // If user often watches this video now, boost it (up to 1.0)
             // If they never watch it now, keep neutral (0.5)
             return 0.5 + (ratio * 0.5);
+        }
+
+        /// <summary>
+        /// Legacy overload for backward compatibility. Prefer the pre-fetched overload.
+        /// </summary>
+        public static double Calculate(string filePath, PlayHistoryService historyService) {
+            var allRecords = historyService.GetRecentRecords(5000);
+            var lookup = allRecords.ToLookup(r => r.FilePath);
+            return Calculate(filePath, lookup);
         }
     }
 }

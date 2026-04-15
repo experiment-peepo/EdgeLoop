@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace GOON.Classes {
     public enum ShuffleMode {
@@ -21,9 +22,36 @@ namespace GOON.Classes {
         public double DefaultOpacity { get; set; } = 0.9;
         public double DefaultVolume { get; set; } = 0.5;
         public string DefaultMonitorDeviceName { get; set; } = null;
-        public virtual string HypnotubeCookies { get; set; } = null;
+        // --- Cookie storage: encrypted at rest via DPAPI ---
+        // The JSON file stores the DPAPI-encrypted value.
+        // Use the Get/Set helpers below for plaintext access at runtime.
+
+        [JsonPropertyName("HypnotubeCookies")]
+        public virtual string HypnotubeCookiesEncrypted { get; set; } = null;
+
+        [JsonPropertyName("Cookies")]
+        public virtual string CookiesEncrypted { get; set; } = null;
+
         public virtual string UserAgent { get; set; } = null;
-        public virtual string Cookies { get; set; } = null;
+
+        /// <summary>
+        /// Gets the decrypted Hypnotube cookies for runtime use.
+        /// Handles both legacy plaintext and DPAPI-encrypted values.
+        /// </summary>
+        [JsonIgnore]
+        public string HypnotubeCookies {
+            get => CookieProtector.Unprotect(HypnotubeCookiesEncrypted);
+            set => HypnotubeCookiesEncrypted = CookieProtector.Protect(value);
+        }
+
+        /// <summary>
+        /// Gets the decrypted global cookies for runtime use.
+        /// </summary>
+        [JsonIgnore]
+        public string Cookies {
+            get => CookieProtector.Unprotect(CookiesEncrypted);
+            set => CookiesEncrypted = CookieProtector.Protect(value);
+        }
         
         
         // Panic hotkey configuration
@@ -113,7 +141,8 @@ namespace GOON.Classes {
                 }
 
                 if (File.Exists(SettingsFilePath)) {
-                    string json = File.ReadAllText(SettingsFilePath);
+                    string json = SafeFileReader.ReadAllTextSafe(SettingsFilePath);
+                    if (string.IsNullOrEmpty(json)) return new UserSettings();
                     try {
                         var settings = JsonSerializer.Deserialize<UserSettings>(json) ?? new UserSettings();
                         
@@ -303,7 +332,8 @@ namespace GOON.Classes {
         public void LoadSession() {
             try {
                 if (File.Exists(SessionFilePath)) {
-                    string json = File.ReadAllText(SessionFilePath);
+                    string json = SafeFileReader.ReadAllTextSafe(SessionFilePath);
+                    if (string.IsNullOrEmpty(json)) return;
                     CurrentSessionPlaylist = JsonSerializer.Deserialize<Playlist>(json) ?? new Playlist();
                     
                     // Migration logic

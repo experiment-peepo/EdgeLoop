@@ -22,7 +22,8 @@ namespace GOON.Classes {
             // Video sites with specialized extractors
             "rule34video.com",
             "pmvhaven.com",
-            "hypnotube.com"
+            "hypnotube.com",
+            "iwara.tv"
         };
 
         /// <summary>

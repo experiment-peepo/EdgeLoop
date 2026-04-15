@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -35,8 +35,9 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
 
     public new int      Priority        { get; set; } = 1999;
     static string       plugin_path     = "yt-dlp.exe";
+    // Use robust JSON options from YoutubeDLJson to handle future yt-dlp schema changes
     static JsonSerializerOptions
-                        jsonSettings    = new() { DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull };
+                        jsonSettings    = YoutubeDLJson.RobustJsonOptions;
 
     FileSystemWatcher   watcher;
     string              workingDir;
@@ -89,8 +90,8 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
             where
                 HasVideo(format) &&
                 format.height <= Config.Video.MaxVerticalResolution &&
-                (!HasAudio(format) || Config.Audio.Languages.Contains(Language.Get(format.language))) && // TBR: Does not respect audio language priority
-                (!Regex.IsMatch(format.protocol, "dash", RegexOptions.IgnoreCase) || format.vcodec.Equals("vp9", StringComparison.OrdinalIgnoreCase))
+            (!HasAudio(format) || Config.Audio.Languages.Contains(Language.Get(format.language))) && // TBR: Does not respect audio language priority
+                (string.IsNullOrEmpty(format.protocol) || !Regex.IsMatch(format.protocol, "dash", RegexOptions.IgnoreCase) || (!string.IsNullOrEmpty(format.vcodec) && format.vcodec.Equals("vp9", StringComparison.OrdinalIgnoreCase)))
 
             orderby format.width    descending,
                     format.height   descending,
@@ -150,14 +151,14 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
     
     private static bool HasVideo(Format fmt)
     {
-        if (fmt.height > 0 || fmt.vbr > 0 || fmt.vcodec != "none")
+        if (fmt.height > 0 || fmt.vbr > 0 || (fmt.vcodec != null && fmt.vcodec != "none"))
             return true;
 
         return false;
     }
     private static bool HasAudio(Format fmt)
     {
-        if (fmt.abr > 0 || fmt.acodec != "none")
+        if (fmt.abr > 0 || (fmt.acodec != null && fmt.acodec != "none"))
             return true;
 
         return false;
@@ -274,13 +275,16 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
             Format fmt = ytdl.formats[i];
 
             if (fmt.vcodec == null)
-                fmt.vcodec = "";
+                fmt.vcodec = "none";
 
             if (fmt.acodec == null)
-                fmt.acodec = "";
+                fmt.acodec = "none";
 
             if (fmt.protocol == null)
                 fmt.protocol = "";
+
+            if (fmt.url == null)
+                fmt.url = "";
 
             bool hasAudio = HasAudio(fmt);
             bool hasVideo = HasVideo(fmt);
@@ -657,6 +661,9 @@ public class YoutubeDL : PluginBase, IOpen, ISuggestExternalAudio, ISuggestExter
             }
         }
         
-        File.WriteAllLines(path, lines);
+        using (var fs = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.Encrypted))
+        using (var writer = new StreamWriter(fs, System.Text.Encoding.UTF8)) {
+            foreach (var line in lines) writer.WriteLine(line);
+        }
     }
 }

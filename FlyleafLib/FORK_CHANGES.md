@@ -195,7 +195,28 @@ Key features:
 
 ---
 
-### 4. Test Files
+### 4. yt-dlp Future Compatibility (March 2026)
+
+#### `Plugins/YoutubeDL/YoutubeDLJson.cs`
+**Changes**:
+- Added `[JsonExtensionData]` on `Format` class to capture unknown fields from future yt-dlp versions
+- Added `RobustJsonOptions` static property with `AllowReadingFromString`, `PropertyNameCaseInsensitive`, `AllowTrailingCommas`
+
+**Conflict Risk**: 🟢 Low - Additive properties only.
+
+#### `Plugins/YoutubeDL/YoutubeDL.cs`
+**Changes**:
+- JSON deserialization now uses `YoutubeDLJson.RobustJsonOptions` instead of basic options
+- Null-safe `HasVideo()`/`HasAudio()` — checks `!= null` before `"none"` sentinel comparison
+- Null-safe protocol regex in `GetBestMatch()` LINQ query
+- Default codec values changed from `""` to `"none"` for consistency
+- Added null check for `fmt.url`
+
+**Conflict Risk**: 🟡 Medium - Format handling logic, but changes are defensive additions.
+
+---
+
+### 5. Test Files
 
 #### `Tests/FlyleafLib.Tests/ClockSyncTests.cs` (NEW FILE)
 **Purpose**: Unit tests for external clock synchronization
@@ -216,8 +237,10 @@ Tests included:
 2. **Check these files for conflicts**:
    - `Player.Screamers.VASD.cs` (most likely to conflict)
    - `Renderer.Present.cs` (second most likely)
+   - `Plugins/YoutubeDL/YoutubeDLJson.cs` (if upstream changes JSON model)
 3. **Run tests after merge**: Execute `ClockSyncTests` to verify sync still works
 4. **Manual verification**: Test D3DImage rendering with transparent window
+5. **yt-dlp JSON check**: If upstream updates `YoutubeDLJson.cs`, ensure `[JsonExtensionData]` and `RobustJsonOptions` are preserved
 
 ### Upstream Changes to Watch For
 
@@ -227,6 +250,8 @@ Tests included:
 | Vortice.Windows update | 🟡 Medium | Check D3DImageManager |
 | Screamer refactoring | 🔴 High | Manual conflict resolution |
 | New renderer architecture | 🔴 High | May require D3DImage rewrite |
+| YoutubeDLJson model update | 🟡 Medium | Re-apply `[JsonExtensionData]` and `RobustJsonOptions` |
+| yt-dlp JSON schema change | 🟢 Low | `[JsonExtensionData]` absorbs unknown fields automatically |
 
 ---
 
@@ -235,9 +260,9 @@ Tests included:
 | Metric | Count |
 |--------|-------|
 | New files created | 4 |
-| Existing files modified | 10 |
-| Lines added (estimated) | ~600 |
-| Lines modified (estimated) | ~50 |
+| Existing files modified | 12 |
+| Lines added (estimated) | ~700 |
+| Lines modified (estimated) | ~65 |
 
 ---
 
@@ -251,6 +276,8 @@ After any merge from upstream, verify:
 - [ ] Speed changes propagate to all synchronized players
 - [ ] No memory leaks in D3DImageManager (use diagnostic tools)
 - [ ] `ClockSyncTests` pass
+- [ ] yt-dlp extraction works with latest yt-dlp binary (`YtDlpCompatibilityTests`)
+- [ ] `YtDlpService.DetectedVersion` reports correct version at startup
 
 ---
 
@@ -259,7 +286,8 @@ After any merge from upstream, verify:
 - The fork maintains API compatibility with upstream where possible
 - Custom changes are isolated to specific subsystems to minimize merge conflicts
 - Consider contributing `IClock` interface upstream if stable
+- `[JsonExtensionData]` on `Format` is critical — never remove it when merging upstream
 
 ---
 
-*Last updated: January 2026*
+*Last updated: March 2026*

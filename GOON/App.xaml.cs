@@ -1,5 +1,5 @@
 /*
-	Copyright (C) 2021 Damsel
+	Copyright (C) 2026 Llamasoft
 
 	This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
@@ -24,6 +24,9 @@ namespace GOON {
 
         public static TelemetryService Telemetry => ServiceContainer.TryGet<TelemetryService>(out var telemetry) ? telemetry : null;
         public static IVideoUrlExtractor UrlExtractor => ServiceContainer.TryGet<IVideoUrlExtractor>(out var extractor) ? extractor : null;
+
+        private System.Threading.CancellationTokenSource _cookieCleanupCts;
+        private System.Threading.Tasks.Task _cookieCleanupTask;
 
         protected override void OnStartup(StartupEventArgs e) {
             // 1. Add global exception handlers FIRST so we can catch initialization crashes
@@ -129,6 +132,31 @@ namespace GOON {
                 }
             });
 
+            // Security: Clean up any orphaned temp cookie files from previous sessions
+            _cookieCleanupCts = new System.Threading.CancellationTokenSource();
+            _cookieCleanupTask = System.Threading.Tasks.Task.Run(() => {
+                try {
+                    var tempDir = System.IO.Path.GetTempPath();
+                    foreach (var file in System.IO.Directory.GetFiles(tempDir, "goon_cookies_*.txt")) {
+                        if (_cookieCleanupCts.Token.IsCancellationRequested) break;
+                        try { System.IO.File.Delete(file); } catch { }
+                    }
+                } catch (Exception ex) {
+                    Logger.Debug($"Cookie temp cleanup: {ex.Message}");
+                }
+            }, _cookieCleanupCts.Token);
+
+            // Security: Migrate legacy plaintext cookies to encrypted form
+            if (settings.HypnotubeCookiesEncrypted != null && !CookieProtector.IsEncrypted(settings.HypnotubeCookiesEncrypted)) {
+                Logger.Info("Migrating plaintext cookies to encrypted storage...");
+                settings.HypnotubeCookies = settings.HypnotubeCookiesEncrypted; // Re-set triggers encryption
+                settings.Save();
+            }
+            if (settings.CookiesEncrypted != null && !CookieProtector.IsEncrypted(settings.CookiesEncrypted)) {
+                settings.Cookies = settings.CookiesEncrypted;
+                settings.Save();
+            }
+
             // base.OnStartup starts the UI - call LAST
             base.OnStartup(e);
         }
@@ -142,6 +170,14 @@ namespace GOON {
                 Logger.Warning("Shutdown is taking too long (5s). Force exiting process to prevent background lingering.");
                 Environment.Exit(0);
             });
+
+            // Clean up tasks
+            try {
+                if (_cookieCleanupTask != null && !_cookieCleanupTask.IsCompleted) {
+                    _cookieCleanupCts?.Cancel();
+                    _cookieCleanupTask.Wait(TimeSpan.FromMilliseconds(500));
+                }
+            } catch { /* ignore wait errors on exit */ }
 
             try {
                 // 1. Stop all video players and close windows (this also saves per-item positions)

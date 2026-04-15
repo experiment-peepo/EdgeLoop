@@ -1348,6 +1348,10 @@ namespace GOON.ViewModels {
             if (url.Contains("hypnotube.com") && !url.EndsWith(".m3u8")) {
                 return true;
             }
+
+            if (url.Contains("iwara.tv")) {
+                return true;
+            }
             
             return false;
         }

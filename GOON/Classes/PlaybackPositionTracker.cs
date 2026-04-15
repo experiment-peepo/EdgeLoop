@@ -55,7 +55,8 @@ namespace GOON.Classes {
         public static PlaybackPositionTracker Load() {
             try {
                 if (File.Exists(_settingsPath)) {
-                    var json = File.ReadAllText(_settingsPath);
+                    var json = SafeFileReader.ReadAllTextSafe(_settingsPath);
+                    if (string.IsNullOrEmpty(json)) return new PlaybackPositionTracker();
                     try {
                         var tracker = JsonSerializer.Deserialize<PlaybackPositionTracker>(json);
                         if (tracker != null && tracker.Positions != null) {
@@ -84,7 +85,8 @@ namespace GOON.Classes {
                 var legacyPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, PositionsFileName);
                 if (File.Exists(legacyPath)) {
                     Logger.Info("[PositionTracker] Migrating legacy positions from base directory...");
-                    var json = File.ReadAllText(legacyPath);
+                    var json = SafeFileReader.ReadAllTextSafe(legacyPath);
+                    if (string.IsNullOrEmpty(json)) return new PlaybackPositionTracker();
                     try {
                         var tracker = JsonSerializer.Deserialize<PlaybackPositionTracker>(json);
                         if (tracker != null) {

@@ -78,7 +78,8 @@ namespace GOON.Tests.Stability {
         public async Task HypnotubeCookies_ShouldBeInjectedIntoHeaders() {
             // Arrange
             var cookieValue = "session=test_session_123";
-            MockSettings.Setup(s => s.HypnotubeCookies).Returns(cookieValue);
+            // Mock the encrypted backing property — CookieProtector.Unprotect handles plaintext transparently
+            MockSettings.Setup(s => s.HypnotubeCookiesEncrypted).Returns(cookieValue);
             
             var mockFetcher = new Mock<IHtmlFetcher>();
             mockFetcher.Setup(f => f.FetchHtmlAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))

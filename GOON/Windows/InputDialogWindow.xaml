@@ -1,5 +1,5 @@
 <!--
-	Copyright (C) 2021 Damsel
+	Copyright (C) 2026 Llamasoft
 
 	This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
@@ -93,7 +93,7 @@
                          Margin="0,0,0,12"
                          KeyDown="InputTextBox_KeyDown"
                          ToolTip="Enter video filename or URL"/>
-                <TextBlock Text="Supported: Hypnotube, PMVHaven, RULE34Video"
+                <TextBlock Text="Supported: Hypnotube, Iwara.tv, PMVHaven, RULE34Video"
                            Foreground="{StaticResource TextSecondary}"
                            FontSize="11"
                            FontStyle="Italic"

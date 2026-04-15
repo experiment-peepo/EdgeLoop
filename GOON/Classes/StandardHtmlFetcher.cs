@@ -51,7 +51,7 @@ namespace GOON.Classes {
                         var cookies = App.Settings.HypnotubeCookies.Trim();
                         if (cookies.Contains("=")) {
                             request.Headers.TryAddWithoutValidation("Cookie", cookies);
-                            Logger.Info($"[Hypnotube] Applied session cookies for request to {url}");
+                            Logger.Debug($"[Hypnotube] Applied session cookies for request");
                         }
                     }
 
@@ -65,7 +65,7 @@ namespace GOON.Classes {
                     if (url.Contains("hypnotube.com") && !string.IsNullOrEmpty(App.Settings?.HypnotubeCookies)) {
                         // Check for indicators of authenticated session (e.g., logout link, user profile)
                         var isAuthenticated = html.Contains("logout") || html.Contains("my_profile") || html.Contains("user-menu");
-                        Logger.Info($"[Hypnotube] Authentication status: {(isAuthenticated ? "Authenticated" : "Guest/Unauthenticated")}");
+                        Logger.Debug($"[Hypnotube] Authentication status: {(isAuthenticated ? "Authenticated" : "Guest/Unauthenticated")}");
                     }
                     
                     // Cache the result
@@ -102,7 +102,7 @@ namespace GOON.Classes {
                     // Add Hypnotube cookies if applicable
                     if (url.Contains("hypnotube.com") && App.Settings != null && !string.IsNullOrEmpty(App.Settings.HypnotubeCookies)) {
                         request.Headers.TryAddWithoutValidation("Cookie", App.Settings.HypnotubeCookies);
-                        Logger.Info("Adding session cookies for Hypnotube redirect resolution");
+                        Logger.Debug("Adding session cookies for redirect resolution");
                     }
 
                     

@@ -56,42 +56,50 @@ namespace GOON.Classes {
             }
 
             try {
-                // Fetch HTML
+                // Fetch HTML but don't fail immediately, some sites block scrapers but work with yt-dlp
                 var html = await FetchHtmlAsync(normalizedUrl, cancellationToken);
-                if (string.IsNullOrWhiteSpace(html)) return new VideoMetadata();
+                bool hasHtml = !string.IsNullOrWhiteSpace(html);
 
                 string videoUrl = null;
                 string title = null;
 
-                // Use cached URL if available, otherwise extract
-                if (!string.IsNullOrEmpty(cachedUrl)) {
-                    videoUrl = cachedUrl;
-                } else {
-                    // Extraction logic...
-                    if (host.Contains("rule34video.com")) {
-                        if (_ytDlpService != null && _ytDlpService.IsAvailable) {
-                            try {
-                                Logger.Info($"[VideoUrlExtractor] Using yt-dlp extraction for Rule34Video: {normalizedUrl}");
-                                videoUrl = await _ytDlpService.GetBestVideoUrlAsync(normalizedUrl, cancellationToken);
-                            } catch (Exception ex) {
-                                Logger.Warning($"[VideoUrlExtractor] yt-dlp failed for Rule34Video: {ex.Message}");
-                            }
+                // Use yt-dlp for video metadata if site is supported by it and blocks scraping
+                bool useYtDlpFirst = host.Contains("rule34video.com") || host.Contains("iwara.tv");
+
+                if (useYtDlpFirst && _ytDlpService != null && _ytDlpService.IsAvailable) {
+                    try {
+                        Logger.Info($"[VideoUrlExtractor] Extracting full metadata using yt-dlp for {host}");
+                        var info = await _ytDlpService.ExtractVideoInfoAsync(normalizedUrl, cancellationToken);
+                        if (info != null) {
+                            if (!string.IsNullOrWhiteSpace(info.Url)) videoUrl = info.Url;
+                            if (!string.IsNullOrWhiteSpace(info.Title) && info.Title != "Unknown") title = info.Title;
                         }
-                        
-                        // Fallback to specialized scraper if yt-dlp failed or is missing
-                        if (string.IsNullOrEmpty(videoUrl)) {
+                    } catch (Exception ex) {
+                        Logger.Warning($"[VideoUrlExtractor] yt-dlp full metadata extraction failed for {host}: {ex.Message}");
+                    }
+                }
+
+                // If yt-dlp failed or was skipped, try getting the URL normally
+                if (string.IsNullOrEmpty(videoUrl)) {
+                    if (!string.IsNullOrEmpty(cachedUrl)) {
+                        videoUrl = cachedUrl;
+                    } else if (useYtDlpFirst) {
+                        // We already tried ExtractVideoInfoAsync and it failed, but let's strictly fallback
+                        if (host.Contains("rule34video.com")) {
                             videoUrl = await ExtractRule34VideoUrlAsync(normalizedUrl, cancellationToken);
+                        } else {
+                            if (hasHtml) videoUrl = await ExtractGenericVideoUrlAsync(normalizedUrl, cancellationToken);
                         }
                     } else if (host.Contains("pmvhaven.com")) {
                         videoUrl = await ExtractPmvHavenUrlAsync(normalizedUrl, cancellationToken);
                     } else if (host.Contains("hypnotube.com")) {
                         videoUrl = await ExtractHypnotubeUrlAsync(normalizedUrl, cancellationToken);
                     } else {
-                        videoUrl = await ExtractGenericVideoUrlAsync(normalizedUrl, cancellationToken);
+                        if (hasHtml) videoUrl = await ExtractGenericVideoUrlAsync(normalizedUrl, cancellationToken);
                     }
                 }
 
-                if (string.IsNullOrEmpty(title)) title = ExtractTitleFromHtml(html, host);
+                if (string.IsNullOrEmpty(title) && hasHtml) title = ExtractTitleFromHtml(html, host);
                 
                 if (videoUrl != null) {
                     PersistentUrlCache.Instance.Set(pageUrl, videoUrl);
@@ -460,6 +468,8 @@ namespace GOON.Classes {
             return null;
         }
 
+        private static readonly TimeSpan _regexTimeout = TimeSpan.FromSeconds(5);
+
         private string ExtractVideoFromHtml(string html, string baseUrl) {
             if (string.IsNullOrWhiteSpace(html)) return null;
 
@@ -469,7 +479,7 @@ namespace GOON.Classes {
                 // Method 1: Look for <video> tags with src attribute
                 Logger.Info("Trying Method 1: <video> tag with src attribute");
                 var videoSrcPattern = @"<video[^>]+src\s*=\s*[""']([^""']+)[""']";
-                var match = Regex.Match(html, videoSrcPattern, RegexOptions.IgnoreCase);
+                var match = Regex.Match(html, videoSrcPattern, RegexOptions.IgnoreCase, _regexTimeout);
                 if (match.Success && match.Groups.Count > 1) {
                     var videoUrl = match.Groups[1].Value;
                     var resolved = ResolveUrl(videoUrl, baseUrl);
@@ -480,7 +490,7 @@ namespace GOON.Classes {
                 // Method 2: Look for <source> tags within video elements
                 Logger.Info("Trying Method 2: <source> tags");
                 var sourcePattern = @"<source[^>]+src\s*=\s*[""']([^""']+)[""']";
-                var sourceMatches = Regex.Matches(html, sourcePattern, RegexOptions.IgnoreCase);
+                var sourceMatches = Regex.Matches(html, sourcePattern, RegexOptions.IgnoreCase, _regexTimeout);
                 Logger.Info($"Method 2: Found {sourceMatches.Count} <source> tags");
                 foreach (Match sourceMatch in sourceMatches) {
                     if (sourceMatch.Success && sourceMatch.Groups.Count > 1) {
@@ -497,7 +507,7 @@ namespace GOON.Classes {
                 // Method 3: Look for data-url or data-src attributes
                 Logger.Info("Trying Method 3: data attributes");
                 var dataUrlPattern = @"(?:data-url|data-src|data-video-src|data-config)\s*=\s*[""']([^""']+)[""']";
-                var dataMatches = Regex.Matches(html, dataUrlPattern, RegexOptions.IgnoreCase);
+                var dataMatches = Regex.Matches(html, dataUrlPattern, RegexOptions.IgnoreCase, _regexTimeout);
                 foreach (Match dataMatch in dataMatches) {
                     if (dataMatch.Success && dataMatch.Groups.Count > 1) {
                         var url = CleanExtractedUrl(dataMatch.Groups[1].Value);
@@ -522,7 +532,7 @@ namespace GOON.Classes {
                 var potentialUrls = new List<string>();
 
                 foreach (var pattern in jsVideoPatterns) {
-                    var jsMatches = Regex.Matches(html, pattern, RegexOptions.IgnoreCase);
+                    var jsMatches = Regex.Matches(html, pattern, RegexOptions.IgnoreCase, _regexTimeout);
                     Logger.Info($"Method 4: Pattern {pattern} found {jsMatches.Count} potential matches");
                     foreach (Match jsMatch in jsMatches) {
                         if (jsMatch.Success && jsMatch.Groups.Count > 1) {
@@ -562,7 +572,7 @@ namespace GOON.Classes {
                 // Method 5: Look for HLS streams (m3u8)
                 Logger.Info("Trying Method 5: HLS streams");
                 var hlsPattern = @"[""']([^""']+\.m3u8(?:[^""']*)?)[""']";
-                var hlsMatches = Regex.Matches(html, hlsPattern, RegexOptions.IgnoreCase);
+                var hlsMatches = Regex.Matches(html, hlsPattern, RegexOptions.IgnoreCase, _regexTimeout);
                 Logger.Info($"Method 5: Found {hlsMatches.Count} potential HLS streams");
                 foreach (Match hlsMatch in hlsMatches) {
                     if (hlsMatch.Success && hlsMatch.Groups.Count > 1) {
@@ -576,7 +586,7 @@ namespace GOON.Classes {
                 // Method 6: Look for Plyr source configuration
                 Logger.Info("Trying Method 6: Plyr configuration");
                 var plyrPattern = @"plyr_player\.source\s*=\s*\{[\s\S]*?sources\s*:\s*\[\s*\{\s*[""']?src[""']?\s*:\s*[""']([^""']+)[""']";
-                var plyrMatch = Regex.Match(html, plyrPattern, RegexOptions.IgnoreCase);
+                var plyrMatch = Regex.Match(html, plyrPattern, RegexOptions.IgnoreCase, _regexTimeout);
                 if (plyrMatch.Success && plyrMatch.Groups.Count > 1) {
                     var videoUrl = CleanExtractedUrl(plyrMatch.Groups[1].Value);
                     var resolved = ResolveUrl(videoUrl, baseUrl);
@@ -624,7 +634,7 @@ namespace GOON.Classes {
                 // Look for JSON-like structures that might contain video URLs
                 // This version is more lenient with whitespace and escaped characters
                 var jsonPattern = @"""(?:src|url|source|file|videoUrl)""\s*:\s*""([^""]+\.(?:mp4|webm|mkv|avi|mov|wmv|m4v|mpg|mpeg|ts|m2ts)[^""]*)""";
-                var matches = Regex.Matches(html, jsonPattern, RegexOptions.IgnoreCase);
+                var matches = Regex.Matches(html, jsonPattern, RegexOptions.IgnoreCase, _regexTimeout);
                 
                 foreach (Match match in matches) {
                     if (match.Success && match.Groups.Count > 1) {
@@ -710,10 +720,39 @@ namespace GOON.Classes {
 
             try {
                 var normalizedUrl = FileValidator.NormalizeUrl(pageUrl);
-                var html = await FetchHtmlAsync(normalizedUrl, cancellationToken);
-                if (string.IsNullOrWhiteSpace(html)) return null;
-
                 var uri = new Uri(normalizedUrl);
+                var host = uri.Host.ToLowerInvariant();
+
+                // Fast path for sites that require CF bypass / yt-dlp to get title
+                if (host.Contains("rule34video.com") || host.Contains("iwara.tv")) {
+                    if (_ytDlpService != null && _ytDlpService.IsAvailable) {
+                        try {
+                            Logger.Info($"[VideoUrlExtractor] Extracting title using yt-dlp for {host}");
+                            var info = await _ytDlpService.ExtractVideoInfoAsync(normalizedUrl, cancellationToken);
+                            if (info != null && !string.IsNullOrWhiteSpace(info.Title) && info.Title != "Unknown") {
+                                return info.Title;
+                            }
+                        } catch (Exception ex) {
+                            Logger.Warning($"[VideoUrlExtractor] yt-dlp title extraction failed for {host}: {ex.Message}");
+                        }
+                    }
+                }
+
+                var html = await FetchHtmlAsync(normalizedUrl, cancellationToken);
+                if (string.IsNullOrWhiteSpace(html)) {
+                    // Fallback to yt-dlp if HTML fetch failed and yt-dlp is available
+                    if (_ytDlpService != null && _ytDlpService.IsAvailable) {
+                        try {
+                            Logger.Info($"[VideoUrlExtractor] HTML fetch failed, fallback to yt-dlp title extraction for {normalizedUrl}");
+                            var info = await _ytDlpService.ExtractVideoInfoAsync(normalizedUrl, cancellationToken);
+                            if (info != null && !string.IsNullOrWhiteSpace(info.Title) && info.Title != "Unknown") {
+                                return info.Title;
+                            }
+                        } catch { }
+                    }
+                    return null;
+                }
+
                 return ExtractTitleFromHtml(html, uri.Host);
             } catch (Exception ex) {
                 Logger.Warning($"Error extracting video title from {pageUrl}: {ex.Message}");

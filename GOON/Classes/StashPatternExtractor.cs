@@ -159,8 +159,10 @@ namespace GOON.Classes {
                 @"\s*[""']?(\d+)[pP]?[""']?\s*:\s*[""']([^""']+)[""']" // Simple "720": "url" map
             };
 
+            var regexTimeout = TimeSpan.FromSeconds(5);
+
             foreach (var pattern in jsonPatterns) {
-                var matches = Regex.Matches(html, pattern, RegexOptions.IgnoreCase);
+                var matches = Regex.Matches(html, pattern, RegexOptions.IgnoreCase, regexTimeout);
                 foreach (Match match in matches) {
                     if (match.Success && match.Groups.Count >= 3) {
                         try {

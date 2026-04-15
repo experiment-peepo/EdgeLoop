@@ -46,7 +46,8 @@ namespace GOON.Classes {
         private void LoadCache() {
             try {
                 if (File.Exists(_cacheFilePath)) {
-                    var json = File.ReadAllText(_cacheFilePath);
+                    var json = SafeFileReader.ReadAllTextSafe(_cacheFilePath);
+                    if (string.IsNullOrEmpty(json)) return;
                     var dictionary = JsonSerializer.Deserialize<Dictionary<string, UrlCacheEntry>>(json);
                     if (dictionary != null) {
                         // Filter out already expired entries during load

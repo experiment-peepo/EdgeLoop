@@ -26,7 +26,8 @@ namespace GOON.Classes {
         private void LoadHistory() {
             try {
                 if (File.Exists(_historyFilePath)) {
-                    var json = File.ReadAllText(_historyFilePath);
+                    var json = SafeFileReader.ReadAllTextSafe(_historyFilePath);
+                    if (string.IsNullOrEmpty(json)) return;
                     var loaded = JsonSerializer.Deserialize<List<VideoPlayRecord>>(json);
                     if (loaded != null) {
                         lock (_lock) {

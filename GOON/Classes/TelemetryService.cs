@@ -24,7 +24,8 @@ namespace GOON.Classes {
         private TelemetryData LoadTelemetry() {
             try {
                 if (File.Exists(_telemetryPath)) {
-                    string json = File.ReadAllText(_telemetryPath);
+                    string json = SafeFileReader.ReadAllTextSafe(_telemetryPath);
+                    if (string.IsNullOrEmpty(json)) return new TelemetryData();
                     return JsonSerializer.Deserialize<TelemetryData>(json) ?? new TelemetryData();
                 }
             } catch (Exception ex) {

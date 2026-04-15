@@ -16,10 +16,12 @@ namespace GOON.Classes {
     public class PlaylistImporter {
         private readonly IVideoUrlExtractor _urlExtractor;
         private readonly IHtmlFetcher _htmlFetcher;
+        private readonly YtDlpService _ytDlpService;
 
-        public PlaylistImporter(IVideoUrlExtractor urlExtractor, IHtmlFetcher htmlFetcher = null) {
+        public PlaylistImporter(IVideoUrlExtractor urlExtractor, IHtmlFetcher htmlFetcher = null, YtDlpService ytDlpService = null) {
             _urlExtractor = urlExtractor ?? throw new ArgumentNullException(nameof(urlExtractor));
             _htmlFetcher = htmlFetcher ?? new StandardHtmlFetcher();
+            _ytDlpService = ytDlpService ?? (ServiceContainer.TryGet<YtDlpService>(out var service) ? service : null);
         }
 
         /// <summary>
@@ -54,9 +56,16 @@ namespace GOON.Classes {
                     videoPageUrls = await ExtractRule34VideoPlaylistAsync(playlistUrl, cancellationToken);
                 } else if (host.Contains("pmvhaven.com")) {
                     videoPageUrls = await ExtractPmvHavenPlaylistAsync(playlistUrl, cancellationToken);
+                } else if (host.Contains("iwara.tv") && _ytDlpService != null) {
+                    Logger.Info($"[PlaylistImporter] Using yt-dlp for iwara.tv playlist to bypass Cloudflare");
+                    videoPageUrls = await _ytDlpService.ExtractPlaylistUrlsAsync(playlistUrl, cancellationToken);
                 } else {
                     // Generic extraction
                     videoPageUrls = await ExtractGenericPlaylistAsync(playlistUrl, cancellationToken);
+                    if ((videoPageUrls == null || videoPageUrls.Count == 0) && _ytDlpService != null) {
+                        Logger.Info($"[PlaylistImporter] Generic scrape failed or returned 0, falling back to yt-dlp for {host}");
+                        videoPageUrls = await _ytDlpService.ExtractPlaylistUrlsAsync(playlistUrl, cancellationToken);
+                    }
                 }
 
                 if (videoPageUrls == null || videoPageUrls.Count == 0) {
