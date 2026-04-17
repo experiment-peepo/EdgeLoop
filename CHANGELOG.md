@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to GOON will be documented in this file.
+All notable changes to EdgeLoop will be documented in this file.
 
 ## [1.1.0] - 2026-01-20
 
@@ -42,3 +42,4 @@ All notable changes to GOON will be documented in this file.
 - Session persistence and position tracking
 - AI Super Resolution support (Nvidia VSR / Intel VPE)
 - Panic hotkey for instant clearing
+

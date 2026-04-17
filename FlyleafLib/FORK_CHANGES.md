@@ -1,8 +1,8 @@
 # FlyleafLib Fork Changes Documentation
 
-> **Base Version**: Flyleaf v3.9.x (forked ~Nov 2025)  
-> **Last Upstream Sync**: December 2025  
-> **Purpose**: Custom modifications to support GOON application's unique requirements
+> **Base Version**: Flyleaf v3.10.3 (upgraded April 2026)  
+> **Last Upstream Sync**: April 2026 (v3.10.3)  
+> **Purpose**: Custom modifications to support EdgeLoop application's unique requirements
 
 ---
 
@@ -185,12 +185,12 @@ Key features:
 #### `FlyleafLib/MediaPlayer/Player.cs`
 **Changes**:
 - Modified `Status` property from `private set` to `internal set` (line ~165).
-- Allows external components (like GOON's test suite) to simulate or force player status transitions for stall detection testing.
+- Allows external components (like EdgeLoop's test suite) to simulate or force player status transitions for stall detection testing.
 
 #### `FlyleafLib/AssemblyInfo.cs`
 **Changes**:
-- Added `[assembly: InternalsVisibleTo("GOON")]`
-- Added `[assembly: InternalsVisibleTo("GOON.Tests")]`
+- Added `[assembly: InternalsVisibleTo("EdgeLoop")]`
+- Added `[assembly: InternalsVisibleTo("EdgeLoop.Tests")]`
 **Purpose**: Allows the main application and its test suite to access internal members of FlyleafLib (like the volatile `status` field) for advanced synchronization and stability monitoring.
 
 ---
@@ -291,3 +291,4 @@ After any merge from upstream, verify:
 ---
 
 *Last updated: March 2026*
+

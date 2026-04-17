@@ -21,7 +21,7 @@ namespace FlyleafLib.Tests
                 if (!System.IO.Directory.Exists(ffmpegPath))
                 {
                     // Fallback for different test execution environments
-                    ffmpegPath = "d:\\Projects\\Develop\\GOON\\FlyleafLib\\FFmpeg";
+                    ffmpegPath = "d:\\Projects\\Develop\\EdgeLoop\\FlyleafLib\\FFmpeg";
                 }
 
                 Engine.Start(new EngineConfig() 
@@ -66,3 +66,4 @@ namespace FlyleafLib.Tests
         }
     }
 }
+

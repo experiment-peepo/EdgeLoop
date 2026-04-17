@@ -1,4 +1,4 @@
-﻿using System.Numerics;
+using System.Numerics;
 using System.Runtime.InteropServices;
 
 using Vortice.Direct3D;
@@ -239,6 +239,9 @@ public unsafe partial class Renderer
 
             vpRequests  = vpRequestsIn;
             vpRequestsIn= VPRequestType.Empty;
+
+            if (vpRequests.HasFlag(VPRequestType.BackColor))
+                SetBackColor();
 
             if (vpRequests.HasFlag(VPRequestType.RotationFlip))
                 FLSetRotationFlip();

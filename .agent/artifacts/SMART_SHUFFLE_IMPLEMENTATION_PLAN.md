@@ -5,7 +5,7 @@
 
 ## Executive Summary
 
-This document outlines the complete implementation plan for upgrading the GOON shuffle system from a simple "play each video once randomly" approach to an intelligent, multi-factor scoring system that considers recency, user preferences, content variety, and watch behavior.
+This document outlines the complete implementation plan for upgrading the EdgeLoop shuffle system from a simple "play each video once randomly" approach to an intelligent, multi-factor scoring system that considers recency, user preferences, content variety, and watch behavior.
 
 ---
 
@@ -15,7 +15,7 @@ This document outlines the complete implementation plan for upgrading the GOON s
 
 **Purpose**: Store rich metadata about each video play event for scoring calculations.
 
-**Location**: Create new file `GOON/Classes/VideoPlayRecord.cs`
+**Location**: Create new file `EdgeLoop/Classes/VideoPlayRecord.cs`
 
 **Fields**:
 | Field | Type | Description |
@@ -51,7 +51,7 @@ This document outlines the complete implementation plan for upgrading the GOON s
 
 **Purpose**: Centralized management of play history with efficient querying.
 
-**Location**: Create new file `GOON/Services/PlayHistoryService.cs`
+**Location**: Create new file `EdgeLoop/Services/PlayHistoryService.cs`
 
 **Responsibilities**:
 1. Load/save play history from disk
@@ -265,7 +265,7 @@ Output: score between 0.0 and 1.0
 
 **Purpose**: Combine all metrics into a final score for each candidate video.
 
-**Location**: Create new file `GOON/Services/ShuffleScoringEngine.cs`
+**Location**: Create new file `EdgeLoop/Services/ShuffleScoringEngine.cs`
 
 **Core Algorithm**:
 ```
@@ -501,22 +501,22 @@ When debug logging is enabled, show a small overlay during playback:
 ## File Summary
 
 ### New Files to Create:
-1. `GOON/Classes/VideoPlayRecord.cs` - Data model
-2. `GOON/Services/PlayHistoryService.cs` - History management
-3. `GOON/Services/ShuffleScoringEngine.cs` - Scoring logic
-4. `GOON/Services/Metrics/RecencyMetric.cs` - Metric 1
-5. `GOON/Services/Metrics/WatchTimeMetric.cs` - Metric 2
-6. `GOON/Services/Metrics/PlayCountMetric.cs` - Metric 3
-7. `GOON/Services/Metrics/LengthVarietyMetric.cs` - Metric 4
-8. `GOON/Services/Metrics/CreatorVarietyMetric.cs` - Metric 5
-9. `GOON/Services/Metrics/TimeOfDayMetric.cs` - Metric 6
+1. `EdgeLoop/Classes/VideoPlayRecord.cs` - Data model
+2. `EdgeLoop/Services/PlayHistoryService.cs` - History management
+3. `EdgeLoop/Services/ShuffleScoringEngine.cs` - Scoring logic
+4. `EdgeLoop/Services/Metrics/RecencyMetric.cs` - Metric 1
+5. `EdgeLoop/Services/Metrics/WatchTimeMetric.cs` - Metric 2
+6. `EdgeLoop/Services/Metrics/PlayCountMetric.cs` - Metric 3
+7. `EdgeLoop/Services/Metrics/LengthVarietyMetric.cs` - Metric 4
+8. `EdgeLoop/Services/Metrics/CreatorVarietyMetric.cs` - Metric 5
+9. `EdgeLoop/Services/Metrics/TimeOfDayMetric.cs` - Metric 6
 
 ### Files to Modify:
-1. `GOON/Classes/UserSettings.cs` - Add new properties
-2. `GOON/ViewModels/HypnoViewModel.cs` - Integrate scoring
-3. `GOON/ViewModels/LauncherViewModel.cs` - Remove pre-shuffle
-4. `GOON/Windows/SettingsWindow.xaml` - Add UI controls
-5. `GOON/App.xaml.cs` - Register services
+1. `EdgeLoop/Classes/UserSettings.cs` - Add new properties
+2. `EdgeLoop/ViewModels/HypnoViewModel.cs` - Integrate scoring
+3. `EdgeLoop/ViewModels/LauncherViewModel.cs` - Remove pre-shuffle
+4. `EdgeLoop/Windows/SettingsWindow.xaml` - Add UI controls
+5. `EdgeLoop/App.xaml.cs` - Register services
 
 ---
 
@@ -535,3 +535,4 @@ When debug logging is enabled, show a small overlay during playback:
 *Document Version: 1.0*
 *Created: 2026-01-20*
 *Author: AI Assistant*
+

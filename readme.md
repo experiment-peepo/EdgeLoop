@@ -1,8 +1,8 @@
-# GOØN v1.1.0
+# EDGELOOP v1.1.0
 
 A specialized video player designed for multi-monitor playback with high-performance overlay capabilities for desktop.
 
-![GOØN UI](assets/screenshot.png)
+![EDGELOOP UI](assets/screenshot.png)
 
 ## Features
 - **Multi-Monitor Support**: Assign different videos to specific screens or span across "All Monitors".
@@ -16,7 +16,7 @@ A specialized video player designed for multi-monitor playback with high-perform
 ## Session & Cookies
 Some sites (e.g., Hypnotube) require authentication to access high-quality streams.
 1.  **Extract Cookies**: Log in to the site in your browser, open developer tools (F12), type `copy(document.cookie)` in the console.
-2.  **Import**: In GOON, go to **Settings > Session & History**, find the site, and click **Paste**.
+2.  **Import**: In EdgeLoop, go to **Settings > Session & History**, find the site, and click **Paste**.
 3.  **Enjoy**: High-resolution streams will now work automatically.
 
 ## Dependencies
@@ -26,12 +26,13 @@ Some sites (e.g., Hypnotube) require authentication to access high-quality strea
 
 ## Quick Start
 1. Extract the contents of this zip to a folder.
-2. Run `GOON.exe`.
+2. Run `EdgeLoop.exe`.
 3. Drag and drop videos or paste URLs to get started.
 
 ## Notes
 - **Distribution**: Distributed as a folder-based bundle for maximum UI stability on .NET 10.
-- **Data Storage**: If the app cannot create a local `Data/` folder, it will fall back to using `%AppData%\GOON`.
+- **Data Storage**: If the app cannot create a local `Data/` folder, it will fall back to using `%AppData%\EdgeLoop`.
 
 ---
 *Support the development on [Ko-fi](https://ko-fi.com/vexfromdestiny)*
+

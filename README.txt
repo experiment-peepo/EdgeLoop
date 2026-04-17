@@ -1,4 +1,4 @@
-GOON v1.1.0
+EdgeLoop v1.1.0
 ==============
 
 Overlay video player for gooners. A specialized video player designed for multi-monitor playback with high-performance overlay capabilities.
@@ -22,14 +22,18 @@ QUICK START
 -----------
 1. Install the .NET 10 Desktop Runtime (linked above).
 2. Extract the contents of this zip to a folder.
-3. Run GOON.exe.
+3. Run EdgeLoop.exe.
 4. Drag and drop videos or paste URLs to get started.
 
 KNOWN NOTES
 -----------
 * Lean Distribution: This version is "Framework-Dependent" to keep the file size small and the folder clean. It relies on your system's .NET 10 installation.
-* Data Storage: If the app cannot create a local 'Data' folder (e.g., in a protected Program Files directory), it will fall back to %AppData%\GOON.
+* Data Storage: If the app cannot create a local 'Data' folder (e.g., in a protected Program Files directory), it will fall back to %AppData%\EdgeLoop.
+* Dependencies: To keep web streaming working, you should occasionally update yt-dlp. Run 'Dependencies/update_ytdlp.bat' to get the latest version from GitHub.
 
 
 ---
 Support the development on Ko-fi: https://ko-fi.com/vexfromdestiny
+
+
+

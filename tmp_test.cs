@@ -1,6 +1,6 @@
 using System;
 using System.Threading.Tasks;
-using GOON.Classes;
+using EdgeLoop.Classes;
 using System.Threading;
 
 class Program {
@@ -15,3 +15,4 @@ class Program {
         }
     }
 }
+

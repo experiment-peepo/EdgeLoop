@@ -34,7 +34,7 @@ If the app is closed via:
 
 #### Step 1: Add Dispose Save in HypnoViewModel
 
-**File:** `GOON/ViewModels/HypnoViewModel.cs`
+**File:** `EdgeLoop/ViewModels/HypnoViewModel.cs`
 
 **Location:** `Dispose()` method
 
@@ -54,7 +54,7 @@ public void Dispose() {
 
 #### Step 2: Add Application Exit Handler in App.xaml.cs
 
-**File:** `GOON/App.xaml.cs`
+**File:** `EdgeLoop/App.xaml.cs`
 
 **Location:** `OnStartup()` method
 
@@ -77,7 +77,7 @@ protected override void OnStartup(StartupEventArgs e) {
 
 #### Step 3: Add Window Closing Handler in HypnoWindow
 
-**File:** `GOON/Windows/HypnoWindow.xaml.cs`
+**File:** `EdgeLoop/Windows/HypnoWindow.xaml.cs`
 
 **Location:** Window constructor or Loaded event
 
@@ -155,7 +155,7 @@ foreach (var coordinatedGroup in coordinatedGroups) {
 
 ##### Step A1: Add IsMaster Property to HypnoViewModel
 
-**File:** `GOON/ViewModels/HypnoViewModel.cs`
+**File:** `EdgeLoop/ViewModels/HypnoViewModel.cs`
 
 ```csharp
 /// <summary>
@@ -167,7 +167,7 @@ public bool IsSyncMaster { get; set; } = false;
 
 ##### Step A2: Modify PlayNext to Check Master Status
 
-**File:** `GOON/ViewModels/HypnoViewModel.cs`
+**File:** `EdgeLoop/ViewModels/HypnoViewModel.cs`
 
 **Location:** `PlayNext()` method, at the start of the shuffle logic
 
@@ -188,7 +188,7 @@ if (IsShuffle && _files.Length > 1) {
 
 ##### Step A3: Modify Master to Broadcast Selection
 
-**File:** `GOON/ViewModels/HypnoViewModel.cs`
+**File:** `EdgeLoop/ViewModels/HypnoViewModel.cs`
 
 **Location:** After selecting the next video in `PlayNext()`
 
@@ -205,7 +205,7 @@ if (!string.IsNullOrEmpty(SyncGroupId) && IsSyncMaster) {
 
 ##### Step A4: Add Broadcast Method to VideoPlayerService
 
-**File:** `GOON/Classes/VideoPlayerService.cs`
+**File:** `EdgeLoop/Classes/VideoPlayerService.cs`
 
 ```csharp
 public void BroadcastIndexToGroup(string syncGroupId, int index) {
@@ -277,25 +277,26 @@ This is more complex and requires a central coordinator. Option A is simpler.
 
 ## Files to Modify
 
-1. `GOON/ViewModels/HypnoViewModel.cs`
+1. `EdgeLoop/ViewModels/HypnoViewModel.cs`
    - Add `IsSyncMaster` property
    - Modify `PlayNext()` for follower check
    - Add broadcast after selection
    - Ensure `Dispose()` saves record
 
-2. `GOON/App.xaml.cs`
+2. `EdgeLoop/App.xaml.cs`
    - Add Exit event handler
 
-3. `GOON/Windows/HypnoWindow.xaml.cs`
+3. `EdgeLoop/Windows/HypnoWindow.xaml.cs`
    - Add Closing event handler
 
-4. `GOON/Classes/VideoPlayerService.cs`
+4. `EdgeLoop/Classes/VideoPlayerService.cs`
    - Add `BroadcastIndexToGroup()` method
 
-5. `GOON/ViewModels/LauncherViewModel.cs` (or equivalent)
+5. `EdgeLoop/ViewModels/LauncherViewModel.cs` (or equivalent)
    - Set `IsSyncMaster` on first ViewModel in sync groups
 
 ---
 
 *Document Version: 1.0*
 *Created: 2026-01-20*
+

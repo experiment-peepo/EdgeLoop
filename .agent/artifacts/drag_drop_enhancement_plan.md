@@ -8,7 +8,7 @@
 
 ## Overview
 
-This plan details the implementation of 6 key enhancements to the GOON application's drag and drop functionality, ordered by priority and dependency.
+This plan details the implementation of 6 key enhancements to the EdgeLoop application's drag and drop functionality, ordered by priority and dependency.
 
 ---
 
@@ -21,7 +21,7 @@ This plan details the implementation of 6 key enhancements to the GOON applicati
 When a user drops a folder onto the playlist, recursively scan all subfolders for video files and add them.
 
 #### Files to Modify
-- `GOON/ViewModels/LauncherViewModel.cs`
+- `EdgeLoop/ViewModels/LauncherViewModel.cs`
 
 #### Implementation Steps
 
@@ -75,8 +75,8 @@ When a user drops a folder onto the playlist, recursively scan all subfolders fo
 Allow users to drag URLs directly from their browser into the playlist.
 
 #### Files to Modify
-- `GOON/Windows/LauncherWindow.xaml.cs`
-- `GOON/ViewModels/LauncherViewModel.cs`
+- `EdgeLoop/Windows/LauncherWindow.xaml.cs`
+- `EdgeLoop/ViewModels/LauncherViewModel.cs`
 
 #### Implementation Steps
 
@@ -157,8 +157,8 @@ Allow users to drag URLs directly from their browser into the playlist.
 Add a visual glow/highlight to the playlist area when a valid drop is hovering over it.
 
 #### Files to Modify
-- `GOON/Windows/LauncherWindow.xaml`
-- `GOON/Windows/LauncherWindow.xaml.cs`
+- `EdgeLoop/Windows/LauncherWindow.xaml`
+- `EdgeLoop/Windows/LauncherWindow.xaml.cs`
 
 #### Implementation Steps
 
@@ -232,21 +232,21 @@ Add a visual glow/highlight to the playlist area when a valid drop is hovering o
 Show a horizontal line between playlist items to indicate exactly where a dragged item will be inserted.
 
 #### Files to Create
-- `GOON/Classes/InsertionAdorner.cs` (New file)
+- `EdgeLoop/Classes/InsertionAdorner.cs` (New file)
 
 #### Files to Modify
-- `GOON/Windows/LauncherWindow.xaml.cs`
+- `EdgeLoop/Windows/LauncherWindow.xaml.cs`
 
 #### Implementation Steps
 
 1. **Create InsertionAdorner class**:
    ```csharp
-   // GOON/Classes/InsertionAdorner.cs
+   // EdgeLoop/Classes/InsertionAdorner.cs
    using System.Windows;
    using System.Windows.Documents;
    using System.Windows.Media;
    
-   namespace GOON.Classes {
+   namespace EdgeLoop.Classes {
        public class InsertionAdorner : Adorner {
            private readonly bool _isSeparatorHorizontal;
            private readonly AdornerLayer _adornerLayer;
@@ -367,21 +367,21 @@ Show a horizontal line between playlist items to indicate exactly where a dragge
 Show a semi-transparent copy of the dragged item following the cursor.
 
 #### Files to Create
-- `GOON/Classes/DragAdorner.cs` (New file)
+- `EdgeLoop/Classes/DragAdorner.cs` (New file)
 
 #### Files to Modify
-- `GOON/Windows/LauncherWindow.xaml.cs`
+- `EdgeLoop/Windows/LauncherWindow.xaml.cs`
 
 #### Implementation Steps
 
 1. **Create DragAdorner class**:
    ```csharp
-   // GOON/Classes/DragAdorner.cs
+   // EdgeLoop/Classes/DragAdorner.cs
    using System.Windows;
    using System.Windows.Documents;
    using System.Windows.Media;
    
-   namespace GOON.Classes {
+   namespace EdgeLoop.Classes {
        public class DragAdorner : Adorner {
            private readonly UIElement _child;
            private double _leftOffset;
@@ -492,7 +492,7 @@ Show a semi-transparent copy of the dragged item following the cursor.
 Automatically scroll the playlist when dragging near the top or bottom edge.
 
 #### Files to Modify
-- `GOON/Windows/LauncherWindow.xaml.cs`
+- `EdgeLoop/Windows/LauncherWindow.xaml.cs`
 
 #### Implementation Steps
 
@@ -608,3 +608,4 @@ Phase 3 (After Phase 1 & 2)
 | `LauncherViewModel.cs` | `AddDroppedFilesAsync`, `AddDroppedUrl` |
 | `InsertionAdorner.cs` | NEW - Insertion line visual |
 | `DragAdorner.cs` | NEW - Ghost preview visual |
+

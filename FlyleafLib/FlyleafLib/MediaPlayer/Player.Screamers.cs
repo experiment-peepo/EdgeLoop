@@ -1,4 +1,4 @@
-﻿using System.Diagnostics;
+using System.Diagnostics;
 
 using FlyleafLib.MediaFramework.MediaDecoder;
 using FlyleafLib.MediaFramework.MediaFrame;
@@ -258,9 +258,10 @@ unsafe partial class Player
             }
 
             if (Renderer.RenderPlay(vFrame, false))
+            {
                 Renderer.PresentPlay();
-
-            UpdateCurTime(vFrame.Timestamp, false);
+                UpdateCurTime(vFrame.Timestamp, false);
+            }
 
             vFrame = null;
             int dequeueRetries  = MAX_DEQUEUE_RETRIES;
@@ -292,11 +293,10 @@ unsafe partial class Player
             {
                 Renderer.PresentPlay();
                 prevFrame?.Dispose();
+                UpdateCurTime(vFrame.Timestamp, false);
             }
             else
                 vFrame.Dispose();
-
-            UpdateCurTime(vFrame.Timestamp, false);
         }
 
         vFrame = null;

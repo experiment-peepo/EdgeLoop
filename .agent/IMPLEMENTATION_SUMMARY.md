@@ -1,4 +1,4 @@
-# GOON - Implementation Summary
+# EdgeLoop - Implementation Summary
 
 ## Successfully Implemented Features
 
@@ -43,7 +43,7 @@
 
 #### User Configuration (Power User Methods)
 - **Command Line**: Run with `--debug` or `-v` flags.
-- **Environment Variable**: Set `GOON_LOG_LEVEL=Debug`.
+- **Environment Variable**: Set `EDGELOOP_LOG_LEVEL=Debug`.
 - **Trigger File**: Creating `debug.enabled` in the Data directory forces debug mode.
 - **Settings UI**: Removed from UI to keep it clean for regular users, but remains in `settings.json` for persistence.
 
@@ -60,8 +60,8 @@
 - **Zero UI Presence:** The "Console" button and Log Level selection have been entirely removed from the application UI and Settings window to maintain a clean, distraction-free environment.
 - **Background Resolution:** Log level is now resolved silently on startup following this hierarchy:
     1. **Command Line Argument:** `--debug` (or `-d`) for `Debug` level, `--verbose` (or `-v`) for `Info`.
-    2. **Environment Variable:** `GOON_LOG_LEVEL` (e.g., `Debug`, `Info`, `Warning`, `Error`).
-    3. **Trigger File:** An empty `debug.enabled` file in the `%AppData%/GOON/` directory forces `Debug` mode.
+    2. **Environment Variable:** `EDGELOOP_LOG_LEVEL` (e.g., `Debug`, `Info`, `Warning`, `Error`).
+    3. **Trigger File:** An empty `debug.enabled` file in the `%AppData%/EdgeLoop/` directory forces `Debug` mode.
     4. **Settings Migration:** Legacy `UserSettings.LogLevel` is still respected if no higher priority override is found.
 - **Log Management:**
     - Rotates automatically at **20MB** to prevent storage bloat.
@@ -91,11 +91,11 @@
 ## Files Modified
 
 ### Core Files
-1. `GOON/Classes/Logger.cs` - Refactored logging system with levels and context tags
-2. `GOON/Classes/UserSettings.cs` - Added `LogLevel` and `CompactMode` properties
-3. `GOON/ViewModels/LauncherViewModel.cs` - M3U playlist support
-4. `GOON/ViewModels/SettingsViewModel.cs` - Log level configuration
-5. `GOON/Windows/SettingsWindow.xaml` - Log level UI
+1. `EdgeLoop/Classes/Logger.cs` - Refactored logging system with levels and context tags
+2. `EdgeLoop/Classes/UserSettings.cs` - Added `LogLevel` and `CompactMode` properties
+3. `EdgeLoop/ViewModels/LauncherViewModel.cs` - M3U playlist support
+4. `EdgeLoop/ViewModels/SettingsViewModel.cs` - Log level configuration
+5. `EdgeLoop/Windows/SettingsWindow.xaml` - Log level UI
 
 ### Supporting Files
 - All files using `Logger` were updated to use new signature where needed
@@ -108,22 +108,22 @@
 1. Add multiple videos to the playlist
 2. Save as M3U format
 3. Open the M3U file in VLC to verify compatibility
-4. Load the M3U back into GOON
+4. Load the M3U back into EdgeLoop
 5. Verify videos load correctly (settings will be defaults)
 
 ### Logging System
 1. Open Settings → Application
 2. Change Logging Level to "Debug"
 3. Perform various actions (add videos, play, etc.)
-4. Check `GOON.log` file for debug messages
+4. Check `EdgeLoop.log` file for debug messages
 5. Change to "Error" level
 6. Verify only errors are logged
 
 ### Log Rotation
 1. Let the log file grow beyond the configured size
 2. Restart the application
-3. Verify `GOON.log.old` is created
-4. Verify new `GOON.log` starts fresh
+3. Verify `EdgeLoop.log.old` is created
+4. Verify new `EdgeLoop.log` starts fresh
 
 ### 3. ✅ UI & Playback Stability
 
@@ -165,3 +165,5 @@
 ---
 
 *Last Updated: 2026-01-19 22:30*
+
+

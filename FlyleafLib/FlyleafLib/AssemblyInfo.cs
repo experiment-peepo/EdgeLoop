@@ -1,8 +1,8 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Runtime.CompilerServices;
 
-[assembly: InternalsVisibleTo("GOON")]
-[assembly: InternalsVisibleTo("GOON.Tests")]
+[assembly: InternalsVisibleTo("EdgeLoop")]
+[assembly: InternalsVisibleTo("EdgeLoop.Tests")]
 
 [assembly: ThemeInfo(
     ResourceDictionaryLocation.None, //where theme specific resource dictionaries are located
@@ -12,3 +12,4 @@ using System.Runtime.CompilerServices;
                                               //(used if a resource is not found in the page,
                                               // app, or any theme specific resource dictionaries)
 )]
+

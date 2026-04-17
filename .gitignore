@@ -9,6 +9,8 @@ publish_test/
 # Dependencies
 Dependencies/*
 !Dependencies/yt-dlp.exe
+!Dependencies/update_ytdlp.bat
+!Dependencies/update_ytdlp.ps1
 test_deps/
 *.user
 
@@ -16,3 +18,9 @@ publish_debug_loose/
 
 publish_debug/
 ffmpeg_temp/
+.agent/
+scratch/
+*_diff.txt
+*.diff
+script.csx
+tmp_test.cs

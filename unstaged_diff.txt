@@ -1,4 +1,4 @@
-Ôªødiff --git a/Dependencies/yt-dlp.exe b/Dependencies/yt-dlp.exe
+diff --git a/Dependencies/yt-dlp.exe b/Dependencies/yt-dlp.exe
 index ac0e0d8..828f154 100644
 Binary files a/Dependencies/yt-dlp.exe and b/Dependencies/yt-dlp.exe differ
 diff --git a/FlyleafLib/FORK_CHANGES.md b/FlyleafLib/FORK_CHANGES.md
@@ -17,17 +17,17 @@ index 6da753d..a9bc2db 100644
 +- Added `[JsonExtensionData]` on `Format` class to capture unknown fields from future yt-dlp versions
 +- Added `RobustJsonOptions` static property with `AllowReadingFromString`, `PropertyNameCaseInsensitive`, `AllowTrailingCommas`
 +
-+**Conflict Risk**: ‚â°∆í∆í√≥ Low - Additive properties only.
++**Conflict Risk**: =ÉÉÛ Low - Additive properties only.
 +
 +#### `Plugins/YoutubeDL/YoutubeDL.cs`
 +**Changes**:
 +- JSON deserialization now uses `YoutubeDLJson.RobustJsonOptions` instead of basic options
-+- Null-safe `HasVideo()`/`HasAudio()` Œì√á√∂ checks `!= null` before `"none"` sentinel comparison
++- Null-safe `HasVideo()`/`HasAudio()` G«ˆ checks `!= null` before `"none"` sentinel comparison
 +- Null-safe protocol regex in `GetBestMatch()` LINQ query
 +- Default codec values changed from `""` to `"none"` for consistency
 +- Added null check for `fmt.url`
 +
-+**Conflict Risk**: ‚â°∆í∆í√≠ Medium - Format handling logic, but changes are defensive additions.
++**Conflict Risk**: =ÉÉÌ Medium - Format handling logic, but changes are defensive additions.
 +
 +---
 +
@@ -47,11 +47,11 @@ index 6da753d..a9bc2db 100644
  ### Upstream Changes to Watch For
  
 @@ -227,6 +250,8 @@ Tests included:
- | Vortice.Windows update | ‚â°∆í∆í√≠ Medium | Check D3DImageManager |
- | Screamer refactoring | ‚â°∆í√∂‚î§ High | Manual conflict resolution |
- | New renderer architecture | ‚â°∆í√∂‚î§ High | May require D3DImage rewrite |
-+| YoutubeDLJson model update | ‚â°∆í∆í√≠ Medium | Re-apply `[JsonExtensionData]` and `RobustJsonOptions` |
-+| yt-dlp JSON schema change | ‚â°∆í∆í√≥ Low | `[JsonExtensionData]` absorbs unknown fields automatically |
+ | Vortice.Windows update | =ÉÉÌ Medium | Check D3DImageManager |
+ | Screamer refactoring | =Éˆ¶ High | Manual conflict resolution |
+ | New renderer architecture | =Éˆ¶ High | May require D3DImage rewrite |
++| YoutubeDLJson model update | =ÉÉÌ Medium | Re-apply `[JsonExtensionData]` and `RobustJsonOptions` |
++| yt-dlp JSON schema change | =ÉÉÛ Low | `[JsonExtensionData]` absorbs unknown fields automatically |
  
  ---
  
@@ -81,7 +81,7 @@ index 6da753d..a9bc2db 100644
  - The fork maintains API compatibility with upstream where possible
  - Custom changes are isolated to specific subsystems to minimize merge conflicts
  - Consider contributing `IClock` interface upstream if stable
-+- `[JsonExtensionData]` on `Format` is critical Œì√á√∂ never remove it when merging upstream
++- `[JsonExtensionData]` on `Format` is critical G«ˆ never remove it when merging upstream
  
  ---
  
@@ -92,7 +92,7 @@ index 90af127..7ce7031 100644
 --- a/FlyleafLib/Plugins/YoutubeDL/YoutubeDL.cs
 +++ b/FlyleafLib/Plugins/YoutubeDL/YoutubeDL.cs
 @@ -1,4 +1,4 @@
--‚à©‚ïó‚îêusing System;
+-n++using System;
 +using System;
  using System.Collections.Generic;
  using System.Diagnostics;
@@ -161,7 +161,7 @@ index f21cf03..6603f55 100644
 --- a/FlyleafLib/Plugins/YoutubeDL/YoutubeDLJson.cs
 +++ b/FlyleafLib/Plugins/YoutubeDL/YoutubeDLJson.cs
 @@ -1,4 +1,5 @@
--‚à©‚ïó‚îêusing System.Collections.Generic;
+-n++using System.Collections.Generic;
 +using System.Collections.Generic;
 +using System.Text.Json;
  using System.Text.Json.Serialization;
@@ -200,25 +200,25 @@ index f21cf03..6603f55 100644
 +    [JsonExtensionData]
 +    public Dictionary<string, JsonElement> ExtensionData { get; set; }
  }
-diff --git a/GOON.Tests/Stability/ConfigVarietyTests.cs b/GOON.Tests/Stability/ConfigVarietyTests.cs
+diff --git a/EdgeLoop.Tests/Stability/ConfigVarietyTests.cs b/EdgeLoop.Tests/Stability/ConfigVarietyTests.cs
 index cbdcafd..dacb131 100644
---- a/GOON.Tests/Stability/ConfigVarietyTests.cs
-+++ b/GOON.Tests/Stability/ConfigVarietyTests.cs
-@@ -78,7 +78,8 @@ namespace GOON.Tests.Stability {
+--- a/EdgeLoop.Tests/Stability/ConfigVarietyTests.cs
++++ b/EdgeLoop.Tests/Stability/ConfigVarietyTests.cs
+@@ -78,7 +78,8 @@ namespace EdgeLoop.Tests.Stability {
          public async Task HypnotubeCookies_ShouldBeInjectedIntoHeaders() {
              // Arrange
              var cookieValue = "session=test_session_123";
 -            MockSettings.Setup(s => s.HypnotubeCookies).Returns(cookieValue);
-+            // Mock the encrypted backing property Œì√á√∂ CookieProtector.Unprotect handles plaintext transparently
++            // Mock the encrypted backing property G«ˆ CookieProtector.Unprotect handles plaintext transparently
 +            MockSettings.Setup(s => s.HypnotubeCookiesEncrypted).Returns(cookieValue);
              
              var mockFetcher = new Mock<IHtmlFetcher>();
              mockFetcher.Setup(f => f.FetchHtmlAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-diff --git a/GOON/App.xaml.cs b/GOON/App.xaml.cs
+diff --git a/EdgeLoop/App.xaml.cs b/EdgeLoop/App.xaml.cs
 index 0d31db7..c42780a 100644
---- a/GOON/App.xaml.cs
-+++ b/GOON/App.xaml.cs
-@@ -129,6 +129,29 @@ namespace GOON {
+--- a/EdgeLoop/App.xaml.cs
++++ b/EdgeLoop/App.xaml.cs
+@@ -129,6 +129,29 @@ namespace EdgeLoop {
                  }
              });
  
@@ -226,7 +226,7 @@ index 0d31db7..c42780a 100644
 +            System.Threading.Tasks.Task.Run(() => {
 +                try {
 +                    var tempDir = System.IO.Path.GetTempPath();
-+                    foreach (var file in System.IO.Directory.GetFiles(tempDir, "goon_cookies_*.txt")) {
++                    foreach (var file in System.IO.Directory.GetFiles(tempDir, "edgeloop_cookies_*.txt")) {
 +                        try { System.IO.File.Delete(file); } catch { }
 +                    }
 +                } catch (Exception ex) {
@@ -248,11 +248,11 @@ index 0d31db7..c42780a 100644
              // base.OnStartup starts the UI - call LAST
              base.OnStartup(e);
          }
-diff --git a/GOON/Classes/Constants.cs b/GOON/Classes/Constants.cs
+diff --git a/EdgeLoop/Classes/Constants.cs b/EdgeLoop/Classes/Constants.cs
 index 1119bd0..66765e1 100644
---- a/GOON/Classes/Constants.cs
-+++ b/GOON/Classes/Constants.cs
-@@ -22,7 +22,8 @@ namespace GOON.Classes {
+--- a/EdgeLoop/Classes/Constants.cs
++++ b/EdgeLoop/Classes/Constants.cs
+@@ -22,7 +22,8 @@ namespace EdgeLoop.Classes {
              // Video sites with specialized extractors
              "rule34video.com",
              "pmvhaven.com",
@@ -262,17 +262,17 @@ index 1119bd0..66765e1 100644
          };
  
          /// <summary>
-diff --git a/GOON/Classes/Metrics/PlayCountMetric.cs b/GOON/Classes/Metrics/PlayCountMetric.cs
+diff --git a/EdgeLoop/Classes/Metrics/PlayCountMetric.cs b/EdgeLoop/Classes/Metrics/PlayCountMetric.cs
 index e7977bd..d46e166 100644
---- a/GOON/Classes/Metrics/PlayCountMetric.cs
-+++ b/GOON/Classes/Metrics/PlayCountMetric.cs
-@@ -5,6 +5,27 @@ using GOON.Classes;
+--- a/EdgeLoop/Classes/Metrics/PlayCountMetric.cs
++++ b/EdgeLoop/Classes/Metrics/PlayCountMetric.cs
+@@ -5,6 +5,27 @@ using EdgeLoop.Classes;
  
- namespace GOON.Classes.Metrics {
+ namespace EdgeLoop.Classes.Metrics {
      public static class PlayCountMetric {
 +        /// <summary>
 +        /// Optimized overload that accepts pre-computed play counts and average.
-+        /// Avoids the O(N‚î¨‚ñì) cost of querying every playlist path's count for each file.
++        /// Avoids the O(N-¶) cost of querying every playlist path's count for each file.
 +        /// </summary>
 +        public static double Calculate(int thisCount, double playlistAverage) {
 +            if (playlistAverage <= 0 && thisCount == 0) return 1.0; // All unplayed
@@ -294,7 +294,7 @@ index e7977bd..d46e166 100644
          public static double Calculate(string filePath, IEnumerable<string> playlistPaths, PlayHistoryService historyService) {
              int thisCount = historyService.GetTotalPlayCount(filePath);
              
-@@ -13,16 +34,7 @@ namespace GOON.Classes.Metrics {
+@@ -13,16 +34,7 @@ namespace EdgeLoop.Classes.Metrics {
              if (counts.Count == 0) return 1.0;
              
              double average = counts.Average();
@@ -312,17 +312,17 @@ index e7977bd..d46e166 100644
          }
      }
  }
-diff --git a/GOON/Classes/Metrics/TimeOfDayMetric.cs b/GOON/Classes/Metrics/TimeOfDayMetric.cs
+diff --git a/EdgeLoop/Classes/Metrics/TimeOfDayMetric.cs b/EdgeLoop/Classes/Metrics/TimeOfDayMetric.cs
 index 819d773..bcfe5c6 100644
---- a/GOON/Classes/Metrics/TimeOfDayMetric.cs
-+++ b/GOON/Classes/Metrics/TimeOfDayMetric.cs
+--- a/EdgeLoop/Classes/Metrics/TimeOfDayMetric.cs
++++ b/EdgeLoop/Classes/Metrics/TimeOfDayMetric.cs
 @@ -1,4 +1,5 @@
  using System;
 +using System.Collections.Generic;
  using System.Linq;
- using GOON.Classes;
+ using EdgeLoop.Classes;
  
-@@ -13,9 +14,12 @@ namespace GOON.Classes.Metrics {
+@@ -13,9 +14,12 @@ namespace EdgeLoop.Classes.Metrics {
              return TimeBucket.Night;
          }
  
@@ -338,7 +338,7 @@ index 819d773..bcfe5c6 100644
              
              if (fileRecords.Count == 0) return 0.5;
  
-@@ -30,5 +34,14 @@ namespace GOON.Classes.Metrics {
+@@ -30,5 +34,14 @@ namespace EdgeLoop.Classes.Metrics {
              // If they never watch it now, keep neutral (0.5)
              return 0.5 + (ratio * 0.5);
          }
@@ -353,11 +353,11 @@ index 819d773..bcfe5c6 100644
 +        }
      }
  }
-diff --git a/GOON/Classes/PersistentUrlCache.cs b/GOON/Classes/PersistentUrlCache.cs
+diff --git a/EdgeLoop/Classes/PersistentUrlCache.cs b/EdgeLoop/Classes/PersistentUrlCache.cs
 index d031f55..e3ab1d8 100644
---- a/GOON/Classes/PersistentUrlCache.cs
-+++ b/GOON/Classes/PersistentUrlCache.cs
-@@ -46,7 +46,8 @@ namespace GOON.Classes {
+--- a/EdgeLoop/Classes/PersistentUrlCache.cs
++++ b/EdgeLoop/Classes/PersistentUrlCache.cs
+@@ -46,7 +46,8 @@ namespace EdgeLoop.Classes {
          private void LoadCache() {
              try {
                  if (File.Exists(_cacheFilePath)) {
@@ -367,11 +367,11 @@ index d031f55..e3ab1d8 100644
                      var dictionary = JsonSerializer.Deserialize<Dictionary<string, UrlCacheEntry>>(json);
                      if (dictionary != null) {
                          // Filter out already expired entries during load
-diff --git a/GOON/Classes/PlayHistoryService.cs b/GOON/Classes/PlayHistoryService.cs
+diff --git a/EdgeLoop/Classes/PlayHistoryService.cs b/EdgeLoop/Classes/PlayHistoryService.cs
 index 7c36cae..fd1073f 100644
---- a/GOON/Classes/PlayHistoryService.cs
-+++ b/GOON/Classes/PlayHistoryService.cs
-@@ -26,7 +26,8 @@ namespace GOON.Classes {
+--- a/EdgeLoop/Classes/PlayHistoryService.cs
++++ b/EdgeLoop/Classes/PlayHistoryService.cs
+@@ -26,7 +26,8 @@ namespace EdgeLoop.Classes {
          private void LoadHistory() {
              try {
                  if (File.Exists(_historyFilePath)) {
@@ -381,11 +381,11 @@ index 7c36cae..fd1073f 100644
                      var loaded = JsonSerializer.Deserialize<List<VideoPlayRecord>>(json);
                      if (loaded != null) {
                          lock (_lock) {
-diff --git a/GOON/Classes/PlaybackPositionTracker.cs b/GOON/Classes/PlaybackPositionTracker.cs
+diff --git a/EdgeLoop/Classes/PlaybackPositionTracker.cs b/EdgeLoop/Classes/PlaybackPositionTracker.cs
 index 08c7e97..48efcec 100644
---- a/GOON/Classes/PlaybackPositionTracker.cs
-+++ b/GOON/Classes/PlaybackPositionTracker.cs
-@@ -55,7 +55,8 @@ namespace GOON.Classes {
+--- a/EdgeLoop/Classes/PlaybackPositionTracker.cs
++++ b/EdgeLoop/Classes/PlaybackPositionTracker.cs
+@@ -55,7 +55,8 @@ namespace EdgeLoop.Classes {
          public static PlaybackPositionTracker Load() {
              try {
                  if (File.Exists(_settingsPath)) {
@@ -395,7 +395,7 @@ index 08c7e97..48efcec 100644
                      try {
                          var tracker = JsonSerializer.Deserialize<PlaybackPositionTracker>(json);
                          if (tracker != null && tracker.Positions != null) {
-@@ -84,7 +85,8 @@ namespace GOON.Classes {
+@@ -84,7 +85,8 @@ namespace EdgeLoop.Classes {
                  var legacyPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, PositionsFileName);
                  if (File.Exists(legacyPath)) {
                      Logger.Info("[PositionTracker] Migrating legacy positions from base directory...");
@@ -405,11 +405,11 @@ index 08c7e97..48efcec 100644
                      try {
                          var tracker = JsonSerializer.Deserialize<PlaybackPositionTracker>(json);
                          if (tracker != null) {
-diff --git a/GOON/Classes/PlaylistImporter.cs b/GOON/Classes/PlaylistImporter.cs
+diff --git a/EdgeLoop/Classes/PlaylistImporter.cs b/EdgeLoop/Classes/PlaylistImporter.cs
 index 136c53f..4aa1c98 100644
---- a/GOON/Classes/PlaylistImporter.cs
-+++ b/GOON/Classes/PlaylistImporter.cs
-@@ -16,10 +16,12 @@ namespace GOON.Classes {
+--- a/EdgeLoop/Classes/PlaylistImporter.cs
++++ b/EdgeLoop/Classes/PlaylistImporter.cs
+@@ -16,10 +16,12 @@ namespace EdgeLoop.Classes {
      public class PlaylistImporter {
          private readonly IVideoUrlExtractor _urlExtractor;
          private readonly IHtmlFetcher _htmlFetcher;
@@ -423,7 +423,7 @@ index 136c53f..4aa1c98 100644
          }
  
          /// <summary>
-@@ -54,9 +56,16 @@ namespace GOON.Classes {
+@@ -54,9 +56,16 @@ namespace EdgeLoop.Classes {
                      videoPageUrls = await ExtractRule34VideoPlaylistAsync(playlistUrl, cancellationToken);
                  } else if (host.Contains("pmvhaven.com")) {
                      videoPageUrls = await ExtractPmvHavenPlaylistAsync(playlistUrl, cancellationToken);
@@ -440,11 +440,11 @@ index 136c53f..4aa1c98 100644
                  }
  
                  if (videoPageUrls == null || videoPageUrls.Count == 0) {
-diff --git a/GOON/Classes/ShuffleScoringEngine.cs b/GOON/Classes/ShuffleScoringEngine.cs
+diff --git a/EdgeLoop/Classes/ShuffleScoringEngine.cs b/EdgeLoop/Classes/ShuffleScoringEngine.cs
 index 366da50..7888af4 100644
---- a/GOON/Classes/ShuffleScoringEngine.cs
-+++ b/GOON/Classes/ShuffleScoringEngine.cs
-@@ -12,7 +12,9 @@ namespace GOON.Classes {
+--- a/EdgeLoop/Classes/ShuffleScoringEngine.cs
++++ b/EdgeLoop/Classes/ShuffleScoringEngine.cs
+@@ -12,7 +12,9 @@ namespace EdgeLoop.Classes {
          // Track recently picked videos IN MEMORY (survives between picks in a session)
          // This is critical for fresh sessions with no history file
          private readonly Queue<string> _recentPicksQueue = new Queue<string>();
@@ -455,14 +455,14 @@ index 366da50..7888af4 100644
  
          public ShuffleScoringEngine(PlayHistoryService historyService) {
              _historyService = historyService;
-@@ -22,14 +24,36 @@ namespace GOON.Classes {
+@@ -22,14 +24,36 @@ namespace EdgeLoop.Classes {
              if (files == null || files.Length == 0) return 0;
              if (files.Length == 1) return 0;
  
 -            var candidates = new List<(int index, double score)>();
 -            var recentRecords = _historyService.GetRecentRecords(10);
 -            var playlistPaths = files.Select(f => f.FilePath).ToList();
-+            // --- PRE-COMPUTE SHARED DATA (avoids O(N‚î¨‚ñì) per-file lookups) ---
++            // --- PRE-COMPUTE SHARED DATA (avoids O(N-¶) per-file lookups) ---
              
 -            // Get paths we've recently picked (in-memory, survives across picks)
 +            // Scale recent-picks queue proportionally to playlist size
@@ -477,7 +477,7 @@ index 366da50..7888af4 100644
 +            var allRecords = _historyService.GetRecentRecords(5000);
 +            var recordsByPath = allRecords.ToLookup(r => r.FilePath);
 +
-+            // Pre-compute play counts for PlayCount metric (avoid O(N‚î¨‚ñì))
++            // Pre-compute play counts for PlayCount metric (avoid O(N-¶))
 +            var playCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 +            foreach (var file in files) {
 +                if (file == null) continue;
@@ -496,7 +496,7 @@ index 366da50..7888af4 100644
              for (int i = 0; i < files.Length; i++) {
                  var file = files[i];
                  if (file == null) continue;
-@@ -37,10 +61,13 @@ namespace GOON.Classes {
+@@ -37,10 +61,13 @@ namespace EdgeLoop.Classes {
                  // CRITICAL: Skip the currently playing video
                  if (i == currentIndex) continue;
  
@@ -512,7 +512,7 @@ index 366da50..7888af4 100644
                  
                  double durationMs = 0;
                  var lastPlay = _historyService.GetLastPlay(file.FilePath);
-@@ -50,7 +77,7 @@ namespace GOON.Classes {
+@@ -50,7 +77,7 @@ namespace EdgeLoop.Classes {
                  
                  double m4 = LengthVarietyMetric.Calculate(durationMs, recentRecords);
                  double m5 = CreatorVarietyMetric.Calculate(file.FilePath, recentRecords);
@@ -521,18 +521,18 @@ index 366da50..7888af4 100644
  
                  // 2. Combine with Weights
                  double score = 
-@@ -61,11 +88,25 @@ namespace GOON.Classes {
+@@ -61,11 +88,25 @@ namespace EdgeLoop.Classes {
                      (m4 * settings.ShuffleLengthWeight) + 
                      (m5 * settings.ShuffleVarietyWeight);
  
 -                // 3. CRITICAL IN-MEMORY PENALTY: Apply harsh penalty for recently picked videos
-+                // 3. "Never Played" discovery boost Œì√á√∂ surface new additions more aggressively
++                // 3. "Never Played" discovery boost G«ˆ surface new additions more aggressively
 +                bool neverPlayed = _historyService.GetTotalPlayCount(file.FilePath) == 0;
 +                if (neverPlayed && !recentPicks.Contains(file.FilePath)) {
 +                    score *= 1.4; // 40% boost for undiscovered videos
 +                }
 +
-+                // 4. Skip-rate penalty Œì√á√∂ demote videos that are consistently skipped
++                // 4. Skip-rate penalty G«ˆ demote videos that are consistently skipped
 +                double skipRate = _historyService.GetSkipRate(file.FilePath);
 +                if (skipRate > 0.6 && _historyService.GetTotalPlayCount(file.FilePath) >= 3) {
 +                    // Only apply if we have enough data (3+ plays) and skip rate is high
@@ -549,11 +549,11 @@ index 366da50..7888af4 100644
                      
                      // Most recent = 0.01 (99% penalty), oldest = 0.5 (50% penalty)
                      double penalty = 0.01 + (recency - 1) * 0.05;
-@@ -77,13 +118,15 @@ namespace GOON.Classes {
+@@ -77,13 +118,15 @@ namespace EdgeLoop.Classes {
                      }
                  }
  
--                // 4. Add Noise (‚î¨‚ñí10% instead of ‚î¨‚ñí5% for more variety)
+-                // 4. Add Noise (-¶10% instead of -¶5% for more variety)
 -                score *= (0.90 + _random.NextDouble() * 0.20);
 +                // Ensure score is positive for weighted selection
 +                score = Math.Max(score, 0.001);
@@ -568,7 +568,7 @@ index 366da50..7888af4 100644
                  }
              }
  
-@@ -92,22 +135,61 @@ namespace GOON.Classes {
+@@ -92,22 +135,61 @@ namespace EdgeLoop.Classes {
                  return (currentIndex + 1) % files.Length;
              }
  
@@ -577,7 +577,7 @@ index 366da50..7888af4 100644
 +            // --- WEIGHTED RANDOM SELECTION (softmax-style) ---
 +            // Instead of always picking the top scorer, use scores as probabilities.
 +            // Higher scores are proportionally more likely, but not guaranteed.
-+            // This eliminates the determinism problem where ‚î¨‚ñí10% noise was the only variety.
++            // This eliminates the determinism problem where -¶10% noise was the only variety.
 +            int selectedIndex = WeightedRandomSelect(candidates);
 +
              string selectedPath = files[selectedIndex]?.FilePath;
@@ -609,7 +609,7 @@ index 366da50..7888af4 100644
 +        /// <summary>
 +        /// Selects a candidate using weighted random selection (roulette wheel).
 +        /// Higher-scored candidates are proportionally more likely to be selected,
-+        /// but every candidate has a chance Œì√á√∂ producing genuine variety.
++        /// but every candidate has a chance G«ˆ producing genuine variety.
 +        /// </summary>
 +        private int WeightedRandomSelect(List<(int index, double score)> candidates) {
 +            double totalScore = candidates.Sum(c => c.score);
@@ -635,11 +635,11 @@ index 366da50..7888af4 100644
          
          /// <summary>
          /// Clears in-memory recent picks. Call when playlist changes.
-diff --git a/GOON/Classes/StandardHtmlFetcher.cs b/GOON/Classes/StandardHtmlFetcher.cs
+diff --git a/EdgeLoop/Classes/StandardHtmlFetcher.cs b/EdgeLoop/Classes/StandardHtmlFetcher.cs
 index ec9244f..ce57501 100644
---- a/GOON/Classes/StandardHtmlFetcher.cs
-+++ b/GOON/Classes/StandardHtmlFetcher.cs
-@@ -51,7 +51,7 @@ namespace GOON.Classes {
+--- a/EdgeLoop/Classes/StandardHtmlFetcher.cs
++++ b/EdgeLoop/Classes/StandardHtmlFetcher.cs
+@@ -51,7 +51,7 @@ namespace EdgeLoop.Classes {
                          var cookies = App.Settings.HypnotubeCookies.Trim();
                          if (cookies.Contains("=")) {
                              request.Headers.TryAddWithoutValidation("Cookie", cookies);
@@ -648,7 +648,7 @@ index ec9244f..ce57501 100644
                          }
                      }
  
-@@ -65,7 +65,7 @@ namespace GOON.Classes {
+@@ -65,7 +65,7 @@ namespace EdgeLoop.Classes {
                      if (url.Contains("hypnotube.com") && !string.IsNullOrEmpty(App.Settings?.HypnotubeCookies)) {
                          // Check for indicators of authenticated session (e.g., logout link, user profile)
                          var isAuthenticated = html.Contains("logout") || html.Contains("my_profile") || html.Contains("user-menu");
@@ -657,7 +657,7 @@ index ec9244f..ce57501 100644
                      }
                      
                      // Cache the result
-@@ -102,7 +102,7 @@ namespace GOON.Classes {
+@@ -102,7 +102,7 @@ namespace EdgeLoop.Classes {
                      // Add Hypnotube cookies if applicable
                      if (url.Contains("hypnotube.com") && App.Settings != null && !string.IsNullOrEmpty(App.Settings.HypnotubeCookies)) {
                          request.Headers.TryAddWithoutValidation("Cookie", App.Settings.HypnotubeCookies);
@@ -666,11 +666,11 @@ index ec9244f..ce57501 100644
                      }
  
                      
-diff --git a/GOON/Classes/StashPatternExtractor.cs b/GOON/Classes/StashPatternExtractor.cs
+diff --git a/EdgeLoop/Classes/StashPatternExtractor.cs b/EdgeLoop/Classes/StashPatternExtractor.cs
 index 9a78acf..75d5bfc 100644
---- a/GOON/Classes/StashPatternExtractor.cs
-+++ b/GOON/Classes/StashPatternExtractor.cs
-@@ -159,8 +159,10 @@ namespace GOON.Classes {
+--- a/EdgeLoop/Classes/StashPatternExtractor.cs
++++ b/EdgeLoop/Classes/StashPatternExtractor.cs
+@@ -159,8 +159,10 @@ namespace EdgeLoop.Classes {
                  @"\s*[""']?(\d+)[pP]?[""']?\s*:\s*[""']([^""']+)[""']" // Simple "720": "url" map
              };
  
@@ -682,11 +682,11 @@ index 9a78acf..75d5bfc 100644
                  foreach (Match match in matches) {
                      if (match.Success && match.Groups.Count >= 3) {
                          try {
-diff --git a/GOON/Classes/TelemetryService.cs b/GOON/Classes/TelemetryService.cs
+diff --git a/EdgeLoop/Classes/TelemetryService.cs b/EdgeLoop/Classes/TelemetryService.cs
 index 1ce55ab..7e5dbb6 100644
---- a/GOON/Classes/TelemetryService.cs
-+++ b/GOON/Classes/TelemetryService.cs
-@@ -24,7 +24,8 @@ namespace GOON.Classes {
+--- a/EdgeLoop/Classes/TelemetryService.cs
++++ b/EdgeLoop/Classes/TelemetryService.cs
+@@ -24,7 +24,8 @@ namespace EdgeLoop.Classes {
          private TelemetryData LoadTelemetry() {
              try {
                  if (File.Exists(_telemetryPath)) {
@@ -696,19 +696,19 @@ index 1ce55ab..7e5dbb6 100644
                      return JsonSerializer.Deserialize<TelemetryData>(json) ?? new TelemetryData();
                  }
              } catch (Exception ex) {
-diff --git a/GOON/Classes/UserSettings.cs b/GOON/Classes/UserSettings.cs
+diff --git a/EdgeLoop/Classes/UserSettings.cs b/EdgeLoop/Classes/UserSettings.cs
 index 3269919..aa35a24 100644
---- a/GOON/Classes/UserSettings.cs
-+++ b/GOON/Classes/UserSettings.cs
+--- a/EdgeLoop/Classes/UserSettings.cs
++++ b/EdgeLoop/Classes/UserSettings.cs
 @@ -1,6 +1,7 @@
  using System;
  using System.IO;
  using System.Text.Json;
 +using System.Text.Json.Serialization;
  
- namespace GOON.Classes {
+ namespace EdgeLoop.Classes {
      public enum ShuffleMode {
-@@ -21,9 +22,36 @@ namespace GOON.Classes {
+@@ -21,9 +22,36 @@ namespace EdgeLoop.Classes {
          public double DefaultOpacity { get; set; } = 0.9;
          public double DefaultVolume { get; set; } = 0.5;
          public string DefaultMonitorDeviceName { get; set; } = null;
@@ -747,7 +747,7 @@ index 3269919..aa35a24 100644
          
          
          // Panic hotkey configuration
-@@ -113,7 +141,8 @@ namespace GOON.Classes {
+@@ -113,7 +141,8 @@ namespace EdgeLoop.Classes {
                  }
  
                  if (File.Exists(SettingsFilePath)) {
@@ -757,7 +757,7 @@ index 3269919..aa35a24 100644
                      try {
                          var settings = JsonSerializer.Deserialize<UserSettings>(json) ?? new UserSettings();
                          
-@@ -303,7 +332,8 @@ namespace GOON.Classes {
+@@ -303,7 +332,8 @@ namespace EdgeLoop.Classes {
          public void LoadSession() {
              try {
                  if (File.Exists(SessionFilePath)) {
@@ -767,11 +767,11 @@ index 3269919..aa35a24 100644
                      CurrentSessionPlaylist = JsonSerializer.Deserialize<Playlist>(json) ?? new Playlist();
                      
                      // Migration logic
-diff --git a/GOON/Classes/VideoUrlExtractor.cs b/GOON/Classes/VideoUrlExtractor.cs
+diff --git a/EdgeLoop/Classes/VideoUrlExtractor.cs b/EdgeLoop/Classes/VideoUrlExtractor.cs
 index 14e5ea4..829c179 100644
---- a/GOON/Classes/VideoUrlExtractor.cs
-+++ b/GOON/Classes/VideoUrlExtractor.cs
-@@ -56,42 +56,50 @@ namespace GOON.Classes {
+--- a/EdgeLoop/Classes/VideoUrlExtractor.cs
++++ b/EdgeLoop/Classes/VideoUrlExtractor.cs
+@@ -56,42 +56,50 @@ namespace EdgeLoop.Classes {
              }
  
              try {
@@ -842,7 +842,7 @@ index 14e5ea4..829c179 100644
                  
                  if (videoUrl != null) {
                      PersistentUrlCache.Instance.Set(pageUrl, videoUrl);
-@@ -460,6 +468,8 @@ namespace GOON.Classes {
+@@ -460,6 +468,8 @@ namespace EdgeLoop.Classes {
              return null;
          }
  
@@ -851,7 +851,7 @@ index 14e5ea4..829c179 100644
          private string ExtractVideoFromHtml(string html, string baseUrl) {
              if (string.IsNullOrWhiteSpace(html)) return null;
  
-@@ -469,7 +479,7 @@ namespace GOON.Classes {
+@@ -469,7 +479,7 @@ namespace EdgeLoop.Classes {
                  // Method 1: Look for <video> tags with src attribute
                  Logger.Info("Trying Method 1: <video> tag with src attribute");
                  var videoSrcPattern = @"<video[^>]+src\s*=\s*[""']([^""']+)[""']";
@@ -860,7 +860,7 @@ index 14e5ea4..829c179 100644
                  if (match.Success && match.Groups.Count > 1) {
                      var videoUrl = match.Groups[1].Value;
                      var resolved = ResolveUrl(videoUrl, baseUrl);
-@@ -480,7 +490,7 @@ namespace GOON.Classes {
+@@ -480,7 +490,7 @@ namespace EdgeLoop.Classes {
                  // Method 2: Look for <source> tags within video elements
                  Logger.Info("Trying Method 2: <source> tags");
                  var sourcePattern = @"<source[^>]+src\s*=\s*[""']([^""']+)[""']";
@@ -869,7 +869,7 @@ index 14e5ea4..829c179 100644
                  Logger.Info($"Method 2: Found {sourceMatches.Count} <source> tags");
                  foreach (Match sourceMatch in sourceMatches) {
                      if (sourceMatch.Success && sourceMatch.Groups.Count > 1) {
-@@ -497,7 +507,7 @@ namespace GOON.Classes {
+@@ -497,7 +507,7 @@ namespace EdgeLoop.Classes {
                  // Method 3: Look for data-url or data-src attributes
                  Logger.Info("Trying Method 3: data attributes");
                  var dataUrlPattern = @"(?:data-url|data-src|data-video-src|data-config)\s*=\s*[""']([^""']+)[""']";
@@ -878,7 +878,7 @@ index 14e5ea4..829c179 100644
                  foreach (Match dataMatch in dataMatches) {
                      if (dataMatch.Success && dataMatch.Groups.Count > 1) {
                          var url = CleanExtractedUrl(dataMatch.Groups[1].Value);
-@@ -522,7 +532,7 @@ namespace GOON.Classes {
+@@ -522,7 +532,7 @@ namespace EdgeLoop.Classes {
                  var potentialUrls = new List<string>();
  
                  foreach (var pattern in jsVideoPatterns) {
@@ -887,7 +887,7 @@ index 14e5ea4..829c179 100644
                      Logger.Info($"Method 4: Pattern {pattern} found {jsMatches.Count} potential matches");
                      foreach (Match jsMatch in jsMatches) {
                          if (jsMatch.Success && jsMatch.Groups.Count > 1) {
-@@ -562,7 +572,7 @@ namespace GOON.Classes {
+@@ -562,7 +572,7 @@ namespace EdgeLoop.Classes {
                  // Method 5: Look for HLS streams (m3u8)
                  Logger.Info("Trying Method 5: HLS streams");
                  var hlsPattern = @"[""']([^""']+\.m3u8(?:[^""']*)?)[""']";
@@ -896,7 +896,7 @@ index 14e5ea4..829c179 100644
                  Logger.Info($"Method 5: Found {hlsMatches.Count} potential HLS streams");
                  foreach (Match hlsMatch in hlsMatches) {
                      if (hlsMatch.Success && hlsMatch.Groups.Count > 1) {
-@@ -576,7 +586,7 @@ namespace GOON.Classes {
+@@ -576,7 +586,7 @@ namespace EdgeLoop.Classes {
                  // Method 6: Look for Plyr source configuration
                  Logger.Info("Trying Method 6: Plyr configuration");
                  var plyrPattern = @"plyr_player\.source\s*=\s*\{[\s\S]*?sources\s*:\s*\[\s*\{\s*[""']?src[""']?\s*:\s*[""']([^""']+)[""']";
@@ -905,7 +905,7 @@ index 14e5ea4..829c179 100644
                  if (plyrMatch.Success && plyrMatch.Groups.Count > 1) {
                      var videoUrl = CleanExtractedUrl(plyrMatch.Groups[1].Value);
                      var resolved = ResolveUrl(videoUrl, baseUrl);
-@@ -624,7 +634,7 @@ namespace GOON.Classes {
+@@ -624,7 +634,7 @@ namespace EdgeLoop.Classes {
                  // Look for JSON-like structures that might contain video URLs
                  // This version is more lenient with whitespace and escaped characters
                  var jsonPattern = @"""(?:src|url|source|file|videoUrl)""\s*:\s*""([^""]+\.(?:mp4|webm|mkv|avi|mov|wmv|m4v|mpg|mpeg|ts|m2ts)[^""]*)""";
@@ -914,7 +914,7 @@ index 14e5ea4..829c179 100644
                  
                  foreach (Match match in matches) {
                      if (match.Success && match.Groups.Count > 1) {
-@@ -710,10 +720,39 @@ namespace GOON.Classes {
+@@ -710,10 +720,39 @@ namespace EdgeLoop.Classes {
  
              try {
                  var normalizedUrl = FileValidator.NormalizeUrl(pageUrl);
@@ -956,10 +956,10 @@ index 14e5ea4..829c179 100644
                  return ExtractTitleFromHtml(html, uri.Host);
              } catch (Exception ex) {
                  Logger.Warning($"Error extracting video title from {pageUrl}: {ex.Message}");
-diff --git a/GOON/Classes/YtDlpService.cs b/GOON/Classes/YtDlpService.cs
+diff --git a/EdgeLoop/Classes/YtDlpService.cs b/EdgeLoop/Classes/YtDlpService.cs
 index 63a40e7..0ce3bfc 100644
---- a/GOON/Classes/YtDlpService.cs
-+++ b/GOON/Classes/YtDlpService.cs
+--- a/EdgeLoop/Classes/YtDlpService.cs
++++ b/EdgeLoop/Classes/YtDlpService.cs
 @@ -1,10 +1,10 @@
  using System;
  using System.Collections.Generic;
@@ -972,7 +972,7 @@ index 63a40e7..0ce3bfc 100644
  using YoutubeDLSharp;
  using YoutubeDLSharp.Options;
  
-@@ -17,12 +17,15 @@ namespace GOON.Classes {
+@@ -17,12 +17,15 @@ namespace EdgeLoop.Classes {
          private readonly YoutubeDL _ytdl;
          private bool _isAvailable;
          private readonly string _ytDlpPath;
@@ -989,7 +989,7 @@ index 63a40e7..0ce3bfc 100644
                  Logger.Warning("yt-dlp.exe not found. Video extraction will fall back to scraping.");
                  _isAvailable = false;
                  return;
-@@ -33,6 +36,10 @@ namespace GOON.Classes {
+@@ -33,6 +36,10 @@ namespace EdgeLoop.Classes {
                  _ytdl.YoutubeDLPath = _ytDlpPath;
                  _ytdl.OutputFolder = Path.GetTempPath();
                  _isAvailable = true;
@@ -1000,7 +1000,7 @@ index 63a40e7..0ce3bfc 100644
                  Logger.Info($"yt-dlp service initialized: {_ytDlpPath}");
              } catch (Exception ex) {
                  Logger.Error("Failed to initialize yt-dlp service", ex);
-@@ -40,6 +47,11 @@ namespace GOON.Classes {
+@@ -40,6 +47,11 @@ namespace EdgeLoop.Classes {
              }
          }
  
@@ -1012,7 +1012,7 @@ index 63a40e7..0ce3bfc 100644
          public bool IsAvailable => _isAvailable;
  
          /// <summary>
-@@ -48,68 +60,95 @@ namespace GOON.Classes {
+@@ -48,68 +60,95 @@ namespace EdgeLoop.Classes {
          public async Task<string> GetBestVideoUrlAsync(string url, CancellationToken cancellationToken = default) {
              if (!_isAvailable) return null;
  
@@ -1082,7 +1082,7 @@ index 63a40e7..0ce3bfc 100644
 +                    Logger.Warning($"[yt-dlp] Extraction timed out after {ExtractionTimeout.TotalSeconds}s");
 +                    continue; // Retry on timeout
 +                } catch (OperationCanceledException) {
-+                    return null; // Caller cancelled Œì√á√∂ don't retry
++                    return null; // Caller cancelled G«ˆ don't retry
                  } catch (Exception ex) {
 -                    Logger.Warning($"[yt-dlp] Error setting up cookies: {ex.Message}");
 +                    Logger.Warning($"[yt-dlp] Exception during extraction (attempt {attempt}): {ex.Message}");
@@ -1155,7 +1155,7 @@ index 63a40e7..0ce3bfc 100644
          }
  
          /// <summary>
-@@ -118,10 +157,16 @@ namespace GOON.Classes {
+@@ -118,10 +157,16 @@ namespace EdgeLoop.Classes {
          public async Task<YtDlpVideoInfo> ExtractVideoInfoAsync(string url, CancellationToken cancellationToken = default) {
              if (!_isAvailable) return null;
  
@@ -1173,7 +1173,7 @@ index 63a40e7..0ce3bfc 100644
                  
                  if (!result.Success || result.Data == null) {
                      Logger.Warning($"[yt-dlp] Info extraction failed: {result.ErrorOutput?.FirstOrDefault()}");
-@@ -130,19 +175,115 @@ namespace GOON.Classes {
+@@ -130,19 +175,115 @@ namespace EdgeLoop.Classes {
  
                  var data = result.Data;
                  var info = new YtDlpVideoInfo {
@@ -1295,7 +1295,7 @@ index 63a40e7..0ce3bfc 100644
              }
          }
  
-@@ -246,6 +387,141 @@ namespace GOON.Classes {
+@@ -246,6 +387,141 @@ namespace EdgeLoop.Classes {
              }
          }
  
@@ -1407,7 +1407,7 @@ index 63a40e7..0ce3bfc 100644
 +                if (w != null || h != null || f != null) {
 +                    Logger.Info($"[yt-dlp] Quality Info: {w}x{h}, Format: {f}");
 +                }
-+            } catch { /* ignore quality logging errors Œì√á√∂ non-critical */ }
++            } catch { /* ignore quality logging errors G«ˆ non-critical */ }
 +        }
 +
 +        /// <summary>
@@ -1437,10 +1437,10 @@ index 63a40e7..0ce3bfc 100644
          public void Dispose() {
              // YoutubeDL doesn't require disposal
              _isAvailable = false;
-diff --git a/GOON/GOON.csproj b/GOON/GOON.csproj
+diff --git a/EdgeLoop/EdgeLoop.csproj b/EdgeLoop/EdgeLoop.csproj
 index d080a59..e4f24b0 100644
---- a/GOON/GOON.csproj
-+++ b/GOON/GOON.csproj
+--- a/EdgeLoop/EdgeLoop.csproj
++++ b/EdgeLoop/EdgeLoop.csproj
 @@ -58,6 +58,7 @@
  
    <ItemGroup>
@@ -1449,11 +1449,11 @@ index d080a59..e4f24b0 100644
      <PackageReference Include="YoutubeDLSharp" Version="1.2.0" />
    </ItemGroup>
  
-diff --git a/GOON/ViewModels/LauncherViewModel.cs b/GOON/ViewModels/LauncherViewModel.cs
+diff --git a/EdgeLoop/ViewModels/LauncherViewModel.cs b/EdgeLoop/ViewModels/LauncherViewModel.cs
 index 75ffa99..63ec79b 100644
---- a/GOON/ViewModels/LauncherViewModel.cs
-+++ b/GOON/ViewModels/LauncherViewModel.cs
-@@ -1348,6 +1348,10 @@ namespace GOON.ViewModels {
+--- a/EdgeLoop/ViewModels/LauncherViewModel.cs
++++ b/EdgeLoop/ViewModels/LauncherViewModel.cs
+@@ -1348,6 +1348,10 @@ namespace EdgeLoop.ViewModels {
              if (url.Contains("hypnotube.com") && !url.EndsWith(".m3u8")) {
                  return true;
              }
@@ -1464,10 +1464,10 @@ index 75ffa99..63ec79b 100644
              
              return false;
          }
-diff --git a/GOON/Windows/InputDialogWindow.xaml b/GOON/Windows/InputDialogWindow.xaml
+diff --git a/EdgeLoop/Windows/InputDialogWindow.xaml b/EdgeLoop/Windows/InputDialogWindow.xaml
 index eb51e1b..26c1ab8 100644
---- a/GOON/Windows/InputDialogWindow.xaml
-+++ b/GOON/Windows/InputDialogWindow.xaml
+--- a/EdgeLoop/Windows/InputDialogWindow.xaml
++++ b/EdgeLoop/Windows/InputDialogWindow.xaml
 @@ -93,7 +93,7 @@
                           Margin="0,0,0,12"
                           KeyDown="InputTextBox_KeyDown"
@@ -1541,5 +1541,7 @@ index 7f6c6be..92abeb6 100644
 +    }
 +}
  
--Write-Host "`nŒì¬£√† Dependencies updated in folder: $depsDir" -ForegroundColor Green
+-Write-Host "`nG£‡ Dependencies updated in folder: $depsDir" -ForegroundColor Green
 +Write-Host "`n`u{2705} Dependencies updated in folder: $depsDir" -ForegroundColor Green
+
+

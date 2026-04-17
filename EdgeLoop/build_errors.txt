@@ -1,0 +1,15 @@
+  Determining projects to restore...
+  All projects are up-to-date for restore.
+  FlyleafLib -> D:\Projects\EdgeLoop-Final\EdgeLoop\FlyleafLib\FlyleafLib\bin\Debug\net8.0-windows\FlyleafLib.dll
+  FlyleafLib.Controls.WPF -> D:\Projects\EdgeLoop-Final\EdgeLoop\FlyleafLib\FlyleafLib.Controls.WPF\bin\Debug\net8.0-windows\FlyleafLib.Controls.WPF.dll
+D:\Projects\EdgeLoop-Final\EdgeLoop\EdgeLoop\Classes\ShuffleScoringEngine.cs(32,64): error CS1061: 'VideoItem' does not contain a definition for 'Duration' and no accessible extension method 'Duration' accepting a first argument of type 'VideoItem' could be found (are you missing a using directive or an assembly reference?) [D:\Projects\EdgeLoop-Final\EdgeLoop\EdgeLoop\EdgeLoop_2gj3q5zo_wpftmp.csproj]
+
+Build FAILED.
+
+D:\Projects\EdgeLoop-Final\EdgeLoop\EdgeLoop\Classes\ShuffleScoringEngine.cs(32,64): error CS1061: 'VideoItem' does not contain a definition for 'Duration' and no accessible extension method 'Duration' accepting a first argument of type 'VideoItem' could be found (are you missing a using directive or an assembly reference?) [D:\Projects\EdgeLoop-Final\EdgeLoop\EdgeLoop\EdgeLoop_2gj3q5zo_wpftmp.csproj]
+    0 Warning(s)
+    1 Error(s)
+
+Time Elapsed 00:00:02.30
+
+

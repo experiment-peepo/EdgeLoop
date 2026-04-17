@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Windows.Data;
 
@@ -642,7 +642,7 @@ public class Config : NotifyPropertyChanged
             return video;
         }
 
-        internal Player player { get => _player; set { _player = value; vp = value != null ? value.Renderer : null; } }
+        internal Player player { get => _player; set { _player = value; vp = value?.Renderer; } }
         Player _player;
 
         /// <summary>
