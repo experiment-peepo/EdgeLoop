@@ -8,12 +8,12 @@ Please be respectful and professional in all interactions. EdgeLoop is a niche p
 ## 🚀 How Can I Contribute?
 
 ### Reporting Bugs
-*   Check the existing [Issues](https://github.com/vexfromdestiny/EdgeLoop/issues) first.
+*   Check the existing [Issues](https://github.com/experiment-peepo/EdgeLoop/issues) first.
 *   Use the **Bug Report** template.
 *   Include steps to reproduce, expected vs. actual behavior, and logs if possible.
 
 ### Suggesting Enhancements
-*   Submit an [Issue](https://github.com/vexfromdestiny/EdgeLoop/issues) with the tag `enhancement`.
+*   Submit an [Issue](https://github.com/experiment-peepo/EdgeLoop/issues) with the tag `enhancement`.
 *   Explain why this feature would be useful and how it should work.
 
 ### Pull Requests

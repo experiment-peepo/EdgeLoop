@@ -1,11 +1,8 @@
 # Security Policy
 
-## Supported Versions
+## Supported Releases
 
-| Version | Supported          |
-| ------- | ------------------ |
-| v1.1.x  | :white_check_mark: |
-| < v1.1  | :x:                |
+Active development on the `main` branch is supported.
 
 ## Reporting a Vulnerability
 

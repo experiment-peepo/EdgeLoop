@@ -1,6 +1,5 @@
 param(
-    [switch]$Update,
-    [switch]$Increment
+    [switch]$Update
 )
 
 $ErrorActionPreference = "Stop"
@@ -18,49 +17,15 @@ if (-not (Test-Path $projectFile)) {
     exit 1
 }
 
-# 1. Read and Increment Version
-Write-Host "Reading current version..." -ForegroundColor Cyan
-$content = Get-Content $projectFile -Raw
-$versionPattern = "(?<=<Version>)(.*?)(?=</Version>)"
+Write-Host "Starting Release Build..." -ForegroundColor Cyan
 
-if ($content -match $versionPattern) {
-    $currentVersionStr = $matches[0]
-    
-    if ($Increment) {
-        try {
-            $version = [Version]$currentVersionStr
-            $newVersion = [Version]::new($version.Major, $version.Minor, $version.Build + 1)
-            
-            Write-Host "Incrementing version: $currentVersionStr -> $newVersion" -ForegroundColor Green
-            
-            $newContent = $content -replace "<Version>.*?</Version>", "<Version>$newVersion</Version>"
-            Set-Content -Path $projectFile -Value $newContent -NoNewline
-        }
-        catch {
-            Write-Error "Failed to parse or increment version '$currentVersionStr'. Error: $_"
-            exit 1
-        }
-    }
-    else {
-        $newVersion = $currentVersionStr
-        Write-Host "Using current version: $newVersion" -ForegroundColor Green
-        Write-Host "Tip: Use -Increment to bump the version number." -ForegroundColor DarkGray
-    }
-}
-else {
-    Write-Error "Could not find <Version> tag in $projectFile"
-    exit 1
-}
-
-Write-Host "Starting Release Build v$newVersion..." -ForegroundColor Cyan
-
-# 2. Cleanup
+# 1. Cleanup
 if (Test-Path "publish") {
     Write-Host "Cleaning up previous publish directory..."
     Remove-Item "publish" -Recurse -Force
 }
 
-# 3. Build and Publish (Framework-dependent - works with WPF!)
+# 2. Build and Publish
 Write-Host "Building EdgeLoop project..." -ForegroundColor Yellow
 dotnet publish EdgeLoop\EdgeLoop.csproj `
     -c Release `
@@ -74,7 +39,7 @@ if ($LASTEXITCODE -ne 0) {
     exit 1
 }
 
-# 4. Copy Dependencies from local folder
+# 3. Copy Dependencies
 Write-Host "Copying External Dependencies..." -ForegroundColor Yellow
 
 if (-not (Test-Path "Dependencies\yt-dlp.exe")) {
@@ -83,44 +48,28 @@ if (-not (Test-Path "Dependencies\yt-dlp.exe")) {
 }
 
 Copy-Item "Dependencies\yt-dlp.exe" "publish\yt-dlp.exe" -Force
-Write-Host "Copied yt-dlp.exe from Dependencies"
-
 Copy-Item "README.txt" "publish\README.txt" -Force
-Write-Host "Copied README.txt to publish folder"
 
-# 5. Create Data Folder (Portable Mode)
-Write-Host "Creating Data folder for Portable Mode..." -ForegroundColor Yellow
+# 4. Create Data Folder
 New-Item -ItemType Directory -Force -Path "publish\Data" | Out-Null
 
-# 6. Verification
+# 5. Verification
 Write-Host "`nVerifying Artifacts..." -ForegroundColor Yellow
-
 $edgeExe = Get-ChildItem "publish/Ed*.exe" | Select-Object -First 1
-$ytDlp = Test-Path "publish/yt-dlp.exe"
 
-if ($edgeExe -and $ytDlp) {
-    Write-Host "SUCCESS! All artifacts present:" -ForegroundColor Green
-    Get-ChildItem "publish" -Filter "*.exe" | ForEach-Object { 
-        Write-Host "$($_.Name) - $([math]::Round($_.Length/1MB, 2)) MB" 
-    }
+if ($edgeExe) {
+    Write-Host "SUCCESS! Artifacts present." -ForegroundColor Green
 
-    # 7. Final Cleanup (Ensure no XML/PDB/Log files leaked into publish)
-    Write-Host "`nCleaning up any transient files..." -ForegroundColor Yellow
+    # 6. Final Cleanup
     Get-ChildItem "publish" -Recurse -Include *.xml, *.pdb, *.log, *.obj | Remove-Item -Force
 
-    Write-Host "`nNote: This is a framework-dependent build." -ForegroundColor Cyan
-    Write-Host "Users need .NET 10 Runtime installed: https://dotnet.microsoft.com/download/dotnet/10.0" -ForegroundColor Cyan
-
-    # 8. Create Zip Package
-    Write-Host "`n[8] Creating EdgeLoop.zip package (Optimal Compression)..." -ForegroundColor Yellow
+    # 7. Create Zip Package
+    Write-Host "`n[7] Creating EdgeLoop.zip package..." -ForegroundColor Yellow
     if (Test-Path "EdgeLoop.zip") { Remove-Item "EdgeLoop.zip" -Force }
-    
-    # Use Compress-Archive with Optimal level
     Compress-Archive -Path "publish\*" -DestinationPath "$PSScriptRoot\EdgeLoop.zip" -CompressionLevel Optimal
     
-    $zipSize = [math]::Round((Get-Item "EdgeLoop.zip").Length / 1MB, 2)
-    Write-Host "`n✅ SUCCESS! Created EdgeLoop.zip ($zipSize MB) for version $newVersion" -ForegroundColor Green
+    Write-Host "`n✅ SUCCESS! Created EdgeLoop.zip" -ForegroundColor Green
 }
 else {
-    Write-Error "Verification Failed! Missing files."
+    Write-Error "Verification Failed!"
 }
