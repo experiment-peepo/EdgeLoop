@@ -4,8 +4,6 @@
 
 ---
 
-![EDGELOOP UI](assets/screenshot.png)
-
 ## 🚀 Key Features
 
 ### 🖥️ Advanced Multi-Monitor Management
