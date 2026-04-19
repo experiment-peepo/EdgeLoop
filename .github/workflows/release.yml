@@ -24,7 +24,7 @@ jobs:
         dotnet-version: '10.0.x'
         
     - name: Restore dependencies
-      run: dotnet restore GOON.sln
+      run: dotnet restore EdgeLoop.sln
 
     - name: Generate Version
       id: git_version
@@ -60,11 +60,11 @@ jobs:
     - name: Update Project Version
       run: |
         $version = "${{ steps.git_version.outputs.version }}"
-        $projectFile = "GOON\GOON.csproj"
+        $projectFile = "EdgeLoop\EdgeLoop.csproj"
         $content = Get-Content $projectFile -Raw
         $newContent = $content -replace "<Version>.*?</Version>", "<Version>$version</Version>"
         Set-Content -Path $projectFile -Value $newContent
-        Write-Host "Updated GOON.csproj version to $version"
+        Write-Host "Updated EdgeLoop.csproj version to $version"
       shell: pwsh
       
     - name: Download External Dependencies (yt-dlp & ffmpeg)
@@ -107,7 +107,7 @@ jobs:
       
     - name: Build and Publish
       run: |
-        dotnet publish GOON\GOON.csproj `
+        dotnet publish EdgeLoop\EdgeLoop.csproj `
           -c Release `
           -r win-x64 `
           --self-contained false `
@@ -118,9 +118,9 @@ jobs:
       
     - name: Verify executable exists
       run: |
-        $exePath = Get-ChildItem "publish/GO*.exe" | Select-Object -First 1
+        $exePath = Get-ChildItem "publish/EdgeLoop.exe" | Select-Object -First 1
         if (-not $exePath) {
-          Write-Error "GOON.exe not found in publish directory"
+          Write-Error "EdgeLoop.exe not found in publish directory"
           exit 1
         }
         if (-not (Test-Path "publish/yt-dlp.exe")) {
@@ -144,33 +144,33 @@ jobs:
       
     - name: Create Zip Package
       run: |
-        Compress-Archive -Path "publish/*" -DestinationPath "GOON.zip" -CompressionLevel Optimal
+        Compress-Archive -Path "publish/*" -DestinationPath "EdgeLoop.zip" -CompressionLevel Optimal
       shell: pwsh
 
     - name: Create Release
       if: github.ref_type == 'tag'
       uses: ncipollo/release-action@v1
       with:
-        artifacts: "GOON.zip"
+        artifacts: "EdgeLoop.zip"
         tag: ${{ github.ref_name }}
         name: ${{ steps.git_version.outputs.is_prerelease == 'true' && 'Beta Release ' || 'Release ' }}${{ github.ref_name }}
         body: |
-          ## GOON ${{ steps.git_version.outputs.is_prerelease == 'true' && 'Beta ' || '' }}Release ${{ steps.git_version.outputs.version }}
+          ## EdgeLoop ${{ steps.git_version.outputs.is_prerelease == 'true' && 'Beta ' || '' }}Release ${{ steps.git_version.outputs.version }}
           
           ### Changes
-          - 🚀 **New Name**: Application is now **GOON**.
+          - 🚀 **New Name**: Application is now **EdgeLoop**.
           - 🎨 **UI Polish**: Updated "Cyber Luxe" aesthetic with SVG icons and consistent styling.
           - 🧹 **Clean Workspace**: Optimized project structure and fixed release build.
           - 📦 **Zip Package**: Standard portable distribution including all dependencies.
           
           ### Installation
-          1. Download `GOON.zip` from the assets below.
+          1. Download `EdgeLoop.zip` from the assets below.
           2. Extract the contents to a folder.
-          3. Run `GOON.exe`.
+          3. Run `EdgeLoop.exe`.
           
           ### System Requirements
           - Windows x64
-          - .NET 8 Runtime required (Framework-dependent build)
+          - .NET 10 Desktop Runtime required (Framework-dependent build)
         draft: false
         prerelease: ${{ steps.git_version.outputs.is_prerelease == 'true' }}
         allowUpdates: true

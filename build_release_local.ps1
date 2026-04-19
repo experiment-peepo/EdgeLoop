@@ -11,7 +11,7 @@ if ($Update) {
 }
 
 # Path to Project File
-$projectFile = Join-Path $PSScriptRoot "GOON\GOON.csproj"
+$projectFile = Join-Path $PSScriptRoot "EdgeLoop\EdgeLoop.csproj"
 
 if (-not (Test-Path $projectFile)) {
     Write-Error "Project file not found at $projectFile"
@@ -61,8 +61,8 @@ if (Test-Path "publish") {
 }
 
 # 3. Build and Publish (Framework-dependent - works with WPF!)
-Write-Host "Building GOON project..." -ForegroundColor Yellow
-dotnet publish GOON\GOON.csproj `
+Write-Host "Building EdgeLoop project..." -ForegroundColor Yellow
+dotnet publish EdgeLoop\EdgeLoop.csproj `
     -c Release `
     -r win-x64 `
     --self-contained false `
@@ -77,14 +77,10 @@ if ($LASTEXITCODE -ne 0) {
 # 4. Copy Dependencies from local folder
 Write-Host "Copying External Dependencies..." -ForegroundColor Yellow
 
-
-
 if (-not (Test-Path "Dependencies\yt-dlp.exe")) {
     Write-Error "yt-dlp.exe not found in Dependencies folder!"
     exit 1
 }
-
-
 
 Copy-Item "Dependencies\yt-dlp.exe" "publish\yt-dlp.exe" -Force
 Write-Host "Copied yt-dlp.exe from Dependencies"
@@ -99,11 +95,10 @@ New-Item -ItemType Directory -Force -Path "publish\Data" | Out-Null
 # 6. Verification
 Write-Host "`nVerifying Artifacts..." -ForegroundColor Yellow
 
-$goonExe = Get-ChildItem "publish/GO*.exe" | Select-Object -First 1
+$edgeExe = Get-ChildItem "publish/Ed*.exe" | Select-Object -First 1
 $ytDlp = Test-Path "publish/yt-dlp.exe"
 
-
-if ($goonExe -and $ytDlp) {
+if ($edgeExe -and $ytDlp) {
     Write-Host "SUCCESS! All artifacts present:" -ForegroundColor Green
     Get-ChildItem "publish" -Filter "*.exe" | ForEach-Object { 
         Write-Host "$($_.Name) - $([math]::Round($_.Length/1MB, 2)) MB" 
@@ -117,14 +112,14 @@ if ($goonExe -and $ytDlp) {
     Write-Host "Users need .NET 10 Runtime installed: https://dotnet.microsoft.com/download/dotnet/10.0" -ForegroundColor Cyan
 
     # 8. Create Zip Package
-    Write-Host "`n[8] Creating GOON.zip package (Optimal Compression)..." -ForegroundColor Yellow
-    if (Test-Path "GOON.zip") { Remove-Item "GOON.zip" -Force }
+    Write-Host "`n[8] Creating EdgeLoop.zip package (Optimal Compression)..." -ForegroundColor Yellow
+    if (Test-Path "EdgeLoop.zip") { Remove-Item "EdgeLoop.zip" -Force }
     
     # Use Compress-Archive with Optimal level
-    Compress-Archive -Path "publish\*" -DestinationPath "$PSScriptRoot\GOON.zip" -CompressionLevel Optimal
+    Compress-Archive -Path "publish\*" -DestinationPath "$PSScriptRoot\EdgeLoop.zip" -CompressionLevel Optimal
     
-    $zipSize = [math]::Round((Get-Item "GOON.zip").Length / 1MB, 2)
-    Write-Host "`n✅ SUCCESS! Created GOON.zip ($zipSize MB) for version $newVersion" -ForegroundColor Green
+    $zipSize = [math]::Round((Get-Item "EdgeLoop.zip").Length / 1MB, 2)
+    Write-Host "`n✅ SUCCESS! Created EdgeLoop.zip ($zipSize MB) for version $newVersion" -ForegroundColor Green
 }
 else {
     Write-Error "Verification Failed! Missing files."
