@@ -76,8 +76,8 @@ namespace EdgeLoop.Classes {
         private void MasterSyncTimer_Tick(object sender, EventArgs e) {
             // ... (Existing sync logic) ...
             
-            // Auto-save session state every 5 seconds
-            if ((DateTime.Now - _lastSessionSave).TotalSeconds > 5) {
+            // Auto-save session state every 30 seconds
+            if ((DateTime.Now - _lastSessionSave).TotalSeconds > 30) {
                 SaveSessionState();
                 _lastSessionSave = DateTime.Now;
             }

@@ -1,4 +1,4 @@
-# 🌌 EdgeLoop
+# 🌌 EdgeLoop v1.0
 
 **EdgeLoop** is a high-performance video engine designed for multi-monitor setups. Built on a custom fork of `Flyleaf`, it provides seamless, transparent overlays directly on your desktop.
 

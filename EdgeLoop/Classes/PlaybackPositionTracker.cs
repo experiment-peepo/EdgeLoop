@@ -45,7 +45,7 @@ namespace EdgeLoop.Classes {
              try {
                 if (System.Windows.Application.Current != null) {
                     _saveTimer = new System.Windows.Threading.DispatcherTimer();
-                    _saveTimer.Interval = TimeSpan.FromSeconds(2);
+                    _saveTimer.Interval = TimeSpan.FromSeconds(30);
                     _saveTimer.Tick += async (s, e) => await SaveAsync();
                     _saveTimer.Start();
                 }

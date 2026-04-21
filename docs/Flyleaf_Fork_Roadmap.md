@@ -7,9 +7,9 @@ Transform Flyleaf from a "Standalone Player" into a "Pluggable Graphics Engine".
 
 ## Compatibility Verification
 > [!NOTE]
-> **.NET 8 Support:** Flyleaf natively targets `.net8.0-windows`. This matches modern architectures, ensuring seamless integration without legacy interop layers.
+> **.NET 10 Support:** Flyleaf natively targets `.net10.0-windows`. This matches modern architectures, ensuring seamless integration without legacy interop layers.
 >
-> **Dependencies:** The project uses **Vortice.Windows** (v3.7+) for DirectX 11, which is the modern, .NET 8-friendly successor to SharpDX. All other dependencies (MaterialDesign, FFmpeg bindings) are up-to-date for .NET 8.
+> **Dependencies:** The project uses **Vortice.Windows** (v3.7+) for DirectX 11, which is the modern, .NET 10-friendly successor to SharpDX. All other dependencies (MaterialDesign, FFmpeg bindings) are up-to-date for .NET 10.
 
 ## Proposed Changes
 

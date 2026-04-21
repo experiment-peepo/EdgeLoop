@@ -1,5 +1,5 @@
-EdgeLoop
-========
+EdgeLoop v1.0
+==============
 
 A specialized video player designed for multi-monitor playback with high-performance overlay capabilities.
 
@@ -14,7 +14,7 @@ KEY CAPABILITIES
 * Multi-Monitor Support: Assign different videos to specific screens or play across "All Monitors".
 * Overlay Mode: High-performance transparent overlays that play directly on your desktop.
 * Truly Portable: Stores all settings, logs, and sessions in a local 'Data' folder if write access is available.
-* Web Integration: Stream directly from supported sites using integrated yt-dlp support.
+* Web Integration: Stream directly from supported sites (Rule34Video, Hypnotube, etc.) using integrated yt-dlp support.
 * Smart Buffering: Automatically downloads high-res videos to disk for instant, stutter-free playback.
 * Privacy Focused: "Boss Key" features to instantly hide or minimize players.
 

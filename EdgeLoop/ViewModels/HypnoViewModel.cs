@@ -228,8 +228,8 @@ namespace EdgeLoop.ViewModels {
 
             // Increase buffering to prevent stutters on high-resolution/high-bitrate videos
             // 1 second = 10,000,000 ticks (100ns units)
-            // Tuned for responsiveness: 1.5s total buffer.
-            Config.Demuxer.BufferDuration = 15000000; 
+            // Tuned for responsiveness: 5s total buffer to handle 4K 100Mbps peaks.
+            Config.Demuxer.BufferDuration = 50000000; 
 
             // Inject AI Super Resolution setting
             Config.Video.SuperResolution = App.Settings?.EnableSuperResolution ?? false;
@@ -240,13 +240,14 @@ namespace EdgeLoop.ViewModels {
             // Set FFmpeg options via dictionary (properties do not exist on class)
             if (Config.Demuxer.FormatOpt == null) Config.Demuxer.FormatOpt = new Dictionary<string, string>();
             
-            Config.Demuxer.FormatOpt["analyzeduration"] = "3000000"; // 3s for more reliable HLS probing
-            Config.Demuxer.FormatOpt["probesize"] = "2000000";       // 2MB
+            Config.Demuxer.FormatOpt["analyzeduration"] = "5000000"; // 5s for more reliable 4K/HLS probing
+            Config.Demuxer.FormatOpt["probesize"] = "10000000";      // 10MB for 4K headers
+            Config.Demuxer.FormatOpt["discardcorrupt"] = "1";       // Prevent stalling on minor stream errors
             Config.Demuxer.FormatOpt["reconnect"] = "1";
             Config.Demuxer.FormatOpt["reconnect_streamed"] = "1";
             Config.Demuxer.FormatOpt["reconnect_delay_max"] = "5";
-            Config.Demuxer.FormatOpt["seg_max_retry"] = "10";       // Help with HLS segment failures
-            Config.Demuxer.FormatOpt["http_persistent"] = "1";      // Keep connections alive
+            Config.Demuxer.FormatOpt["seg_max_retry"] = "10";
+            Config.Demuxer.FormatOpt["http_persistent"] = "1";
 
             // Re-enabling Video Acceleration as requested
             Config.Video.VideoAcceleration = true;
