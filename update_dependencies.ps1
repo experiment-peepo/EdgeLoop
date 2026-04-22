@@ -57,4 +57,35 @@ try {
     }
 }
 
+# 2. Download and Extract FFmpeg
+$ffmpegPath = Join-Path $depsDir "ffmpeg.exe"
+$ffmpegZip = Join-Path $depsDir "ffmpeg.zip"
+$ffmpegTempDir = Join-Path $depsDir "ffmpeg_temp"
+$ffmpegUrl = "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip"
+
+Write-Host "`nFetching latest FFmpeg..." -ForegroundColor Yellow
+try {
+    Invoke-WebRequest -Uri $ffmpegUrl -OutFile $ffmpegZip -UserAgent "Mozilla/5.0" -TimeoutSec 120
+    
+    if (Test-Path $ffmpegTempDir) { Remove-Item $ffmpegTempDir -Recurse -Force }
+    New-Item -ItemType Directory -Path $ffmpegTempDir | Out-Null
+    
+    Write-Host "Extracting FFmpeg..." -ForegroundColor Gray
+    Expand-Archive -Path $ffmpegZip -DestinationPath $ffmpegTempDir -Force
+    
+    $extractedExe = Get-ChildItem -Path $ffmpegTempDir -Filter "ffmpeg.exe" -Recurse | Select-Object -First 1
+    if ($extractedExe) {
+        Move-Item -Path $extractedExe.FullName -Destination $ffmpegPath -Force
+        Write-Host "FFmpeg updated successfully." -ForegroundColor Green
+    } else {
+        throw "ffmpeg.exe not found in downloaded archive."
+    }
+} catch {
+    Write-Host "ERROR: Failed to update FFmpeg: $_" -ForegroundColor Red
+} finally {
+    # Cleanup
+    if (Test-Path $ffmpegZip) { Remove-Item $ffmpegZip -Force }
+    if (Test-Path $ffmpegTempDir) { Remove-Item $ffmpegTempDir -Recurse -Force }
+}
+
 Write-Host "`n`u{2705} Dependencies updated in folder: $depsDir" -ForegroundColor Green
