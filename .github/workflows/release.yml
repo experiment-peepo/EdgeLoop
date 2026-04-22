@@ -114,6 +114,10 @@ jobs:
           --self-contained false `
           -p:PublishSingleFile=false `
           -o publish
+        
+        # Ensure update_dependencies.bat is included
+        New-Item -ItemType Directory -Force -Path "publish/Dependencies"
+        Copy-Item "Dependencies/update_dependencies.bat" "publish/Dependencies/" -Force
 
 
       
@@ -132,9 +136,13 @@ jobs:
             Write-Error "ffmpeg.exe not found in publish directory"
             exit 1
         }
+        if (-not (Test-Path "publish/Dependencies/update_dependencies.bat")) {
+            Write-Error "update_dependencies.bat not found in publish directory"
+            exit 1
+        }
         $fileSize = $exePath.Length
         Write-Host "Executable found: $($exePath.Name) ($fileSize bytes)"
-        Write-Host "Dependencies verified: yt-dlp.exe, ffmpeg.exe"
+        Write-Host "Dependencies verified: yt-dlp.exe, ffmpeg.exe, update_dependencies.bat"
       shell: pwsh
       
     - name: Create Data Folder and Add README

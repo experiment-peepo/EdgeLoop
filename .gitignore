@@ -9,8 +9,8 @@ publish_test/
 # Dependencies
 Dependencies/*
 !Dependencies/yt-dlp.exe
-!Dependencies/update_ytdlp.bat
-!Dependencies/update_ytdlp.ps1
+!Dependencies/update_dependencies.bat
+!Dependencies/update_dependencies.ps1
 test_deps/
 *.user
 
