@@ -21,7 +21,8 @@ KEY CAPABILITIES
 QUICK START
 -----------
 1. Install the .NET 10 Desktop Runtime (linked above).
-2. Extract the contents of this zip to a folder.
+2. Purchase and download the software from: https://psi-conaut.itch.io/edgeloop
+3. Extract the contents of this zip to a folder.
 3. Run EdgeLoop.exe.
 4. Drag and drop videos or paste URLs to get started.
 
@@ -33,4 +34,6 @@ KNOWN NOTES
 
 
 ---
-Support the development on Ko-fi: https://ko-fi.com/vexfromdestiny
+Support the development:
+- Patreon: https://www.patreon.com/cw/vexfromdestiny
+- Ko-fi: https://ko-fi.com/vexfromdestiny

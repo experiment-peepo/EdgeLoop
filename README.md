@@ -32,7 +32,7 @@
 ## 📦 Installation & Setup
 
 1.  **Requirements**: Ensure the [.NET 10 Desktop Runtime](https://dotnet.microsoft.com/download/dotnet/10.0-windows-desktop-runtime) is installed.
-2.  **Download**: Get the latest bundle from the [Releases](https://github.com/experiment-peepo/EdgeLoop/releases) page.
+2.  **Download**: Purchase and download the latest bundle from [itch.io](https://psi-conaut.itch.io/edgeloop). This is the only official way to purchase the software.
 3.  **Run**: Extract and launch `EdgeLoop.exe`.
 
 ### Site Authentication
@@ -49,4 +49,4 @@ For sites that require sessions:
 Distributed under the **GPL-3.0 License**. See `LICENSE` for more information.
 
 ---
-*Support the development on [Ko-fi](https://ko-fi.com/vexfromdestiny)*
+*Support the development on [Patreon](https://www.patreon.com/cw/vexfromdestiny) or [Ko-fi](https://ko-fi.com/vexfromdestiny)*
