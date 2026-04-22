@@ -378,6 +378,13 @@ namespace EdgeLoop.Classes {
                 if (jsonLdMatch.Success && jsonLdMatch.Groups.Count > 1) {
                     var hlsUrl = CleanExtractedUrl(jsonLdMatch.Groups[1].Value);
                     Logger.Info($"PMVHaven: Found HLS URL in JSON-LD: {hlsUrl}");
+                    
+                    if (!hlsUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase) && !hlsUrl.StartsWith("//", StringComparison.OrdinalIgnoreCase)) {
+                        var absolute = "https://video.pmvhaven.com/" + hlsUrl.TrimStart('/');
+                        Logger.Info($"PMVHaven: Resolved relative JSON-LD URL to CDN: {absolute}");
+                        return absolute;
+                    }
+                    
                     return ResolveUrl(hlsUrl, url);
                 }
 
@@ -390,6 +397,13 @@ namespace EdgeLoop.Classes {
                         // Filter out common false positives if necessary, but m3u8 is usually good
                          if (!hlsUrl.Contains("preview", StringComparison.OrdinalIgnoreCase)) {
                              Logger.Info($"PMVHaven: Found HLS URL in HTML: {hlsUrl}");
+                             
+                             if (!hlsUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase) && !hlsUrl.StartsWith("//", StringComparison.OrdinalIgnoreCase)) {
+                                 var absolute = "https://video.pmvhaven.com/" + hlsUrl.TrimStart('/');
+                                 Logger.Info($"PMVHaven: Resolved relative HLS URL to CDN: {absolute}");
+                                 return absolute;
+                             }
+                             
                              return ResolveUrl(hlsUrl, url);
                          }
                      }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
@@ -267,7 +267,13 @@ namespace EdgeLoop.ViewModels {
         private void RefreshScreens() {
             // Use cached screens if available and recent
             if (_cachedScreens != null && DateTime.Now - _screensCacheTime < ScreenCacheTimeout) {
+                // If we already have screens and they match one-to-one, don't clear (preserves selection better)
+                if (AvailableScreens.Count > 0 && AvailableScreens.Skip(1).Select(s => s.DeviceName).SequenceEqual(_cachedScreens.Select(s => s.DeviceName))) {
+                    return;
+                }
+                
                 AvailableScreens.Clear();
+                AvailableScreens.Add(ScreenViewer.CreateAllScreens());
                 foreach (var s in _cachedScreens) {
                     AvailableScreens.Add(s);
                 }
@@ -276,6 +282,16 @@ namespace EdgeLoop.ViewModels {
 
             try {
                 var screens = WindowServices.GetAllScreenViewers();
+                
+                // Store existing assignments by device name to restore them after refresh
+                // Use a loop to handle potential duplicates in AddedFiles safely
+                var assignments = new Dictionary<VideoItem, string>();
+                foreach (var f in AddedFiles) {
+                    if (f != null && f.AssignedScreen != null) {
+                        assignments[f] = f.AssignedScreen.DeviceName;
+                    }
+                }
+
                 _cachedScreens = screens;
                 _screensCacheTime = DateTime.Now;
                 
@@ -286,20 +302,32 @@ namespace EdgeLoop.ViewModels {
                     AvailableScreens.Add(s);
                 }
                 
+                // Restore assignments
+                foreach (var f in AddedFiles) {
+                    if (assignments.TryGetValue(f, out var deviceName)) {
+                        var newScreen = AvailableScreens.FirstOrDefault(s => s.DeviceName == deviceName);
+                        if (newScreen != null) {
+                            f.AssignedScreen = newScreen;
+                        }
+                    }
+                }
+                
                 // Ensure we have at least one screen
-                if (AvailableScreens.Count == 0) {
-                    Logger.Warning("No screens detected, using default screen");
+                if (AvailableScreens.Count <= 1) { // 1 because of "All Monitors"
+                    Logger.Warning("No real screens detected, using default screen");
                     SetStatusMessage("Warning: No screens detected. Using default screen.", StatusMessageType.Warning);
-                    // Add a default screen
+                    
                     var defaultScreen = System.Windows.Forms.Screen.PrimaryScreen ?? System.Windows.Forms.Screen.AllScreens.FirstOrDefault();
                     if (defaultScreen != null) {
                         var defaultViewer = new ScreenViewer(defaultScreen);
-                        AvailableScreens.Add(defaultViewer);
-                        _cachedScreens = new List<ScreenViewer> { defaultViewer };
+                        if (!AvailableScreens.Any(s => s.DeviceName == defaultViewer.DeviceName)) {
+                            AvailableScreens.Add(defaultViewer);
+                            _cachedScreens = new List<ScreenViewer> { defaultViewer };
+                        }
                     }
                 }
             } catch (Exception ex) {
-                Logger.Error("Error refreshing screens", ex);
+                Logger.Error("Failed to refresh screens", ex);
                 SetStatusMessage($"Error refreshing screens: {ex.Message}", StatusMessageType.Error);
                 // Add a fallback screen
                 try {
@@ -361,8 +389,7 @@ namespace EdgeLoop.ViewModels {
             SetStatusMessage(null);
 
             try {
-                var selectedItems = parameter as System.Collections.IList;
-                var (assignments, isAllMonitors) = BuildAssignmentsFromSelection(selectedItems);
+                var (assignments, isAllMonitors) = BuildAssignments();
                 
                 // Handle null assignments from BuildAssignmentsFromSelection
                 if (assignments == null) {
@@ -404,13 +431,8 @@ namespace EdgeLoop.ViewModels {
             await App.VideoService.PlayPerMonitorAsync(assignments, showGroupControl, null, _cancellationTokenSource.Token).ConfigureAwait(false);
         }
 
-        private (Dictionary<ScreenViewer, IEnumerable<VideoItem>> Assignments, bool HasAllMonitors) BuildAssignmentsFromSelection(System.Collections.IList selectedItems) {
-            var selectedFiles = new List<VideoItem>();
-            if (selectedItems != null && selectedItems.Count > 0) {
-                foreach (VideoItem f in selectedItems) selectedFiles.Add(f);
-            } else {
-                foreach (var f in AddedFiles) selectedFiles.Add(f);
-            }
+        private (Dictionary<ScreenViewer, IEnumerable<VideoItem>> Assignments, bool HasAllMonitors) BuildAssignments() {
+            var selectedFiles = AddedFiles.ToList();
 
             if (selectedFiles.Count < 1) return (null, false);
 

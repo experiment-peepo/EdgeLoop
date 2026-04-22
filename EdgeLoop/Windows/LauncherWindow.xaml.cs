@@ -176,15 +176,22 @@ namespace EdgeLoop.Windows {
             var settings = App.Settings;
             if (settings == null) return;
 
-            if (settings.LauncherWindowTop != -1) {
-                this.Top = settings.LauncherWindowTop;
-                this.Left = settings.LauncherWindowLeft;
-                this.Width = settings.LauncherWindowWidth;
-                this.Height = settings.LauncherWindowHeight;
+            try {
+                if (settings.LauncherWindowTop != -1 && 
+                    double.IsFinite(settings.LauncherWindowTop) && 
+                    double.IsFinite(settings.LauncherWindowLeft)) {
+                    
+                    this.Top = settings.LauncherWindowTop;
+                    this.Left = settings.LauncherWindowLeft;
+                    this.Width = settings.LauncherWindowWidth;
+                    this.Height = settings.LauncherWindowHeight;
 
-                // Ensure window is on screen
-                if (this.Top < 0) this.Top = 0;
-                if (this.Left < 0) this.Left = 0;
+                    // Ensure window is on screen
+                    if (this.Top < 0) this.Top = 0;
+                    if (this.Left < 0) this.Left = 0;
+                }
+            } catch (Exception ex) {
+                Logger.Warning("Failed to load window bounds from settings, using defaults.", ex);
             }
         }
 

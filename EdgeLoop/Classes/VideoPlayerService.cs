@@ -302,6 +302,7 @@ namespace EdgeLoop.Classes {
             }
 
             if (this.IsPlaying) {
+                PowerManagement.SuppressSleep();
                 _masterSyncTimer.Start();
             }
         }
@@ -360,6 +361,7 @@ namespace EdgeLoop.Classes {
             _masterSyncTimer?.Stop();
             _sharedClock.Pause();
             _sharedClock.Reset();
+            PowerManagement.AllowSleep();
 
             // SESSION RESUME: Immediate save of positions when session ends
             PlaybackPositionTracker.Instance.SaveSync();
@@ -415,6 +417,7 @@ namespace EdgeLoop.Classes {
 
                 if (players.Count == 0) {
                     _masterSyncTimer.Stop();
+                    PowerManagement.AllowSleep();
                     Logger.Info("[VideoPlayerService] Last player removed, stopped sync timer.");
                 }
             }
@@ -596,6 +599,7 @@ namespace EdgeLoop.Classes {
                 }
 
                 if (this.IsPlaying) {
+                    PowerManagement.SuppressSleep();
                     _masterSyncTimer.Start();
                 }
             } catch (OperationCanceledException) {

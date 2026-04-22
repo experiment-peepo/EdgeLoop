@@ -144,7 +144,7 @@ namespace EdgeLoop.Classes {
                     string json = SafeFileReader.ReadAllTextSafe(SettingsFilePath);
                     if (string.IsNullOrEmpty(json)) return new UserSettings();
                     try {
-                        var settings = JsonSerializer.Deserialize<UserSettings>(json) ?? new UserSettings();
+                        var settings = JsonSerializer.Deserialize<UserSettings>(json, _jsonOptions) ?? new UserSettings();
                         
                         // Migration logic
                         if (settings.SettingsVersion < 1) {
@@ -216,11 +216,11 @@ namespace EdgeLoop.Classes {
             if (double.IsNaN(ShuffleVarietyWeight) || double.IsInfinity(ShuffleVarietyWeight)) { ShuffleVarietyWeight = 0.2; valuesCorrected = true; }
             if (double.IsNaN(ShuffleLengthWeight) || double.IsInfinity(ShuffleLengthWeight)) { ShuffleLengthWeight = 0.2; valuesCorrected = true; }
 
-            // Ensure window dimensions are valid
-            if (double.IsNaN(LauncherWindowWidth) || LauncherWindowWidth <= 100) { LauncherWindowWidth = 700; valuesCorrected = true; }
-            if (double.IsNaN(LauncherWindowHeight) || LauncherWindowHeight <= 100) { LauncherWindowHeight = 750; valuesCorrected = true; }
-            if (double.IsNaN(LauncherWindowTop)) { LauncherWindowTop = -1; valuesCorrected = true; }
-            if (double.IsNaN(LauncherWindowLeft)) { LauncherWindowLeft = -1; valuesCorrected = true; }
+            // Ensure window dimensions are valid and finite
+            if (!double.IsFinite(LauncherWindowWidth) || LauncherWindowWidth <= 100) { LauncherWindowWidth = 700; valuesCorrected = true; }
+            if (!double.IsFinite(LauncherWindowHeight) || LauncherWindowHeight <= 100) { LauncherWindowHeight = 750; valuesCorrected = true; }
+            if (!double.IsFinite(LauncherWindowTop)) { LauncherWindowTop = -1; valuesCorrected = true; }
+            if (!double.IsFinite(LauncherWindowLeft)) { LauncherWindowLeft = -1; valuesCorrected = true; }
 
             // Validate PlaybackState
             if (LastPlaybackState != null) {

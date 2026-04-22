@@ -5,7 +5,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:EdgeLoop.Windows"
         mc:Ignorable="d"
-        Title="{Binding DialogTitle}" Width="450" 
+        Title="{Binding DialogTitle}" Width="500" 
         SizeToContent="Height" MinHeight="180"
         ResizeMode="NoResize"
         WindowStyle="None"

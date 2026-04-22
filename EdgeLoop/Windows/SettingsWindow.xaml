@@ -15,7 +15,7 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:EdgeLoop.Windows"
         xmlns:vm="clr-namespace:EdgeLoop.ViewModels"
-        xmlns:sys="clr-namespace:System;assembly=mscorlib"
+        xmlns:sys="clr-namespace:System;assembly=System.Runtime"
         mc:Ignorable="d"
         Title="Settings" SizeToContent="Height" Width="480"
         ResizeMode="NoResize"
@@ -413,97 +413,103 @@
                     <!-- Hotkeys -->
                     <Expander Header="Hotkeys" Style="{StaticResource SettingsExpanderStyle}" IsExpanded="{Binding IsHotkeysExpanded}">
                         <StackPanel>
-                            <StackPanel Margin="0,0,0,16">
-                                <TextBlock Text="Panic Hotkey" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                                <TextBlock Text="Global hotkey to stop all playback immediately" Foreground="{StaticResource TextTertiary}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"/>
-                            </StackPanel>
-                            <Grid Margin="0,0,0,24">
+
+                            <!-- ═══ Emergency Controls ═══ -->
+                            <TextBlock Text="EMERGENCY CONTROLS" 
+                                       Foreground="{StaticResource AccentPrimary}" 
+                                       FontSize="11" FontWeight="Bold" 
+                                       Margin="0,0,0,12" 
+                                       Opacity="0.85"/>
+
+                            <!-- Panic Hotkey -->
+                            <Grid Margin="0,0,0,10">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <StackPanel Orientation="Horizontal" Grid.Column="0" VerticalAlignment="Center">
-                                    <CheckBox Content="Ctrl" IsChecked="{Binding PanicHotkeyCtrl}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="12" Margin="0,0,10,0" Foreground="{StaticResource TextPrimary}"/>
-                                    <CheckBox Content="Shift" IsChecked="{Binding PanicHotkeyShift}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="12" Margin="0,0,10,0" Foreground="{StaticResource TextPrimary}"/>
-                                    <CheckBox Content="Alt" IsChecked="{Binding PanicHotkeyAlt}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="12" Margin="0,0,10,0" Foreground="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Panic" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                <StackPanel Orientation="Horizontal" Grid.Column="1" VerticalAlignment="Center">
+                                    <CheckBox Content="Ctrl" IsChecked="{Binding PanicHotkeyCtrl}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
+                                    <CheckBox Content="Shift" IsChecked="{Binding PanicHotkeyShift}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
+                                    <CheckBox Content="Alt" IsChecked="{Binding PanicHotkeyAlt}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="+" VerticalAlignment="Center" Foreground="{StaticResource TextSecondary}" Margin="0,0,8,0"/>
                                 </StackPanel>
-                                <TextBlock Text="+" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{StaticResource TextSecondary}" Margin="5,0"/>
-                                <ComboBox Grid.Column="2" Width="100" ItemsSource="{StaticResource KeyList}" SelectedItem="{Binding PanicHotkeyKey}" Style="{StaticResource PinkComboBoxStyle}"/>
+                                <ComboBox Grid.Column="2" Width="95" ItemsSource="{StaticResource KeyList}" SelectedItem="{Binding PanicHotkeyKey}" Style="{StaticResource PinkComboBoxStyle}"/>
                             </Grid>
 
-                            <!-- Clear Playlist Hotkey -->
-                            <StackPanel Margin="0,0,0,16">
-                                <TextBlock Text="Wipe &amp; Exit Hotkey" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                                <TextBlock Text="Clear session, close all videos, and exit the application" Foreground="{StaticResource TextTertiary}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"/>
-                            </StackPanel>
-                            <Grid Margin="0,0,0,24">
+                            <!-- Wipe & Exit Hotkey -->
+                            <Grid Margin="0,0,0,10">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <StackPanel Orientation="Horizontal" Grid.Column="0" VerticalAlignment="Center">
-                                    <CheckBox Content="Ctrl" IsChecked="{Binding ClearHotkeyCtrl}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="12" Margin="0,0,10,0" Foreground="{StaticResource TextPrimary}"/>
-                                    <CheckBox Content="Shift" IsChecked="{Binding ClearHotkeyShift}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="12" Margin="0,0,10,0" Foreground="{StaticResource TextPrimary}"/>
-                                    <CheckBox Content="Alt" IsChecked="{Binding ClearHotkeyAlt}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="12" Margin="0,0,10,0" Foreground="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Wipe &amp; Exit" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                <StackPanel Orientation="Horizontal" Grid.Column="1" VerticalAlignment="Center">
+                                    <CheckBox Content="Ctrl" IsChecked="{Binding ClearHotkeyCtrl}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
+                                    <CheckBox Content="Shift" IsChecked="{Binding ClearHotkeyShift}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
+                                    <CheckBox Content="Alt" IsChecked="{Binding ClearHotkeyAlt}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="+" VerticalAlignment="Center" Foreground="{StaticResource TextSecondary}" Margin="0,0,8,0"/>
                                 </StackPanel>
-                                <TextBlock Text="+" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{StaticResource TextSecondary}" Margin="5,0"/>
-                                <ComboBox Grid.Column="2" Width="100" ItemsSource="{StaticResource KeyList}" SelectedItem="{Binding ClearHotkeyKey}" Style="{StaticResource PinkComboBoxStyle}"/>
+                                <ComboBox Grid.Column="2" Width="95" ItemsSource="{StaticResource KeyList}" SelectedItem="{Binding ClearHotkeyKey}" Style="{StaticResource PinkComboBoxStyle}"/>
                             </Grid>
 
-                            <!-- Triple-Press Emergency Stop (Opaque Mode) -->
-                            <StackPanel Margin="0,0,0,16">
-                                <TextBlock Text="Fullscreen Escape Hotkey (Opaque Mode)" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                                <TextBlock Text="Press 3 times quickly to exit (only works in Opaque Mode)" Foreground="{StaticResource TextTertiary}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"/>
-                            </StackPanel>
-                            <Grid Margin="0,0,0,24">
+                            <!-- Fullscreen Escape (Opaque Mode) -->
+                            <Grid Margin="0,0,0,4">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <TextBlock Text="Emergency Key" VerticalAlignment="Center" Foreground="{StaticResource TextSecondary}" Margin="0,0,20,0"/>
-                                <ComboBox Grid.Column="1" Width="100" ItemsSource="{StaticResource KeyList}" SelectedItem="{Binding OpaquePanicHotkeyKey}" Style="{StaticResource PinkComboBoxStyle}"/>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Fullscreen Escape" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Triple-press to exit (Opaque Mode)" Foreground="{StaticResource TextTertiary}" FontSize="10" Margin="0,2,0,0"/>
+                                </StackPanel>
+                                <ComboBox Grid.Column="1" Width="95" ItemsSource="{StaticResource KeyList}" SelectedItem="{Binding OpaquePanicHotkeyKey}" Style="{StaticResource PinkComboBoxStyle}"/>
                             </Grid>
+
+                            <!-- ═══ Divider ═══ -->
+                            <Border Height="1" Background="#22FFFFFF" Margin="0,14,0,14"/>
+
+                            <!-- ═══ Playback Navigation ═══ -->
+                            <TextBlock Text="PLAYBACK NAVIGATION" 
+                                       Foreground="{StaticResource AccentPrimary}" 
+                                       FontSize="11" FontWeight="Bold" 
+                                       Margin="0,0,0,12" 
+                                       Opacity="0.85"/>
 
                             <!-- Skip Forward Hotkey -->
-                            <StackPanel Margin="0,0,0,16">
-                                <TextBlock Text="Skip Forward Hotkey" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                                <TextBlock Text="Skip to the next video in the queue" Foreground="{StaticResource TextTertiary}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"/>
-                            </StackPanel>
-                            <Grid Margin="0,0,0,24">
+                            <Grid Margin="0,0,0,10">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <StackPanel Orientation="Horizontal" Grid.Column="0" VerticalAlignment="Center">
-                                    <CheckBox Content="Ctrl" IsChecked="{Binding SkipForwardHotkeyCtrl}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="12" Margin="0,0,10,0" Foreground="{StaticResource TextPrimary}"/>
-                                    <CheckBox Content="Shift" IsChecked="{Binding SkipForwardHotkeyShift}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="12" Margin="0,0,10,0" Foreground="{StaticResource TextPrimary}"/>
-                                    <CheckBox Content="Alt" IsChecked="{Binding SkipForwardHotkeyAlt}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="12" Margin="0,0,10,0" Foreground="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Skip Forward" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                <StackPanel Orientation="Horizontal" Grid.Column="1" VerticalAlignment="Center">
+                                    <CheckBox Content="Ctrl" IsChecked="{Binding SkipForwardHotkeyCtrl}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
+                                    <CheckBox Content="Shift" IsChecked="{Binding SkipForwardHotkeyShift}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
+                                    <CheckBox Content="Alt" IsChecked="{Binding SkipForwardHotkeyAlt}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="+" VerticalAlignment="Center" Foreground="{StaticResource TextSecondary}" Margin="0,0,8,0"/>
                                 </StackPanel>
-                                <TextBlock Text="+" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{StaticResource TextSecondary}" Margin="5,0"/>
-                                <ComboBox Grid.Column="2" Width="100" ItemsSource="{StaticResource KeyList}" SelectedItem="{Binding SkipForwardHotkeyKey}" Style="{StaticResource PinkComboBoxStyle}"/>
+                                <ComboBox Grid.Column="2" Width="95" ItemsSource="{StaticResource KeyList}" SelectedItem="{Binding SkipForwardHotkeyKey}" Style="{StaticResource PinkComboBoxStyle}"/>
                             </Grid>
 
                             <!-- Skip Backward Hotkey -->
-                            <StackPanel Margin="0,0,0,16">
-                                <TextBlock Text="Skip Backward Hotkey" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                                <TextBlock Text="Go back to the previous video" Foreground="{StaticResource TextTertiary}" FontSize="11" Margin="0,4,0,0" TextWrapping="Wrap"/>
-                            </StackPanel>
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto"/>
                                     <ColumnDefinition Width="*"/>
                                     <ColumnDefinition Width="Auto"/>
                                 </Grid.ColumnDefinitions>
-                                <StackPanel Orientation="Horizontal" Grid.Column="0" VerticalAlignment="Center">
-                                    <CheckBox Content="Ctrl" IsChecked="{Binding SkipBackwardHotkeyCtrl}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="12" Margin="0,0,10,0" Foreground="{StaticResource TextPrimary}"/>
-                                    <CheckBox Content="Shift" IsChecked="{Binding SkipBackwardHotkeyShift}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="12" Margin="0,0,10,0" Foreground="{StaticResource TextPrimary}"/>
-                                    <CheckBox Content="Alt" IsChecked="{Binding SkipBackwardHotkeyAlt}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="12" Margin="0,0,10,0" Foreground="{StaticResource TextPrimary}"/>
+                                <TextBlock Text="Skip Backward" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                <StackPanel Orientation="Horizontal" Grid.Column="1" VerticalAlignment="Center">
+                                    <CheckBox Content="Ctrl" IsChecked="{Binding SkipBackwardHotkeyCtrl}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
+                                    <CheckBox Content="Shift" IsChecked="{Binding SkipBackwardHotkeyShift}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
+                                    <CheckBox Content="Alt" IsChecked="{Binding SkipBackwardHotkeyAlt}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
+                                    <TextBlock Text="+" VerticalAlignment="Center" Foreground="{StaticResource TextSecondary}" Margin="0,0,8,0"/>
                                 </StackPanel>
-                                <TextBlock Text="+" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Center" Foreground="{StaticResource TextSecondary}" Margin="5,0"/>
-                                <ComboBox Grid.Column="2" Width="100" ItemsSource="{StaticResource KeyList}" SelectedItem="{Binding SkipBackwardHotkeyKey}" Style="{StaticResource PinkComboBoxStyle}"/>
+                                <ComboBox Grid.Column="2" Width="95" ItemsSource="{StaticResource KeyList}" SelectedItem="{Binding SkipBackwardHotkeyKey}" Style="{StaticResource PinkComboBoxStyle}"/>
                             </Grid>
                         </StackPanel>
                     </Expander>

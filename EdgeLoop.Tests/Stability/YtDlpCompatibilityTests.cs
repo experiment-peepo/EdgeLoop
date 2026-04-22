@@ -59,7 +59,7 @@ namespace EdgeLoop.Tests.Stability {
                 new[] { typeof(object), typeof(string), typeof(string) },
                 null);
             
-            var result = method?.Invoke(null, new object[] { null, "Title", "fallback" });
+            var result = method?.Invoke(null, new object?[] { null, "Title", "fallback" });
 
             // Assert
             result.Should().Be("fallback");
@@ -82,7 +82,7 @@ namespace EdgeLoop.Tests.Stability {
             };
 
             foreach (var error in permanentErrors) {
-                var result = (bool)method?.Invoke(null, new object[] { error });
+                var result = (bool)(method?.Invoke(null, new object[] { error }) ?? false);
                 result.Should().BeTrue($"'{error}' should be classified as definitive");
             }
         }
@@ -101,7 +101,7 @@ namespace EdgeLoop.Tests.Stability {
             };
 
             foreach (var error in transientErrors) {
-                var result = (bool)method?.Invoke(null, new object[] { error });
+                var result = (bool)(method?.Invoke(null, new object?[] { error }) ?? false);
                 result.Should().BeFalse($"'{error}' should NOT be classified as definitive");
             }
         }

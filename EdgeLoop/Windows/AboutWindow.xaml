@@ -62,25 +62,47 @@
                            LineHeight="20"
                            Margin="0,0,0,30"/>
 
-                <!-- Ko-fi Button -->
-                <Button Command="{Binding OpenKoFiCommand}" 
-                        Background="Transparent" BorderBrush="Transparent"
-                        HorizontalAlignment="Center"
-                        Cursor="Hand" ToolTip="Support on Ko-fi">
-                    <Button.Template>
-                        <ControlTemplate TargetType="Button">
-                             <Grid>
-                                <ContentPresenter/>
-                                <Border Background="Transparent"/> 
-                            </Grid>
-                        </ControlTemplate>
-                    </Button.Template>
-                    <Image Source="pack://application:,,,/Images/kofi.png" Height="42" RenderOptions.BitmapScalingMode="HighQuality">
-                        <Image.Effect>
-                            <DropShadowEffect Color="#000000" BlurRadius="12" ShadowDepth="2" Opacity="0.4"/>
-                        </Image.Effect>
-                    </Image>
-                </Button>
+                <!-- Support Buttons -->
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,10,0,10">
+                    <!-- Ko-fi Button -->
+                    <Button Command="{Binding OpenKoFiCommand}" 
+                            Background="Transparent" BorderBrush="Transparent"
+                            Cursor="Hand" ToolTip="Support on Ko-fi"
+                            Margin="0,0,12,0">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                 <Grid>
+                                    <ContentPresenter/>
+                                    <Border Background="Transparent"/> 
+                                </Grid>
+                            </ControlTemplate>
+                        </Button.Template>
+                        <Image Source="pack://application:,,,/Images/kofi.png" Height="32" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality">
+                            <Image.Effect>
+                                <DropShadowEffect Color="#000000" BlurRadius="8" ShadowDepth="1" Opacity="0.3"/>
+                            </Image.Effect>
+                        </Image>
+                    </Button>
+
+                    <!-- Patreon Button -->
+                    <Button Command="{Binding OpenPatreonCommand}" 
+                            Background="Transparent" BorderBrush="Transparent"
+                            Cursor="Hand" ToolTip="Support on Patreon">
+                        <Button.Template>
+                            <ControlTemplate TargetType="Button">
+                                 <Grid>
+                                    <ContentPresenter/>
+                                    <Border Background="Transparent"/> 
+                                </Grid>
+                            </ControlTemplate>
+                        </Button.Template>
+                        <Image Source="pack://application:,,,/Images/patreon.png" Height="24" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality">
+                            <Image.Effect>
+                                <DropShadowEffect Color="#000000" BlurRadius="8" ShadowDepth="1" Opacity="0.3"/>
+                            </Image.Effect>
+                        </Image>
+                    </Button>
+                </StackPanel>
                 
                 <TextBlock Text="Support the development" 
                            Foreground="{StaticResource TextTertiary}" 

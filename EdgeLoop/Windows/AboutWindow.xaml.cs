@@ -28,6 +28,7 @@ namespace EdgeLoop.Windows {
         }
 
         public ICommand OpenKoFiCommand => new RelayCommand(OpenKoFi);
+        public ICommand OpenPatreonCommand => new RelayCommand(OpenPatreon);
 
         private void OpenKoFi(object obj) {
             try {
@@ -37,6 +38,17 @@ namespace EdgeLoop.Windows {
                 });
             } catch (Exception ex) {
                 Logger.Error("Failed to open Ko-Fi link", ex);
+            }
+        }
+
+        private void OpenPatreon(object obj) {
+            try {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo {
+                    FileName = "https://www.patreon.com/cw/vexfromdestiny",
+                    UseShellExecute = true
+                });
+            } catch (Exception ex) {
+                Logger.Error("Failed to open Patreon link", ex);
             }
         }
     }

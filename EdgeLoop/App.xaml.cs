@@ -33,6 +33,9 @@ namespace EdgeLoop {
             this.DispatcherUnhandledException += (s, args) => {
                 try {
                     Classes.Logger.Error("Unhandled exception in UI thread", args.Exception);
+                    if (args.Exception.InnerException != null) {
+                        Classes.Logger.Error("Inner exception", args.Exception.InnerException);
+                    }
                     Console.Error.WriteLine($"Unhandled Exception: {args.Exception}");
 
                     var userMessage = "An unexpected error occurred in the application.\n\n" +
