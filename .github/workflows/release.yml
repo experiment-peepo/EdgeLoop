@@ -123,11 +123,11 @@ jobs:
           Write-Error "EdgeLoop.exe not found in publish directory"
           exit 1
         }
-        if (-not (Test-Path "publish/yt-dlp.exe")) {
+        if (-not (Test-Path "publish/Dependencies/yt-dlp.exe")) {
             Write-Error "yt-dlp.exe not found in publish directory"
             exit 1
         }
-        if (-not (Test-Path "publish/ffmpeg.exe")) {
+        if (-not (Test-Path "publish/Dependencies/ffmpeg.exe")) {
             Write-Error "ffmpeg.exe not found in publish directory"
             exit 1
         }
