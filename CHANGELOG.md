@@ -1,3 +1,15 @@
+## [1.0.0-beta] - 2026-04-26
+
+### Added
+- **YouTube Ambiguity Handler**: Added a new choice dialog that appears when importing YouTube links containing both a video and a playlist ID. You can now choose to import just the video or the entire collection.
+- **Source Labeling**: The watchlist now displays the source of each video (e.g., "YouTube", "PMVHaven", "Local File") as a subtle sub-label under the title.
+- **Smart Dependency Updates**: The `update_dependencies` tools now intelligently check for the latest versions on GitHub before downloading, saving bandwidth.
+
+### Fixed
+- **PMVHaven Playlist Import**: Fixed a critical issue where only the first video was imported from PMVHaven collections. It now uses a specialized LD+JSON extractor to find all videos reliably.
+- **Title Sanitization**: Improved title cleaning for PMVHaven to remove redundant site names and uploader attributions, keeping your watchlist clean.
+- **URL Pattern Support**: Added support for singular `/video/` URL patterns alongside the plural `/videos/` patterns.
+
 ## [1.0.0] - 2026-04-21
 
 ### Added (since Rebranding)
