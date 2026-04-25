@@ -68,7 +68,10 @@ namespace EdgeLoop {
             // 3. Initialize Flyleaf Engine with robust paths and detailed logging
             try {
                 string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                string ffmpegPath = System.IO.Path.Combine(baseDir, "FFmpeg");
+                string ffmpegPath = System.IO.Path.Combine(baseDir, "Dependencies");
+                if (!System.IO.Directory.Exists(ffmpegPath)) {
+                    ffmpegPath = System.IO.Path.Combine(baseDir, "FFmpeg");
+                }
                 string pluginsPath = System.IO.Path.Combine(baseDir, "Plugins");
 
                 // Redirect Flyleaf logs to diagnostic log only (Debug level)

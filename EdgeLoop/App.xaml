@@ -78,6 +78,7 @@
             <Geometry x:Key="Icon_Minimize">M19,13H5V11H19V13Z</Geometry>
             <Geometry x:Key="Icon_Maximize">M18,4H6C4.89,4 4,4.89 4,6V18A2,2 0 0,0 6,20H18A2,2 0 0,0 20,18V6C20,4.89 19.1,4 18,4M18,18H6V6H18V18Z</Geometry>
             <Geometry x:Key="Icon_Restore">M18,16H20V4H8V6H5V20H17V16H18M10,6H18V14H16V8H10V6M7,10H15V18H7V10Z</Geometry>
+            <Geometry x:Key="Icon_Warning">M12,2L1,21H23L12,2M12,6L19.53,19H4.47L12,6M11,10V14H13V10H11M11,16V18H13V16H11Z</Geometry>
              
             <!-- Playback Icons -->
              <Geometry x:Key="Icon_Play">M8,5.14V19.14L19,12.14L8,5.14Z</Geometry>

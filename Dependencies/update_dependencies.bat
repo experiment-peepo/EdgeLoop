@@ -1,9 +1,6 @@
-<# :
 @echo off
 powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((Get-Content '%~f0') -join \"`n\")"
-pause
 exit /b
-#>
 
 # yt-dlp Auto-Update Script (Polyglot Edition)
 # This file is a single-file solution that handles both batch execution and PowerShell logic.

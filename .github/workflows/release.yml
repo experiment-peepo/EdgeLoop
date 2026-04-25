@@ -11,6 +11,8 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     
     steps:
     - name: Checkout code
@@ -27,7 +29,7 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore EdgeLoop.sln
 
-    - name: Generate Version
+    - name: Generate Version and Extract Release Notes
       id: git_version
       run: |
         if ("${{ github.ref_type }}" -eq "tag") {
@@ -52,6 +54,18 @@ jobs:
         # Detect prerelease
         $isPrerelease = ($version -match "beta|alpha|rc") ? "true" : "false"
         echo "is_prerelease=$isPrerelease" >> $env:GITHUB_OUTPUT
+
+        # Extract latest release notes from CHANGELOG.md
+        $changelog = Get-Content "CHANGELOG.md" -Raw
+        # Matches from the first ## header to the next ## header or end of file
+        if ($changelog -match "(?s)## \[[^\]]+\] - \d{4}-\d{2}-\d{2}(.*?)(?=\n## \[|$)") {
+            $notes = $matches[1].Trim()
+            # Escaping for multi-line output in GitHub Actions
+            $notes = $notes -replace "%", "%25" -replace "\n", "%0A" -replace "\r", "%0D"
+            echo "release_notes=$notes" >> $env:GITHUB_OUTPUT
+        } else {
+            echo "release_notes=No detailed changelog found for this version." >> $env:GITHUB_OUTPUT
+        }
 
         echo "Computed Version: $version"
         echo "Numeric Version: $numericVersion"
@@ -164,14 +178,9 @@ jobs:
         tag: ${{ github.ref_name }}
         name: ${{ steps.git_version.outputs.is_prerelease == 'true' && 'Beta Release ' || 'Release ' }}${{ github.ref_name }}
         body: |
-          ## EdgeLoop ${{ steps.git_version.outputs.is_prerelease == 'true' && 'Beta ' || '' }}Release ${{ steps.git_version.outputs.version }}
+          ${{ steps.git_version.outputs.release_notes }}
           
-          ### Changes
-          - 🚀 **New Name**: Application is now **EdgeLoop**.
-          - 🎨 **UI Polish**: Updated "Cyber Luxe" aesthetic with SVG icons and consistent styling.
-          - 🧹 **Clean Workspace**: Optimized project structure and fixed release build.
-          - 📦 **Zip Package**: Standard portable distribution including all dependencies.
-          
+          ---
           ### Installation
           1. Download `EdgeLoop.zip` from the assets below.
           2. Extract the contents to a folder.

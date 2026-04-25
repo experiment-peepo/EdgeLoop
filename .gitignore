@@ -20,6 +20,8 @@ publish_debug/
 ffmpeg_temp/
 .agent/
 scratch/
+Dependencies/yt-dlp.exe.bak
+*.pdf
 *_diff.txt
 *.diff
 script.csx

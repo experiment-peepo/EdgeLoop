@@ -82,22 +82,36 @@ namespace EdgeLoop.Classes {
                         var errorMsg = result.ErrorOutput?.FirstOrDefault() ?? "Unknown error";
                         Logger.Warning($"[yt-dlp] Extraction failed for {url}: {errorMsg}");
                         
-                        // Don't retry on definitive errors (e.g., "Video unavailable" or "Video requires login")
-                        if (IsDefinitiveError(errorMsg) || errorMsg.Contains("requires login", StringComparison.OrdinalIgnoreCase)) {
-                            // Let the UI know about the definitive error
-                            if (errorMsg.Contains("requires login", StringComparison.OrdinalIgnoreCase)) {
-                                Logger.Error($"[VideoUrlExtractor] Authentication required for {url}. Video cannot be downloaded unconditionally.");
+                        // FALLBACK: If cookie database is locked, retry WITHOUT cookies
+                        if (options.CookiesFromBrowser != null && IsCookieLockError(errorMsg)) {
+                            Logger.Info($"[yt-dlp] Cookie database locked (browser open?). Retrying without cookies...");
+                            options.CookiesFromBrowser = null;
+                            result = await _ytdl.RunVideoDataFetch(url, ct: timeoutCts.Token, overrideOptions: options);
+                            if (result.Success) {
+                                Logger.Debug($"[yt-dlp] Fallback successful (fetched without cookies)");
+                            } else {
+                                errorMsg = result.ErrorOutput?.FirstOrDefault() ?? "Unknown error";
                             }
-                            break;
                         }
-                        continue;
+
+                        if (!result.Success) {
+                            // Don't retry on definitive errors (e.g., "Video unavailable" or "Video requires login")
+                            if (IsDefinitiveError(errorMsg) || errorMsg.Contains("requires login", StringComparison.OrdinalIgnoreCase)) {
+                                if (errorMsg.Contains("requires login", StringComparison.OrdinalIgnoreCase)) {
+                                    Logger.Error($"[VideoUrlExtractor] Authentication required for {url}. Video cannot be downloaded unconditionally.");
+                                }
+                                break;
+                            }
+                            continue;
+                        }
                     }
 
-                    var videoUrl = result.Data?.Url;
+                    var videoData = result.Data;
+                    var videoUrl = videoData?.Url;
 
                     // Fallback: check ManifestUrl if direct URL is null
-                    if (string.IsNullOrEmpty(videoUrl)) {
-                        videoUrl = SafeGetProperty<string>(result.Data, "ManifestUrl", null);
+                    if (string.IsNullOrEmpty(videoUrl) && videoData != null) {
+                        videoUrl = SafeGetProperty<string>(videoData, "ManifestUrl", null);
                         if (!string.IsNullOrEmpty(videoUrl)) {
                             Logger.Debug($"[yt-dlp] No direct URL, using ManifestUrl");
                         }
@@ -105,10 +119,9 @@ namespace EdgeLoop.Classes {
 
                     if (!string.IsNullOrEmpty(videoUrl)) {
                         Logger.Debug($"[yt-dlp] Successfully extracted URL");
-                        LogVideoQuality(result.Data);
+                        LogVideoQuality(videoData);
+                        return videoUrl;
                     }
-                    
-                    return videoUrl;
                 } catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) {
                     Logger.Warning($"[yt-dlp] Extraction timed out after {ExtractionTimeout.TotalSeconds}s");
                     continue; // Retry on timeout
@@ -328,6 +341,43 @@ namespace EdgeLoop.Classes {
                     if (proc.ExitCode != 0) {
                         var err = await proc.StandardError.ReadToEndAsync();
                         Logger.Warning($"[yt-dlp] Playlist extraction returned {proc.ExitCode}: {err}");
+
+                        // FALLBACK: Retry without cookies if database is locked
+                        if (args.Contains("--cookies-from-browser") && IsCookieLockError(err)) {
+                            Logger.Info($"[yt-dlp] Cookie database locked during playlist extraction. Retrying without cookies...");
+                            
+                            // Remove --cookies-from-browser and its value
+                            int idx = args.IndexOf("--cookies-from-browser");
+                            if (idx >= 0) {
+                                args.RemoveAt(idx + 1); // Remove the browser name
+                                args.RemoveAt(idx);     // Remove the flag
+                            }
+                            
+                            // Re-run the process
+                            var fallbackPsi = new ProcessStartInfo {
+                                FileName = _ytDlpPath,
+                                CreateNoWindow = true,
+                                UseShellExecute = false,
+                                RedirectStandardOutput = true,
+                                RedirectStandardError = true,
+                                WindowStyle = ProcessWindowStyle.Hidden
+                            };
+                            foreach (var arg in args) fallbackPsi.ArgumentList.Add(arg);
+                            
+                            using var fallbackProc = Process.Start(fallbackPsi);
+                            if (fallbackProc != null) {
+                                urls.Clear(); // Clear any partial results
+                                while ((line = await fallbackProc.StandardOutput.ReadLineAsync()) != null) {
+                                    if (string.IsNullOrWhiteSpace(line)) continue;
+                                    var trimmed = line.Trim();
+                                    if (trimmed.StartsWith("http", StringComparison.OrdinalIgnoreCase)) urls.Add(trimmed);
+                                }
+                                await fallbackProc.WaitForExitAsync(cancellationToken);
+                                if (fallbackProc.ExitCode == 0) {
+                                    Logger.Debug($"[yt-dlp] Playlist fallback successful (fetched {urls.Count} URLs)");
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -444,7 +494,7 @@ namespace EdgeLoop.Classes {
                 args.Add(options.Cookies);
             } else if (url.Contains("youtube.com") || url.Contains("youtu.be") || url.Contains("iwara.tv")) {
                 // Simplified: Just always add it for major sites if no explicit cookie file
-                var browser = App.Settings?.BrowserForCookies ?? "chrome";
+                var browser = App.Settings?.BrowserForCookies ?? "Firefox";
                 args.Add("--cookies-from-browser");
                 args.Add(browser);
                 Logger.Debug($"[yt-dlp] Using --cookies-from-browser {browser} for high-quality download");
@@ -754,6 +804,12 @@ namespace EdgeLoop.Classes {
                     Logger.Debug($"[yt-dlp] Quality Info: {w}x{h}, Format: {f}");
                 }
             } catch { /* ignore quality logging errors — non-critical */ }
+        }
+
+        private bool IsCookieLockError(string errorMsg) {
+            if (string.IsNullOrEmpty(errorMsg)) return false;
+            return errorMsg.Contains("Could not copy", StringComparison.OrdinalIgnoreCase) && 
+                   errorMsg.Contains("cookie database", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>

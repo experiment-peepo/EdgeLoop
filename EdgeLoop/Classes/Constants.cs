@@ -61,12 +61,12 @@ namespace EdgeLoop.Classes {
         /// <summary>
         /// HTTP request timeout in seconds
         /// </summary>
-        public const int HttpRequestTimeoutSeconds = 30;
-
+        public const int HttpRequestTimeoutSeconds = 60;
+        
         /// <summary>
         /// URL extraction timeout in seconds
         /// </summary>
-        public const int UrlExtractionTimeoutSeconds = 30;
+        public const int UrlExtractionTimeoutSeconds = 60;
 
         /// <summary>
         /// URL cache TTL in minutes

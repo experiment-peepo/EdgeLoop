@@ -54,7 +54,7 @@ namespace EdgeLoop.ViewModels {
         private string _browserForCookies;
 
         public ObservableCollection<string> AvailableBrowsers { get; } = new ObservableCollection<string> { 
-            "chrome", "firefox", "edge", "opera", "vivaldi", "brave"
+            "Chrome", "Firefox", "Edge", "Opera", "Brave"
         };
 
         public string BrowserForCookies {
@@ -187,7 +187,7 @@ namespace EdgeLoop.ViewModels {
             _enableSuperResolution = settings.EnableSuperResolution;
             _enableDiagnosticMode = settings.EnableDiagnosticMode;
             _hypnotubeCookies = settings.HypnotubeCookies;
-            _browserForCookies = settings.BrowserForCookies ?? "chrome";
+            _browserForCookies = settings.BrowserForCookies ?? "Firefox";
             
 
             // Load and set the last expanded section

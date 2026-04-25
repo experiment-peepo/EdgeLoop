@@ -11,7 +11,7 @@ namespace EdgeLoop.Classes {
         private static readonly HttpClient _httpClient = new HttpClient(new HttpClientHandler {
             AutomaticDecompression = System.Net.DecompressionMethods.GZip | System.Net.DecompressionMethods.Deflate
         }) {
-            Timeout = TimeSpan.FromSeconds(30)
+            Timeout = TimeSpan.FromSeconds(Constants.HttpRequestTimeoutSeconds)
         };
         
         private static readonly LruCache<string, string> _htmlCache = new LruCache<string, string>(100, TimeSpan.FromMinutes(2));
