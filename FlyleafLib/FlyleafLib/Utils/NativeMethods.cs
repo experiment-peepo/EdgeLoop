@@ -320,101 +320,101 @@ public static partial class Utils
         // Currently not used (mainly for refresh rate?*)
         // [LibraryImport] not needed for commented code.
     }
-        //    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
-        //    public string dmDeviceName;
-        //    public ushort dmSpecVersion;
-        //    public ushort dmDriverVersion;
-        //    public ushort dmSize;
-        //    public ushort dmDriverExtra;
-        //    public int dmFields;
-        //    public int dmPositionX;
-        //    public int dmPositionY;
-        //    public int dmDisplayOrientation;
-        //    public int dmDisplayFixedOutput;
-        //    public short dmColor;
-        //    public short dmDuplex;
-        //    public short dmYResolution;
-        //    public short dmTTOption;
-        //    public short dmCollate;
-        //    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
-        //    public string dmFormName;
-        //    public ushort dmLogPixels;
-        //    public int dmBitsPerPel;
-        //    public int dmPelsWidth;
-        //    public int dmPelsHeight;
-        //    public int dmDisplayFlags;
-        //    public int dmDisplayFrequency; // not accurate should be ratio / float (e.g. 59.95 will be 59)
-        //    public int dmICMMethod;
-        //    public int dmICMIntent;
-        //    public int dmMediaType;
-        //    public int dmDitherType;
-        //    public int dmReserved1;
-        //    public int dmReserved2;
-        //    public int dmPanningWidth;
-        //    public int dmPanningHeight;
+    //    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+    //    public string dmDeviceName;
+    //    public ushort dmSpecVersion;
+    //    public ushort dmDriverVersion;
+    //    public ushort dmSize;
+    //    public ushort dmDriverExtra;
+    //    public int dmFields;
+    //    public int dmPositionX;
+    //    public int dmPositionY;
+    //    public int dmDisplayOrientation;
+    //    public int dmDisplayFixedOutput;
+    //    public short dmColor;
+    //    public short dmDuplex;
+    //    public short dmYResolution;
+    //    public short dmTTOption;
+    //    public short dmCollate;
+    //    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+    //    public string dmFormName;
+    //    public ushort dmLogPixels;
+    //    public int dmBitsPerPel;
+    //    public int dmPelsWidth;
+    //    public int dmPelsHeight;
+    //    public int dmDisplayFlags;
+    //    public int dmDisplayFrequency; // not accurate should be ratio / float (e.g. 59.95 will be 59)
+    //    public int dmICMMethod;
+    //    public int dmICMIntent;
+    //    public int dmMediaType;
+    //    public int dmDitherType;
+    //    public int dmReserved1;
+    //    public int dmReserved2;
+    //    public int dmPanningWidth;
+    //    public int dmPanningHeight;
 
-        //    public static DEVMODE Get(string deviceName)
-        //    {
-        //        DEVMODE dev = new();
-        //        dev.dmSize = (ushort)Marshal.SizeOf(dev);
-        //        EnumDisplaySettings(deviceName, ENUM_CURRENT_SETTINGS, ref dev);
-        //        return dev;
-        //    }
-        //}
+    //    public static DEVMODE Get(string deviceName)
+    //    {
+    //        DEVMODE dev = new();
+    //        dev.dmSize = (ushort)Marshal.SizeOf(dev);
+    //        EnumDisplaySettings(deviceName, ENUM_CURRENT_SETTINGS, ref dev);
+    //        return dev;
+    //    }
+    //}
 
-        //[DllImport("user32.dll", CharSet = CharSet.Ansi)]
-        //private static extern bool EnumDisplaySettings(string deviceName, int modeNum, ref DEVMODE devMode);
+    //[DllImport("user32.dll", CharSet = CharSet.Ansi)]
+    //private static extern bool EnumDisplaySettings(string deviceName, int modeNum, ref DEVMODE devMode);
 
-        //private const int ENUM_CURRENT_SETTINGS = -1;
+    //private const int ENUM_CURRENT_SETTINGS = -1;
 
 
-        //[DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-        //public static extern bool GetMonitorInfoW(IntPtr hMonitor, ref MONITORINFOEXW lpmi);
+    //[DllImport("user32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    //public static extern bool GetMonitorInfoW(IntPtr hMonitor, ref MONITORINFOEXW lpmi);
 
-        //[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
-        //public struct MONITORINFOEXW
-        //{
-        //    public uint cbSize;
-        //    public RECT rcMonitor;
-        //    public RECT rcWork;
-        //    public MonitorInfoFlags dwFlags;
+    //[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    //public struct MONITORINFOEXW
+    //{
+    //    public uint cbSize;
+    //    public RECT rcMonitor;
+    //    public RECT rcWork;
+    //    public MonitorInfoFlags dwFlags;
 
-        //    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
-        //    public string szDevice;
+    //    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+    //    public string szDevice;
 
-        //    public static MONITORINFOEXW Create()
-        //        => new() { cbSize = (uint)Marshal.SizeOf(typeof(MONITORINFOEXW)), szDevice = string.Empty };
-        //}
+    //    public static MONITORINFOEXW Create()
+    //        => new() { cbSize = (uint)Marshal.SizeOf(typeof(MONITORINFOEXW)), szDevice = string.Empty };
+    //}
 
-        //[Flags]
-        //public enum MonitorInfoFlags : uint
-        //{
-        //    MONITORINFOF_PRIMARY = 0x00000001
-        //}
+    //[Flags]
+    //public enum MonitorInfoFlags : uint
+    //{
+    //    MONITORINFOF_PRIMARY = 0x00000001
+    //}
 
-        //[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
-        //public struct DISPLAY_DEVICE
-        //{
-        //    public int cb;
-        //    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
-        //    public string DeviceName;
-        //    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
-        //    public string DeviceString;
-        //    public int StateFlags;
-        //    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
-        //    public string DeviceID;
-        //    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
-        //    public string DeviceKey;
+    //[StructLayout(LayoutKind.Sequential, CharSet = CharSet.Ansi)]
+    //public struct DISPLAY_DEVICE
+    //{
+    //    public int cb;
+    //    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 32)]
+    //    public string DeviceName;
+    //    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+    //    public string DeviceString;
+    //    public int StateFlags;
+    //    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+    //    public string DeviceID;
+    //    [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 128)]
+    //    public string DeviceKey;
 
-        //    public static DISPLAY_DEVICE Create()
-        //    {
-        //        var display = new DISPLAY_DEVICE();
-        //        display.cb = Marshal.SizeOf(display);
-        //        return display;
-        //    }
-        //}
+    //    public static DISPLAY_DEVICE Create()
+    //    {
+    //        var display = new DISPLAY_DEVICE();
+    //        display.cb = Marshal.SizeOf(display);
+    //        return display;
+    //    }
+    //}
 
-        //[DllImport("user32.dll", CharSet = CharSet.Ansi)]
-        //public static extern bool EnumDisplayDevices(string lpDevice, uint iDevNum, ref DISPLAY_DEVICE lpDisplayDevice, uint dwFlags);
+    //[DllImport("user32.dll", CharSet = CharSet.Ansi)]
+    //public static extern bool EnumDisplayDevices(string lpDevice, uint iDevNum, ref DISPLAY_DEVICE lpDisplayDevice, uint dwFlags);
 
 }

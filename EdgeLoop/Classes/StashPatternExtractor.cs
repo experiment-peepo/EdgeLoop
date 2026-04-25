@@ -4,25 +4,31 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using HtmlAgilityPack;
 
-namespace EdgeLoop.Classes {
+namespace EdgeLoop.Classes
+{
     /// <summary>
     /// XPath-based HTML extractor inspired by Stash community scraper patterns
     /// Provides robust extraction with quality awareness
     /// </summary>
-    public class StashPatternExtractor {
+    public class StashPatternExtractor
+    {
         /// <summary>
         /// Extracts Open Graph video URL (often highest quality)
         /// </summary>
-        public static string ExtractOgVideo(string html) {
+        public static string ExtractOgVideo(string html)
+        {
             if (string.IsNullOrEmpty(html)) return null;
 
-            try {
+            try
+            {
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
-                
+
                 var node = doc.DocumentNode.SelectSingleNode("//meta[@property='og:video']");
                 return node?.GetAttributeValue("content", null);
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Warning($"Error extracting og:video: {ex.Message}");
                 return null;
             }
@@ -31,16 +37,20 @@ namespace EdgeLoop.Classes {
         /// <summary>
         /// Extracts Open Graph image/thumbnail URL
         /// </summary>
-        public static string ExtractOgImage(string html) {
+        public static string ExtractOgImage(string html)
+        {
             if (string.IsNullOrEmpty(html)) return null;
 
-            try {
+            try
+            {
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
-                
+
                 var node = doc.DocumentNode.SelectSingleNode("//meta[@property='og:image']");
                 return node?.GetAttributeValue("content", null);
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Warning($"Error extracting og:image: {ex.Message}");
                 return null;
             }
@@ -49,18 +59,22 @@ namespace EdgeLoop.Classes {
         /// <summary>
         /// Extracts Open Graph title
         /// </summary>
-        public static string ExtractOgTitle(string html) {
+        public static string ExtractOgTitle(string html)
+        {
             if (string.IsNullOrEmpty(html)) return null;
 
-            try {
+            try
+            {
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
-                
+
                 // Try both property and name attributes, as some sites use them interchangeably
-                var node = doc.DocumentNode.SelectSingleNode("//meta[@property='og:title']") ?? 
+                var node = doc.DocumentNode.SelectSingleNode("//meta[@property='og:title']") ??
                            doc.DocumentNode.SelectSingleNode("//meta[@name='og:title']");
                 return node?.GetAttributeValue("content", null);
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Warning($"Error extracting og:title: {ex.Message}");
                 return null;
             }
@@ -69,25 +83,31 @@ namespace EdgeLoop.Classes {
         /// <summary>
         /// Extracts video title using Stash patterns for Hypnotube
         /// </summary>
-        public static string ExtractHypnotubeTitle(string html) {
+        public static string ExtractHypnotubeTitle(string html)
+        {
             if (string.IsNullOrEmpty(html)) return null;
 
-            try {
+            try
+            {
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
-                
+
                 // Modern pattern: The H1 inside the item-tr-inner-col container
                 var node = doc.DocumentNode.SelectSingleNode("//div[contains(@class, 'item-tr-inner-col')]//h1");
-                if (node == null) {
+                if (node == null)
+                {
                     // Fallback: any H1 inside the main item column
                     node = doc.DocumentNode.SelectSingleNode("//div[contains(@class, 'item-tr-col')]//h1");
                 }
-                if (node == null) {
+                if (node == null)
+                {
                     // Last resort: the first H1 on the page (usually the video title)
                     node = doc.DocumentNode.SelectSingleNode("//h1");
                 }
                 return node?.InnerText?.Trim();
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Warning($"Error extracting Hypnotube title: {ex.Message}");
                 return null;
             }
@@ -96,44 +116,49 @@ namespace EdgeLoop.Classes {
         /// <summary>
         /// Extracts all video source URLs from HTML and returns them sorted by quality
         /// </summary>
-        public static List<VideoQuality> ExtractAllVideoSources(string html, string baseUrl = null) {
+        public static List<VideoQuality> ExtractAllVideoSources(string html, string baseUrl = null)
+        {
             var qualities = new List<VideoQuality>();
             if (string.IsNullOrEmpty(html)) return qualities;
-            
-            try {
+
+            try
+            {
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
-                
+
                 // 1. Try standard <video><source> tags
                 var sourceNodes = doc.DocumentNode.SelectNodes("//video//source");
-                if (sourceNodes != null) {
-                    foreach (var source in sourceNodes) {
+                if (sourceNodes != null)
+                {
+                    foreach (var source in sourceNodes)
+                    {
                         var url = source.GetAttributeValue("src", "");
                         if (string.IsNullOrEmpty(url)) continue;
-                        
+
                         url = ResolveUrl(url, baseUrl);
-                        
+
                         // Priority 1: Check URL for quality
                         var quality = QualitySelector.DetectQualityFromUrl(url);
-                        
+
                         // Priority 2: Check attributes commonly used for quality
-                        if (quality <= 0) {
-                             var label = source.GetAttributeValue("label", "");
-                             var title = source.GetAttributeValue("title", "");
-                             var res = source.GetAttributeValue("res", "");
-                             var dataRes = source.GetAttributeValue("data-res", "");
-                             var sizes = source.GetAttributeValue("sizes", "");
-                             var size = source.GetAttributeValue("size", "");
-                             
-                             quality = QualitySelector.DetectQualityFromString(label);
-                             if (quality <= 0) quality = QualitySelector.DetectQualityFromString(title);
-                             if (quality <= 0) quality = QualitySelector.DetectQualityFromString(res);
-                             if (quality <= 0) quality = QualitySelector.DetectQualityFromString(dataRes);
-                             if (quality <= 0) quality = QualitySelector.DetectQualityFromString(sizes);
-                             if (quality <= 0) quality = QualitySelector.DetectQualityFromString(size);
-                         }
-                        
-                         // Include everything
+                        if (quality <= 0)
+                        {
+                            var label = source.GetAttributeValue("label", "");
+                            var title = source.GetAttributeValue("title", "");
+                            var res = source.GetAttributeValue("res", "");
+                            var dataRes = source.GetAttributeValue("data-res", "");
+                            var sizes = source.GetAttributeValue("sizes", "");
+                            var size = source.GetAttributeValue("size", "");
+
+                            quality = QualitySelector.DetectQualityFromString(label);
+                            if (quality <= 0) quality = QualitySelector.DetectQualityFromString(title);
+                            if (quality <= 0) quality = QualitySelector.DetectQualityFromString(res);
+                            if (quality <= 0) quality = QualitySelector.DetectQualityFromString(dataRes);
+                            if (quality <= 0) quality = QualitySelector.DetectQualityFromString(sizes);
+                            if (quality <= 0) quality = QualitySelector.DetectQualityFromString(size);
+                        }
+
+                        // Include everything
                         var detectedQuality = quality > 0 ? quality : 1;
                         Logger.Debug($"[Extractor] Found <source> tag: {detectedQuality}p -> {url}");
                         qualities.Add(new VideoQuality(detectedQuality, url));
@@ -142,20 +167,25 @@ namespace EdgeLoop.Classes {
 
                 // 2. Try extracting from JSON sources in scripts
                 var jsonSources = ExtractSourcesFromJson(html, baseUrl);
-                foreach (var jsSource in jsonSources) {
-                    if (!qualities.Any(q => q.Url == jsSource.Url)) {
+                foreach (var jsSource in jsonSources)
+                {
+                    if (!qualities.Any(q => q.Url == jsSource.Url))
+                    {
                         Logger.Debug($"[Extractor] Found JSON source: {jsSource.Height}p -> {jsSource.Url}");
                         qualities.Add(jsSource);
                     }
                 }
-                
+
                 // 3. Extract from <video> src attribute (as fallback)
                 var videoNode = doc.DocumentNode.SelectSingleNode("//video[@src]");
-                if (videoNode != null) {
+                if (videoNode != null)
+                {
                     var url = videoNode.GetAttributeValue("src", null);
-                    if (!string.IsNullOrEmpty(url)) {
+                    if (!string.IsNullOrEmpty(url))
+                    {
                         url = ResolveUrl(url, baseUrl);
-                        if (!qualities.Any(q => q.Url == url)) {
+                        if (!qualities.Any(q => q.Url == url))
+                        {
                             var quality = QualitySelector.DetectQualityFromUrl(url);
                             var detectedQuality = quality > 0 ? quality : 720;
                             Logger.Debug($"[Extractor] Found fallback <video src>: {detectedQuality}p -> {url}");
@@ -164,14 +194,17 @@ namespace EdgeLoop.Classes {
                     }
                 }
 
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Warning($"Error extracting video sources: {ex.Message}");
             }
 
             return qualities.OrderByDescending(q => q.Height).ToList();
         }
 
-        private static List<VideoQuality> ExtractSourcesFromJson(string html, string baseUrl) {
+        private static List<VideoQuality> ExtractSourcesFromJson(string html, string baseUrl)
+        {
             var sources = new List<VideoQuality>();
             if (string.IsNullOrWhiteSpace(html)) return sources;
 
@@ -189,34 +222,48 @@ namespace EdgeLoop.Classes {
 
             var regexTimeout = TimeSpan.FromSeconds(5);
 
-            foreach (var pattern in jsonPatterns) {
+            foreach (var pattern in jsonPatterns)
+            {
                 var matches = Regex.Matches(html, pattern, RegexOptions.IgnoreCase, regexTimeout);
-                foreach (Match match in matches) {
-                    if (match.Success && match.Groups.Count >= 3) {
-                        try {
+                foreach (Match match in matches)
+                {
+                    if (match.Success && match.Groups.Count >= 3)
+                    {
+                        try
+                        {
                             string url, label;
-                            
-                            if (int.TryParse(match.Groups[2].Value, out int q2)) {
+
+                            if (int.TryParse(match.Groups[2].Value, out int q2))
+                            {
                                 url = match.Groups[1].Value.Replace("\\/", "/");
                                 label = match.Groups[2].Value;
-                            } else if (int.TryParse(match.Groups[1].Value, out int q1)) {
+                            }
+                            else if (int.TryParse(match.Groups[1].Value, out int q1))
+                            {
                                 label = match.Groups[1].Value;
                                 url = match.Groups[2].Value.Replace("\\/", "/");
-                            } else if (match.Groups.Count >= 4 && int.TryParse(match.Groups[3].Value, out int q3)) { 
+                            }
+                            else if (match.Groups.Count >= 4 && int.TryParse(match.Groups[3].Value, out int q3))
+                            {
                                 url = match.Groups[1].Value.Replace("\\/", "/");
                                 label = match.Groups[3].Value;
-                            } else {
+                            }
+                            else
+                            {
                                 continue;
                             }
 
-                            if (!string.IsNullOrEmpty(url) && (url.Contains(".mp4") || url.Contains(".webm"))) {
+                            if (!string.IsNullOrEmpty(url) && (url.Contains(".mp4") || url.Contains(".webm")))
+                            {
                                 var resolvedUrl = ResolveUrl(url, baseUrl);
                                 var quality = QualitySelector.DetectQualityFromString(label);
-                                if (quality > 0) {
+                                if (quality > 0)
+                                {
                                     sources.Add(new VideoQuality(resolvedUrl, quality, $"{label}p"));
                                 }
                             }
-                        } catch { }
+                        }
+                        catch { }
                     }
                 }
             }
@@ -227,20 +274,25 @@ namespace EdgeLoop.Classes {
         /// <summary>
         /// Extracts video tags using Stash patterns
         /// </summary>
-        public static List<string> ExtractTags(string html, string xpath = "//div[@class='tags-block']/a") {
+        public static List<string> ExtractTags(string html, string xpath = "//div[@class='tags-block']/a")
+        {
             if (string.IsNullOrEmpty(html)) return new List<string>();
 
-            try {
+            try
+            {
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
-                
+
                 var tagNodes = doc.DocumentNode.SelectNodes(xpath);
-                if (tagNodes != null) {
+                if (tagNodes != null)
+                {
                     return tagNodes.Select(n => n.InnerText?.Trim())
                                   .Where(t => !string.IsNullOrEmpty(t))
                                   .ToList();
                 }
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Warning($"Error extracting tags: {ex.Message}");
             }
 
@@ -250,42 +302,54 @@ namespace EdgeLoop.Classes {
         /// <summary>
         /// Generic XPath extraction helper
         /// </summary>
-        public static string ExtractByXPath(string html, string xpath) {
+        public static string ExtractByXPath(string html, string xpath)
+        {
             if (string.IsNullOrEmpty(html) || string.IsNullOrEmpty(xpath)) return null;
 
-            try {
+            try
+            {
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
-                
+
                 var node = doc.DocumentNode.SelectSingleNode(xpath);
-                if (node != null) {
-                    if (xpath.Contains("/@")) {
+                if (node != null)
+                {
+                    if (xpath.Contains("/@"))
+                    {
                         var attrName = xpath.Substring(xpath.LastIndexOf("/@") + 2);
                         return node.GetAttributeValue(attrName, null);
                     }
                     return node.InnerText?.Trim();
                 }
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Warning($"Error extracting XPath {xpath}: {ex.Message}");
             }
 
             return null;
         }
 
-        private static string ResolveUrl(string url, string baseUrl) {
+        private static string ResolveUrl(string url, string baseUrl)
+        {
             if (string.IsNullOrEmpty(url) || string.IsNullOrEmpty(baseUrl)) return url;
-            if (url.StartsWith("http") || url.StartsWith("//")) {
-                if (url.StartsWith("//")) {
+            if (url.StartsWith("http") || url.StartsWith("//"))
+            {
+                if (url.StartsWith("//"))
+                {
                     var baseUri = new Uri(baseUrl);
                     return baseUri.Scheme + ":" + url;
                 }
                 return url;
             }
-            try {
+            try
+            {
                 var baseUri = new Uri(baseUrl);
                 var absoluteUri = new Uri(baseUri, url);
                 return absoluteUri.ToString();
-            } catch {
+            }
+            catch
+            {
                 return url;
             }
         }

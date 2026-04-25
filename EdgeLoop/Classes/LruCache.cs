@@ -1,18 +1,21 @@
 using System;
 using System.Collections.Generic;
 
-namespace EdgeLoop.Classes {
+namespace EdgeLoop.Classes
+{
     /// <summary>
     /// LRU (Least Recently Used) cache with size limit and TTL support
     /// </summary>
-    public class LruCache<TKey, TValue> {
+    public class LruCache<TKey, TValue>
+    {
         private readonly int _maxSize;
         private readonly TimeSpan? _ttl;
         private readonly Dictionary<TKey, CacheEntry> _cache;
         private readonly LinkedList<TKey> _accessOrder;
         private readonly object _lock = new object();
 
-        private class CacheEntry {
+        private class CacheEntry
+        {
             public TValue Value { get; set; }
             public DateTime CreatedAt { get; set; }
             public LinkedListNode<TKey> Node { get; set; }
@@ -23,7 +26,8 @@ namespace EdgeLoop.Classes {
         /// </summary>
         /// <param name="maxSize">Maximum number of entries</param>
         /// <param name="ttl">Time to live for entries (null for no expiration)</param>
-        public LruCache(int maxSize, TimeSpan? ttl = null) {
+        public LruCache(int maxSize, TimeSpan? ttl = null)
+        {
             _maxSize = maxSize;
             _ttl = ttl;
             _cache = new Dictionary<TKey, CacheEntry>();
@@ -33,16 +37,20 @@ namespace EdgeLoop.Classes {
         /// <summary>
         /// Gets a value from the cache
         /// </summary>
-        public bool TryGetValue(TKey key, out TValue value) {
+        public bool TryGetValue(TKey key, out TValue value)
+        {
             value = default(TValue);
-            
-            lock (_lock) {
-                if (!_cache.TryGetValue(key, out var entry)) {
+
+            lock (_lock)
+            {
+                if (!_cache.TryGetValue(key, out var entry))
+                {
                     return false;
                 }
 
                 // Check if entry has expired
-                if (_ttl.HasValue && DateTime.Now - entry.CreatedAt > _ttl.Value) {
+                if (_ttl.HasValue && DateTime.Now - entry.CreatedAt > _ttl.Value)
+                {
                     RemoveInternal(key);
                     return false;
                 }
@@ -50,7 +58,7 @@ namespace EdgeLoop.Classes {
                 // Move to front (most recently used)
                 _accessOrder.Remove(entry.Node);
                 entry.Node = _accessOrder.AddFirst(key);
-                
+
                 value = entry.Value;
                 return true;
             }
@@ -59,9 +67,12 @@ namespace EdgeLoop.Classes {
         /// <summary>
         /// Adds or updates a value in the cache
         /// </summary>
-        public void Set(TKey key, TValue value) {
-            lock (_lock) {
-                if (_cache.TryGetValue(key, out var existingEntry)) {
+        public void Set(TKey key, TValue value)
+        {
+            lock (_lock)
+            {
+                if (_cache.TryGetValue(key, out var existingEntry))
+                {
                     // Update existing entry
                     existingEntry.Value = value;
                     existingEntry.CreatedAt = DateTime.Now;
@@ -71,14 +82,16 @@ namespace EdgeLoop.Classes {
                 }
 
                 // Remove least recently used if at capacity
-                if (_cache.Count >= _maxSize) {
+                if (_cache.Count >= _maxSize)
+                {
                     var lruKey = _accessOrder.Last.Value;
                     RemoveInternal(lruKey);
                 }
 
                 // Add new entry
                 var node = _accessOrder.AddFirst(key);
-                _cache[key] = new CacheEntry {
+                _cache[key] = new CacheEntry
+                {
                     Value = value,
                     CreatedAt = DateTime.Now,
                     Node = node
@@ -89,8 +102,10 @@ namespace EdgeLoop.Classes {
         /// <summary>
         /// Removes an entry from the cache (internal version without locking, assumes lock is held)
         /// </summary>
-        private void RemoveInternal(TKey key) {
-            if (_cache.TryGetValue(key, out var entry)) {
+        private void RemoveInternal(TKey key)
+        {
+            if (_cache.TryGetValue(key, out var entry))
+            {
                 _accessOrder.Remove(entry.Node);
                 _cache.Remove(key);
             }
@@ -99,8 +114,10 @@ namespace EdgeLoop.Classes {
         /// <summary>
         /// Removes an entry from the cache
         /// </summary>
-        public void Remove(TKey key) {
-            lock (_lock) {
+        public void Remove(TKey key)
+        {
+            lock (_lock)
+            {
                 RemoveInternal(key);
             }
         }
@@ -108,8 +125,10 @@ namespace EdgeLoop.Classes {
         /// <summary>
         /// Clears all entries from the cache
         /// </summary>
-        public void Clear() {
-            lock (_lock) {
+        public void Clear()
+        {
+            lock (_lock)
+            {
                 _cache.Clear();
                 _accessOrder.Clear();
             }
@@ -118,9 +137,12 @@ namespace EdgeLoop.Classes {
         /// <summary>
         /// Gets the number of entries in the cache
         /// </summary>
-        public int Count {
-            get {
-                lock (_lock) {
+        public int Count
+        {
+            get
+            {
+                lock (_lock)
+                {
                     return _cache.Count;
                 }
             }

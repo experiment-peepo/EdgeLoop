@@ -20,9 +20,11 @@ using System.Windows.Forms;
 using System.Runtime.Versioning;
 using System.Windows.Interop;
 
-namespace EdgeLoop.Classes {
+namespace EdgeLoop.Classes
+{
     [SupportedOSPlatform("windows")]
-    public static class WindowServices {
+    public static class WindowServices
+    {
         public const int WS_EX_TRANSPARENT = 0x00000020;
         public const int GWL_EXSTYLE = (-20);
 
@@ -45,16 +47,19 @@ namespace EdgeLoop.Classes {
         }
 
         [SupportedOSPlatform("windows")]
-        public static List<ScreenViewer> GetAllScreenViewers() {
+        public static List<ScreenViewer> GetAllScreenViewers()
+        {
             List<ScreenViewer> list = new List<ScreenViewer>();
-            foreach(Screen screen in GetAllScreens()) {
+            foreach (Screen screen in GetAllScreens())
+            {
                 list.Add(new ScreenViewer(screen));
             }
             return list;
         }
 
         [SupportedOSPlatform("windows")]
-        public static void MoveWindowToScreen(Window window, Screen screen) {
+        public static void MoveWindowToScreen(Window window, Screen screen)
+        {
             if (window == null || screen == null) return;
 
             window.WindowState = WindowState.Normal;

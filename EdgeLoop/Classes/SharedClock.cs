@@ -2,12 +2,14 @@ using System;
 using System.Diagnostics;
 using FlyleafLib.MediaPlayer;
 
-namespace EdgeLoop.Classes {
+namespace EdgeLoop.Classes
+{
     /// <summary>
     /// A synchronized clock implementation for multi-monitor playback.
     /// Uses Stopwatch for high-resolution timing, converted to 100ns Ticks.
     /// </summary>
-    public class SharedClock : IClock {
+    public class SharedClock : IClock
+    {
         private long _baseSW;
         private long _baseTicks;
         private long _pausedTicks;
@@ -15,24 +17,29 @@ namespace EdgeLoop.Classes {
         private double _speed = 1.0;
         private static readonly double _swToTicks = 10000000.0 / Stopwatch.Frequency;
 
-        public SharedClock() {
+        public SharedClock()
+        {
             _baseSW = 0;
             _baseTicks = 0;
             _pausedTicks = 0;
             _isRunning = false;
         }
 
-        public long Ticks {
-            get {
+        public long Ticks
+        {
+            get
+            {
                 if (!_isRunning) return _pausedTicks;
                 long elapsedSW = Stopwatch.GetTimestamp() - _baseSW;
                 return _baseTicks + (long)(elapsedSW * _swToTicks * _speed);
             }
         }
 
-        public double Speed {
+        public double Speed
+        {
             get => _speed;
-            set {
+            set
+            {
                 if (Math.Abs(_speed - value) < 0.001) return;
                 // Capture current ticks before changing speed to maintain continuity
                 _baseTicks = Ticks;
@@ -41,7 +48,8 @@ namespace EdgeLoop.Classes {
             }
         }
 
-        public void Start() {
+        public void Start()
+        {
             if (_isRunning) return;
             Logger.Debug($"[SharedClock] Starting at {_pausedTicks / 10000}ms");
             _baseSW = Stopwatch.GetTimestamp();
@@ -49,23 +57,26 @@ namespace EdgeLoop.Classes {
             _isRunning = true;
         }
 
-        public void Pause() {
+        public void Pause()
+        {
             if (!_isRunning) return;
             _pausedTicks = Ticks;
             Logger.Debug($"[SharedClock] Pausing at {_pausedTicks / 10000}ms");
             _isRunning = false;
         }
 
-        public void Seek(long ticks) {
+        public void Seek(long ticks)
+        {
             Logger.Debug($"[SharedClock] Seeking from {Ticks / 10000}ms to {ticks / 10000}ms");
             _baseTicks = ticks;
             _baseSW = Stopwatch.GetTimestamp();
             if (!_isRunning) _pausedTicks = ticks;
         }
-        
+
         public bool IsRunning => _isRunning;
 
-        public void Reset() {
+        public void Reset()
+        {
             Logger.Debug($"[SharedClock] Resetting (Previous: {Ticks / 10000}ms)");
             _baseSW = Stopwatch.GetTimestamp();
             _baseTicks = 0;

@@ -1,11 +1,13 @@
 using System;
 
-namespace EdgeLoop.Classes {
+namespace EdgeLoop.Classes
+{
     /// <summary>
     /// Represents a single playback event for a video.
     /// Used for smart shuffle scoring and analytics.
     /// </summary>
-    public class VideoPlayRecord {
+    public class VideoPlayRecord
+    {
         /// <summary>
         /// Unique identifier for the video (usually local file path or URL)
         /// </summary>
@@ -45,7 +47,7 @@ namespace EdgeLoop.Classes {
         /// Hash identifier for the playlist this video belonged to
         /// </summary>
         public string PlaylistHash { get; set; }
-        
+
         /// <summary>
         /// Helper to get watch percentage (0-1)
         /// </summary>

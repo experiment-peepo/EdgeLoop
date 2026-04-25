@@ -1,9 +1,7 @@
+using FlyleafLib.MediaFramework.MediaFrame;
 using SharpGen.Runtime;
 using Vortice.DXGI;
-
 using ResultCode = Vortice.DXGI.ResultCode;
-
-using FlyleafLib.MediaFramework.MediaFrame;
 
 namespace FlyleafLib.MediaFramework.MediaRenderer;
 
@@ -48,7 +46,7 @@ public unsafe partial class Renderer
     {
         canIdle = false;
         while (isIdleRunning)
-            { canIdle = false; Thread.Sleep(1); }
+        { canIdle = false; Thread.Sleep(1); }
     }
     void RenderIdleLoop()
     {
@@ -58,7 +56,7 @@ public unsafe partial class Renderer
             while (renderRequestAt <= lastRenderAt && rechecks-- > 0)
             {
                 if (!canIdle || !SwapChain.CanPresent)
-                    { rechecks = 0; break; }
+                { rechecks = 0; break; }
 
                 Thread.Sleep(5); // might not TimeBeginPeriod1 (can drop fps or slow down cancelation)
             }
@@ -89,7 +87,8 @@ public unsafe partial class Renderer
             lock (lockRenderLoops)
             {
                 bool acquired = false;
-                if (D3DImage != null && D3DImage.IsEnabled) { D3DImage.Acquire(); acquired = true; }
+                if (D3DImage != null && D3DImage.IsEnabled)
+                { D3DImage.Acquire(); acquired = true; }
 
                 try
                 {
@@ -109,7 +108,7 @@ public unsafe partial class Renderer
                         }
 
                         if (Frames.RendererFrame != null)
-                            { D3Render(Frames.RendererFrame, false); needsClear = false; }
+                        { D3Render(Frames.RendererFrame, false); needsClear = false; }
                     }
                     else
                     {
@@ -120,9 +119,9 @@ public unsafe partial class Renderer
                             return RenderIdle();
                         }
 
-                    
+
                         if (Frames.RendererFrame != null)
-                            { FLRender(Frames.RendererFrame); needsClear = false; }
+                        { FLRender(Frames.RendererFrame); needsClear = false; }
                     }
 
                     if (needsClear)
@@ -145,7 +144,8 @@ public unsafe partial class Renderer
                 }
                 finally
                 {
-                    if (acquired) D3DImage.Release();
+                    if (acquired)
+                        D3DImage.Release();
                 }
             }
 
@@ -191,11 +191,11 @@ public unsafe partial class Renderer
             {
                 bool acquired = false;
                 long startTicks = 0;
-                if (D3DImage != null && D3DImage.IsEnabled) 
-                { 
+                if (D3DImage != null && D3DImage.IsEnabled)
+                {
                     startTicks = System.Diagnostics.Stopwatch.GetTimestamp();
-                    D3DImage.Acquire(); 
-                    acquired = true; 
+                    D3DImage.Acquire();
+                    acquired = true;
                 }
 
                 try
@@ -238,7 +238,8 @@ public unsafe partial class Renderer
                 }
                 finally
                 {
-                    if (acquired) D3DImage.Release();
+                    if (acquired)
+                        D3DImage.Release();
                 }
             }
 
@@ -301,7 +302,8 @@ public unsafe partial class Renderer
                     return;
 
                 bool acquired = false;
-                if (D3DImage != null && D3DImage.IsEnabled) { D3DImage.Acquire(); acquired = true; }
+                if (D3DImage != null && D3DImage.IsEnabled)
+                { D3DImage.Acquire(); acquired = true; }
 
                 try
                 {
@@ -318,7 +320,8 @@ public unsafe partial class Renderer
                 }
                 finally
                 {
-                    if (acquired) D3DImage.Release();
+                    if (acquired)
+                        D3DImage.Release();
                 }
 
                 SwapChain.Present(1, PresentFlags.None);

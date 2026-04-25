@@ -1,34 +1,32 @@
+using SharpGen.Runtime;
 using System.Runtime.InteropServices;
 using System.Windows;
-
-using SharpGen.Runtime;
 using Vortice.Direct2D1;
 using Vortice.Direct3D11;
 using Vortice.DirectComposition;
 using Vortice.DXGI;
-
-using ID3D11Texture2D = Vortice.Direct3D11.ID3D11Texture2D;
-using FrameStatistics = Vortice.DXGI.FrameStatistics;
-
 using static FlyleafLib.Utils.NativeMethods;
+using FrameStatistics = Vortice.DXGI.FrameStatistics;
+using ID3D11Texture2D = Vortice.Direct3D11.ID3D11Texture2D;
 
 namespace FlyleafLib.MediaFramework.MediaRenderer;
 
 public unsafe class SwapChain
 {
-    public Renderer                 Renderer        { get; private set; }
-    public bool                     Disposed        { get; private set; } = true;
-    public GPUOutput                Monitor         { get; private set; }
-    public nint                     ControlHwnd     { get; private set; }
-    
-    public bool                     CanPresent      => canPresent || (Renderer.D3DImage != null && Renderer.D3DImage.IsEnabled && vp.ControlWidth > 0 && vp.ControlHeight > 0);
+    public Renderer Renderer { get; private set; }
+    public bool Disposed { get; private set; } = true;
+    public GPUOutput Monitor { get; private set; }
+    public nint ControlHwnd { get; private set; }
+
+    public bool CanPresent => canPresent || (Renderer.D3DImage != null && Renderer.D3DImage.IsEnabled && vp.ControlWidth > 0 && vp.ControlHeight > 0);
     internal bool canPresent;
 
     public ID3D11VideoProcessorOutputView
-                                    VPOV            { get; internal set; }
-    public ID3D11Texture2D          BackBuffer => bb;
+                                    VPOV
+    { get; internal set; }
+    public ID3D11Texture2D BackBuffer => bb;
     ID3D11Texture2D bb;
-    public ID3D11RenderTargetView   BackBufferRtv => bbRtv;
+    public ID3D11RenderTargetView BackBufferRtv => bbRtv;
     ID3D11RenderTargetView bbRtv;
 
     IDXGISwapChain1             sc;
@@ -56,28 +54,28 @@ public unsafe class SwapChain
 
     internal SwapChain(Renderer renderer, IVP vp = null)
     {
-        Renderer    = renderer;
-        this.vp     = vp ?? renderer;
+        Renderer = renderer;
+        this.vp = vp ?? renderer;
 
-        Log         = renderer.Log;
-        ucfg        = renderer.ucfg;
+        Log = renderer.Log;
+        ucfg = renderer.ucfg;
 
-        wndProcDelegate     = new(WndProc);
-        wndProcDelegatePtr  = Marshal.GetFunctionPointerForDelegate(wndProcDelegate);
+        wndProcDelegate = new(WndProc);
+        wndProcDelegatePtr = Marshal.GetFunctionPointerForDelegate(wndProcDelegate);
     }
 
     SwapChainDescription1 Desc() => new()
     {
-            BufferUsage         = Usage.RenderTargetOutput,
-            Format              = (Format)ucfg.SwapChainFormat,
-            Width               = 2,
-            Height              = 2,
-            AlphaMode           = AlphaMode.Premultiplied,  // TBR
-            SwapEffect          = SwapEffect.FlipDiscard,   
-            Scaling             = Scaling.Stretch,          // DComp can't validate widhth/height?*
-            BufferCount         = 2,
-            SampleDescription   = new SampleDescription(1, 0),
-            Flags               = SwapChainFlags.None
+        BufferUsage = Usage.RenderTargetOutput,
+        Format = (Format)ucfg.SwapChainFormat,
+        Width = 2,
+        Height = 2,
+        AlphaMode = AlphaMode.Premultiplied,  // TBR
+        SwapEffect = SwapEffect.FlipDiscard,
+        Scaling = Scaling.Stretch,          // DComp can't validate widhth/height?*
+        BufferCount = 2,
+        SampleDescription = new SampleDescription(1, 0),
+        Flags = SwapChainFlags.None
     };
 
     public void Setup(nint hwnd)
@@ -114,13 +112,14 @@ public unsafe class SwapChain
     {
         try
         {
-            if (CanDebug) Log.Debug($"SC Initializing [Hwnd: {ControlHwnd}, Fmt: {ucfg.SwapChainFormat}]");
+            if (CanDebug)
+                Log.Debug($"SC Initializing [Hwnd: {ControlHwnd}, Fmt: {ucfg.SwapChainFormat}]");
 
-            Disposed        = false;
+            Disposed = false;
             RECT rect       = new();
             GetWindowRect(ControlHwnd, ref rect);
-            controlWidth    = rect.Right  - rect.Left;
-            controlHeight   = rect.Bottom - rect.Top;
+            controlWidth = rect.Right - rect.Left;
+            controlHeight = rect.Bottom - rect.Top;
 
             sc = Engine.Video.Factory.CreateSwapChainForComposition(Renderer.Device, Desc()); // we will resize on rendering
             DComp.DCompositionCreateDevice(Renderer.DXGIDevice, out dcDevice).CheckError();
@@ -143,7 +142,8 @@ public unsafe class SwapChain
 
             SetupLocalHelper();
 
-            if (CanInfo) Log.Info($"SC Initialized [Hwnd: {ControlHwnd}, Fmt: {ucfg.SwapChainFormat}]");
+            if (CanInfo)
+                Log.Info($"SC Initialized [Hwnd: {ControlHwnd}, Fmt: {ucfg.SwapChainFormat}]");
         }
         catch (Exception e) // Should handle device lost etc..
         {
@@ -179,7 +179,8 @@ public unsafe class SwapChain
     {
         try
         {
-            if (CanDebug) Log.Debug($"SC Initializing [Fmt: {ucfg.SwapChainFormat}]");
+            if (CanDebug)
+                Log.Debug($"SC Initializing [Fmt: {ucfg.SwapChainFormat}]");
 
             Disposed = false;
 
@@ -198,11 +199,11 @@ public unsafe class SwapChain
     }
     void SetupLocalHelper()
     {
-        context2d   = Renderer.context2d;
+        context2d = Renderer.context2d;
 
         // Only to avoid nulls on resize
-        bb          = sc.GetBuffer<ID3D11Texture2D>(0);
-        bbRtv       = Renderer.Device.CreateRenderTargetView(bb);
+        bb = sc.GetBuffer<ID3D11Texture2D>(0);
+        bbRtv = Renderer.Device.CreateRenderTargetView(bb);
 
         UpdateDisplay(true); // don't force if we let WndProc run without our swapchain
 
@@ -285,7 +286,8 @@ public unsafe class SwapChain
     }
     void DisposeLocalWinUI()
     {
-        if (CanDebug) Log.Debug($"SC Disposing");
+        if (CanDebug)
+            Log.Debug($"SC Disposing");
 
         WinUIClbk.Invoke(null);
 
@@ -298,7 +300,8 @@ public unsafe class SwapChain
             sc = null;
         }
 
-        if (CanInfo) Log.Info($"SC Disposed [Hwnd: {ControlHwnd}]");
+        if (CanInfo)
+            Log.Info($"SC Disposed [Hwnd: {ControlHwnd}]");
     }
     void DisposeHelper()
     {
@@ -307,7 +310,7 @@ public unsafe class SwapChain
             bitmap2d.Dispose();
             bitmap2d = null;
         }
-        
+
         if (VPOV != null)
         {
             VPOV.Dispose();
@@ -330,8 +333,8 @@ public unsafe class SwapChain
 
     public void Resize(int width, int height)
     {   // Externally used when a WndProc hook is not available (e.g. WinUI)
-        controlWidth    = width;
-        controlHeight   = height;
+        controlWidth = width;
+        controlHeight = height;
 
         canPresent = controlWidth > 0 && controlHeight > 0;
         if (controlWidth != vp.ControlWidth || controlHeight != vp.ControlHeight) // TBR: It will not refresh on restore from minimize (same sizes)
@@ -340,26 +343,29 @@ public unsafe class SwapChain
 
     public Result Present()
     {
-        if (sc == null) return Result.Ok;
+        if (sc == null)
+            return Result.Ok;
         return sc.Present(ucfg.VSync, PresentFlags.None);
     }
 
     public Result Present(uint syncInterval, PresentFlags flags)
     {
-        if (sc == null) return Result.Ok;
+        if (sc == null)
+            return Result.Ok;
         return sc.Present(syncInterval, flags);
     }
 
     internal void SetSize()
     {
-        if (sc == null) return;
+        if (sc == null)
+            return;
 
         // TBR lock with Resize*
         vp.UpdateSize(controlWidth, controlHeight);
 
         if (!isCornerRadiusEmpty)
         {
-            dcClip.SetRight (vp.ControlWidth);
+            dcClip.SetRight(vp.ControlWidth);
             dcClip.SetBottom(vp.ControlHeight);
             dcDevice.Commit().CheckError();
         }
@@ -370,11 +376,11 @@ public unsafe class SwapChain
             bitmap2d.Dispose();
         }
 
-        bbRtv.  Dispose();
-        bb.     Dispose();
-        sc.     ResizeBuffers(0, (uint)vp.ControlWidth, (uint)vp.ControlHeight, Format.Unknown, SwapChainFlags.None);
-        bb      = sc.GetBuffer<ID3D11Texture2D>(0);
-        bbRtv   = Renderer.Device.CreateRenderTargetView(bb);
+        bbRtv.Dispose();
+        bb.Dispose();
+        sc.ResizeBuffers(0, (uint)vp.ControlWidth, (uint)vp.ControlHeight, Format.Unknown, SwapChainFlags.None);
+        bb = sc.GetBuffer<ID3D11Texture2D>(0);
+        bbRtv = Renderer.Device.CreateRenderTargetView(bb);
 
         if (context2d != null)
         {
@@ -423,19 +429,19 @@ public unsafe class SwapChain
     }
     void SetClipHelper()
     {
-        dcClip.SetTop   (0);
-        dcClip.SetLeft  (0);
-        dcClip.SetRight (controlWidth);
+        dcClip.SetTop(0);
+        dcClip.SetLeft(0);
+        dcClip.SetRight(controlWidth);
         dcClip.SetBottom(controlHeight);
-        
-        dcClip.SetTopLeftRadiusX        ((float)ucfg.cornerRadius.TopLeft);
-        dcClip.SetTopLeftRadiusY        ((float)ucfg.cornerRadius.TopLeft);
-        dcClip.SetTopRightRadiusX       ((float)ucfg.cornerRadius.TopRight);
-        dcClip.SetTopRightRadiusY       ((float)ucfg.cornerRadius.TopRight);
-        dcClip.SetBottomLeftRadiusX     ((float)ucfg.cornerRadius.BottomLeft);
-        dcClip.SetBottomLeftRadiusY     ((float)ucfg.cornerRadius.BottomLeft);
-        dcClip.SetBottomRightRadiusX    ((float)ucfg.cornerRadius.BottomRight);
-        dcClip.SetBottomRightRadiusY    ((float)ucfg.cornerRadius.BottomRight);
+
+        dcClip.SetTopLeftRadiusX((float)ucfg.cornerRadius.TopLeft);
+        dcClip.SetTopLeftRadiusY((float)ucfg.cornerRadius.TopLeft);
+        dcClip.SetTopRightRadiusX((float)ucfg.cornerRadius.TopRight);
+        dcClip.SetTopRightRadiusY((float)ucfg.cornerRadius.TopRight);
+        dcClip.SetBottomLeftRadiusX((float)ucfg.cornerRadius.BottomLeft);
+        dcClip.SetBottomLeftRadiusY((float)ucfg.cornerRadius.BottomLeft);
+        dcClip.SetBottomRightRadiusX((float)ucfg.cornerRadius.BottomRight);
+        dcClip.SetBottomRightRadiusY((float)ucfg.cornerRadius.BottomRight);
     }
 
     public FrameStatistics GetFrameStatistics()
@@ -447,11 +453,13 @@ public unsafe class SwapChain
 
             FrameStatistics stats;
             int retries = 7;
-            while(sc.GetFrameStatistics(out stats).Failure && retries-- > 0);
+            while (sc.GetFrameStatistics(out stats).Failure && retries-- > 0)
+                ;
 
-            #if DEBUG
-            if (retries == 0 && CanDebug) Log.Debug("GetFrameStatistics failed");
-            #endif
+#if DEBUG
+            if (retries == 0 && CanDebug)
+                Log.Debug("GetFrameStatistics failed");
+#endif
 
             return stats;
         }
@@ -468,12 +476,13 @@ public unsafe class SwapChain
         displayHwnd = newDisplayHwnd;
 
         var displays = Engine.Video.GetGPUOutputs(Renderer.DXGIAdapter);
-        foreach(var display in displays)
+        foreach (var display in displays)
             if (displayHwnd == display.Hwnd)
             {
                 Monitor = display;
                 vp.MonitorChanged(Monitor);
-                if (CanDebug) Log.Debug($"{display}");
+                if (CanDebug)
+                    Log.Debug($"{display}");
 
                 return;
             }

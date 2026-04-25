@@ -2,39 +2,55 @@ using System;
 using System.Reflection;
 using Microsoft.Win32;
 
-namespace EdgeLoop.Classes {
+namespace EdgeLoop.Classes
+{
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    public static class StartupManager {
+    public static class StartupManager
+    {
         private const string RegistryKeyPath = @"Software\Microsoft\Windows\CurrentVersion\Run";
         private const string AppName = "EdgeLoop";
 
-        public static bool IsStartupEnabled() {
-            try {
-                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RegistryKeyPath)) {
+        public static bool IsStartupEnabled()
+        {
+            try
+            {
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RegistryKeyPath))
+                {
                     if (key == null) return false;
                     return key.GetValue(AppName) != null;
                 }
-            } catch {
+            }
+            catch
+            {
                 return false;
             }
         }
 
-        public static void SetStartup(bool enable) {
-            try {
-                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RegistryKeyPath, true)) {
+        public static void SetStartup(bool enable)
+        {
+            try
+            {
+                using (RegistryKey key = Registry.CurrentUser.OpenSubKey(RegistryKeyPath, true))
+                {
                     if (key == null) return;
 
-                    if (enable) {
+                    if (enable)
+                    {
                         string exePath = Environment.ProcessPath;
-                        if (string.IsNullOrEmpty(exePath)) {
+                        if (string.IsNullOrEmpty(exePath))
+                        {
                             throw new Exception("Could not determine application process path.");
                         }
                         key.SetValue(AppName, $"\"{exePath}\"");
-                    } else {
+                    }
+                    else
+                    {
                         key.DeleteValue(AppName, false);
                     }
                 }
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 System.Windows.MessageBox.Show(
                     $"Failed to {(enable ? "enable" : "disable")} startup: {ex.Message}",
                     "Startup Error",

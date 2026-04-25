@@ -1,11 +1,13 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 
-namespace EdgeLoop.Classes {
+namespace EdgeLoop.Classes
+{
     /// <summary>
     /// Base class for objects that need to notify property changes
     /// </summary>
-    public class ObservableObject : INotifyPropertyChanged {
+    public class ObservableObject : INotifyPropertyChanged
+    {
         /// <summary>
         /// Event raised when a property value changes
         /// </summary>
@@ -15,7 +17,8 @@ namespace EdgeLoop.Classes {
         /// Raises the PropertyChanged event
         /// </summary>
         /// <param name="propertyName">Name of the property that changed</param>
-        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null) {
+        protected virtual void OnPropertyChanged([CallerMemberName] string propertyName = null)
+        {
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
 
@@ -27,7 +30,8 @@ namespace EdgeLoop.Classes {
         /// <param name="value">New value</param>
         /// <param name="propertyName">Property name (automatically inferred)</param>
         /// <returns>True if value changed, false otherwise</returns>
-        protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string propertyName = null) {
+        protected bool SetProperty<T>(ref T field, T value, [CallerMemberName] string propertyName = null)
+        {
             if (System.Collections.Generic.EqualityComparer<T>.Default.Equals(field, value)) return false;
             field = value;
             OnPropertyChanged(propertyName);

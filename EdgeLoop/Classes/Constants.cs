@@ -1,14 +1,16 @@
 using System;
 
-namespace EdgeLoop.Classes {
+namespace EdgeLoop.Classes
+{
     /// <summary>
     /// Centralized constants for the application
     /// </summary>
-    public static class Constants {
+    public static class Constants
+    {
         /// <summary>
         /// Supported video file extensions
         /// </summary>
-        public static readonly string[] VideoExtensions = { 
+        public static readonly string[] VideoExtensions = {
             ".mp4", ".mkv", ".avi", ".mov", ".wmv", ".m4v", ".webm",  // Modern formats
             ".mpg", ".mpeg",  // MPEG-1/2 - DVD/broadcast content
             ".ts", ".m2ts",   // MPEG transport streams - Blu-ray content
@@ -62,7 +64,7 @@ namespace EdgeLoop.Classes {
         /// HTTP request timeout in seconds
         /// </summary>
         public const int HttpRequestTimeoutSeconds = 60;
-        
+
         /// <summary>
         /// URL extraction timeout in seconds
         /// </summary>

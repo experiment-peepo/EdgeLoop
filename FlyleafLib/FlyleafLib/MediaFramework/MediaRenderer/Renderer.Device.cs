@@ -1,33 +1,29 @@
-using System.Text.RegularExpressions;
-
+using FlyleafLib.MediaFramework.MediaDecoder;
+using FlyleafLib.MediaPlayer;
 using SharpGen.Runtime;
+using System.Text.RegularExpressions;
 using Vortice.Direct2D1;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
-
-using FeatureLevel          = Vortice.Direct3D.FeatureLevel;
-using ID3D11Device          = Vortice.Direct3D11.ID3D11Device;
-using ID3D11DeviceContext   = Vortice.Direct3D11.ID3D11DeviceContext;
-
-using FlyleafLib.MediaFramework.MediaDecoder;
-using FlyleafLib.MediaPlayer;
-
 using static FlyleafLib.Config;
+using FeatureLevel = Vortice.Direct3D.FeatureLevel;
+using ID3D11Device = Vortice.Direct3D11.ID3D11Device;
+using ID3D11DeviceContext = Vortice.Direct3D11.ID3D11DeviceContext;
 
 namespace FlyleafLib.MediaFramework.MediaRenderer;
 
 public unsafe partial class Renderer : NotifyPropertyChanged
 {
-    public int                  UniqueId        { get; private set; }
-    public bool                 Disposed        { get; private set; } = true;
-    public SwapChain            SwapChain       { get; private set; }
-    public VideoDecoder         VideoDecoder    { get; private set; }
+    public int UniqueId { get; private set; }
+    public bool Disposed { get; private set; } = true;
+    public SwapChain SwapChain { get; private set; }
+    public VideoDecoder VideoDecoder { get; private set; }
     public readonly VideoCache  Frames;
-    public Config               Config          { get; private set; }
+    public Config Config { get; private set; }
     internal VideoConfig ucfg;
 
-    public FeatureLevel         FeatureLevel    { get; private set; }
+    public FeatureLevel FeatureLevel { get; private set; }
     static FeatureLevel[]   featureLevels =
     [
         FeatureLevel.Level_11_1,
@@ -39,12 +35,12 @@ public unsafe partial class Renderer : NotifyPropertyChanged
         FeatureLevel.Level_9_1
     ];
 
-    public ID3D11Device         Device          => device;
+    public ID3D11Device Device => device;
     internal ID3D11Device device;
     internal object lockDevice = new();
-    public IDXGIDevice1         DXGIDevice      { get; private set; }
-    internal IDXGIAdapter       DXGIAdapter     { get; private set; }
-    public GPUAdapter           GPUAdapter      => gpuAdapter;
+    public IDXGIDevice1 DXGIDevice { get; private set; }
+    internal IDXGIAdapter DXGIAdapter { get; private set; }
+    public GPUAdapter GPUAdapter => gpuAdapter;
     GPUAdapter gpuAdapter;
     ID3D11DeviceContext     context;
     bool                    forceWarp;
@@ -57,14 +53,14 @@ public unsafe partial class Renderer : NotifyPropertyChanged
 
     public Renderer(VideoDecoder videoDecoder, int uniqueId = -1, Player player = null)
     {
-        UniqueId    = uniqueId == -1 ? GetUniqueId() : uniqueId;
-        Log         = new(("[#" + UniqueId + "]").PadRight(8, ' ') + " [Renderer      ] ");
-        VideoDecoder= videoDecoder;
-        Config      = videoDecoder.Config;
+        UniqueId = uniqueId == -1 ? GetUniqueId() : uniqueId;
+        Log = new(("[#" + UniqueId + "]").PadRight(8, ' ') + " [Renderer      ] ");
+        VideoDecoder = videoDecoder;
+        Config = videoDecoder.Config;
         this.player = player;
-        ucfg        = Config.Video;
-        Frames      = new(Config.Decoder);
-        SwapChain   = new(this);
+        ucfg = Config.Video;
+        Frames = new(Config.Decoder);
+        SwapChain = new(this);
 
         Init();
         SetupLocal();
@@ -84,11 +80,11 @@ public unsafe partial class Renderer : NotifyPropertyChanged
         else if (Engine.Video != null)
         {
             foreach (var gpuAdapter in Engine.Video.GPUAdapters.Values)
-                if (Regex.IsMatch(gpuAdapter.Description,      confAdapter, RegexOptions.IgnoreCase) ||
-                    Regex.IsMatch(gpuAdapter.Luid.ToString(),  confAdapter, RegexOptions.IgnoreCase))
+                if (Regex.IsMatch(gpuAdapter.Description, confAdapter, RegexOptions.IgnoreCase) ||
+                    Regex.IsMatch(gpuAdapter.Luid.ToString(), confAdapter, RegexOptions.IgnoreCase))
                 {
                     this.gpuAdapter = gpuAdapter;
-                    DXGIAdapter     = gpuAdapter.dxgiAdapter;
+                    DXGIAdapter = gpuAdapter.dxgiAdapter;
                     break;
                 }
         }
@@ -103,12 +99,14 @@ public unsafe partial class Renderer : NotifyPropertyChanged
     {
         DisposeLocal();
 
-        if (CanDebug) Log.Debug("Initializing");
+        if (CanDebug)
+            Log.Debug("Initializing");
 
         DeviceCreationFlags debugFlag = DeviceCreationFlags.None;
-        #if DEBUG
-        if (D3D11.SdkLayersAvailable()) debugFlag |= DeviceCreationFlags.Debug;
-        #endif
+#if DEBUG
+        if (D3D11.SdkLayersAvailable())
+            debugFlag |= DeviceCreationFlags.Debug;
+#endif
 
         Result result;
 
@@ -118,7 +116,7 @@ public unsafe partial class Renderer : NotifyPropertyChanged
             forceWarp = true;
             Log.Error($"Initialization failed ({result.NativeApiCode}). Failling back to WARP device.");
         }
-        
+
         // Forced or Fallback to WARP
         if (forceWarp)
             if ((result = D3D11.D3D11CreateDevice(null, DriverType.Warp, debugFlag, featureLevels, out device)).Failure)
@@ -127,11 +125,11 @@ public unsafe partial class Renderer : NotifyPropertyChanged
                 return;
             }
 
-        Disposed    = false;
-        canIdle     = true;
-        context     = device.ImmediateContext;
-        FeatureLevel= device.FeatureLevel;
-        DXGIDevice  = device.QueryInterface<IDXGIDevice1>();
+        Disposed = false;
+        canIdle = true;
+        context = device.ImmediateContext;
+        FeatureLevel = device.FeatureLevel;
+        DXGIDevice = device.QueryInterface<IDXGIDevice1>();
 
         // Max Latency 1 | Multithread Protected
         DXGIDevice.MaximumFrameLatency = 1;
@@ -143,26 +141,26 @@ public unsafe partial class Renderer : NotifyPropertyChanged
         {
             if (Engine.Video == null)
             {
-                 DXGIAdapter = DXGIDevice.GetAdapter();
+                DXGIAdapter = DXGIDevice.GetAdapter();
             }
             else
             {
                 var gpuAdapters = Engine.Video.GPUAdapters;
-                DXGIAdapter     = DXGIDevice.GetAdapter();
+                DXGIAdapter = DXGIDevice.GetAdapter();
                 var desc        = DXGIAdapter.Description;
                 bool dxgiExists = true;
-    
+
                 if (!gpuAdapters.TryGetValue(desc.Luid, out gpuAdapter))
                 {
-                    lock(Engine.Video.GPUAdapters)
+                    lock (Engine.Video.GPUAdapters)
                         if (!gpuAdapters.TryGetValue(desc.Luid, out gpuAdapter))
                         {
-                            dxgiExists  = false;
-                            gpuAdapter  = Engine.Video.GetGPUAdapter(DXGIAdapter, desc);
+                            dxgiExists = false;
+                            gpuAdapter = Engine.Video.GetGPUAdapter(DXGIAdapter, desc);
                             gpuAdapters.Add(GPUAdapter.Luid, GPUAdapter);
                         }
                 }
-    
+
                 if (dxgiExists)
                 {
                     DXGIAdapter.Dispose();
@@ -173,7 +171,7 @@ public unsafe partial class Renderer : NotifyPropertyChanged
 
         if (ucfg.Use2DGraphics)
         {
-            device2d  = D2D1.D2D1CreateDevice(DXGIDevice);
+            device2d = D2D1.D2D1CreateDevice(DXGIDevice);
             context2d = device2d.CreateDeviceContext();
             ucfg.OnD2DInitialized(this, context2d);
         }
@@ -182,7 +180,8 @@ public unsafe partial class Renderer : NotifyPropertyChanged
         D3Setup();
         D3DImageInit();
 
-        if (CanInfo) Log.Info($"Initialized with Feature Level {(int)FeatureLevel >> 12}.{((int)FeatureLevel >> 8) & 0xf}");
+        if (CanInfo)
+            Log.Info($"Initialized with Feature Level {(int)FeatureLevel >> 12}.{((int)FeatureLevel >> 8) & 0xf}");
 
         SwapChain.Setup();
     }
@@ -219,8 +218,8 @@ public unsafe partial class Renderer : NotifyPropertyChanged
         if (!fromDecoder)
         {
             VideoDecoder.Open(stream);
-            VideoDecoder.keyPacketRequired  = !VideoDecoder.isIntraOnly;
-            VideoDecoder.keyFrameRequired   = false;
+            VideoDecoder.keyPacketRequired = !VideoDecoder.isIntraOnly;
+            VideoDecoder.keyFrameRequired = false;
         }
 
         if (wasPlaying)
@@ -240,8 +239,9 @@ public unsafe partial class Renderer : NotifyPropertyChanged
         {
             if (Disposed)
                 return;
-            
-            if (CanDebug) Log.Debug("Disposing");
+
+            if (CanDebug)
+                Log.Debug("Disposing");
 
             Disposed = true;
 
@@ -251,7 +251,7 @@ public unsafe partial class Renderer : NotifyPropertyChanged
                 player?.Pause();
                 VideoDecoder.Dispose();
             }
-            
+
             SwapChain.DisposeLocal();
             if (!isDeviceReset)
                 RenderIdleStop(); // Ensures it didn't start again (after CanPresent = false)
@@ -263,25 +263,29 @@ public unsafe partial class Renderer : NotifyPropertyChanged
             if (device2d != null)
             {
                 ucfg.OnD2DDisposing(this, context2d);
-                context2d?. Dispose();
-                device2d?.  Dispose();
+                context2d?.Dispose();
+                device2d?.Dispose();
             }
-            
-            DXGIDevice. Dispose(); DXGIDevice   = null;
-            context.    ClearState();
-            context.    Flush();
-            context.    Dispose(); context      = null;
-            device.     Dispose(); device       = null;
 
-            #if DEBUG
+            DXGIDevice.Dispose();
+            DXGIDevice = null;
+            context.ClearState();
+            context.Flush();
+            context.Dispose();
+            context = null;
+            device.Dispose();
+            device = null;
+
+#if DEBUG
             ReportLiveObjects();
-            #endif
+#endif
 
-            if (CanInfo) Log.Info("Disposed");
+            if (CanInfo)
+                Log.Info("Disposed");
         }
     }
 
-    #if DEBUG
+#if DEBUG
     int xx01 = 1;
     public void ReportLiveObjects()
     {
@@ -294,7 +298,8 @@ public unsafe partial class Renderer : NotifyPropertyChanged
                 dxgiDebug.ReportLiveObjects(DXGI.DebugAll, Vortice.DXGI.Debug.ReportLiveObjectFlags.Summary | Vortice.DXGI.Debug.ReportLiveObjectFlags.IgnoreInternal);
                 dxgiDebug.Dispose();
             }
-        } catch { }
+        }
+        catch { }
     }
-    #endif
+#endif
 }

@@ -6,11 +6,13 @@ using EdgeLoop.ViewModels;
 using EdgeLoop.Windows;
 using System.Collections.ObjectModel;
 
-namespace EdgeLoop.Classes {
+namespace EdgeLoop.Classes
+{
     /// <summary>
     /// Interface for video playback management across screens
     /// </summary>
-    public interface IVideoPlayerService {
+    public interface IVideoPlayerService
+    {
         // Events
         event EventHandler MediaOpened;
         event EventHandler<MediaErrorEventArgs> MediaErrorOccurred;
@@ -18,23 +20,23 @@ namespace EdgeLoop.Classes {
         // Core playback
         Task PlayPerMonitorAsync(IDictionary<ScreenViewer, IEnumerable<VideoItem>> assignments, bool showGroupControl = true, PlaybackState resumeState = null, CancellationToken cancellationToken = default);
         Task PlayOnScreensAsync(IEnumerable<VideoItem> files, IEnumerable<ScreenViewer> screens);
-        
+
         // Controls
         void PauseAll();
         void ContinueAll();
         void StopAll();
-        
+
         // Volume/Opacity
         void SetVolumeAll(double volume);
         void SetOpacityAll(double opacity);
-        
+
         // Player management
         void UnregisterPlayer(HypnoWindow player);
         void RemoveItemsFromAllPlayers(IEnumerable<VideoItem> items);
-        
+
         // Highlights
         void UpdateHighlights();
-        
+
         // State
         bool IsPlaying { get; }
         bool HasActivePlayers { get; }

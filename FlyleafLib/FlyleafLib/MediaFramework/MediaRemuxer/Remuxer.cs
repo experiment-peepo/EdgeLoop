@@ -4,11 +4,11 @@ namespace FlyleafLib.MediaFramework.MediaRemuxer;
 
 public unsafe class Remuxer
 {
-    public int                  UniqueId            { get; set; }
-    public bool                 Disposed            { get; private set; } = true;
-    public string               Filename            { get; private set; }
-    public bool                 HasStreams          => mapInOutStreams2.Count > 0 || mapInOutStreams.Count > 0;
-    public bool                 HeaderWritten       { get; private set; }
+    public int UniqueId { get; set; }
+    public bool Disposed { get; private set; } = true;
+    public string Filename { get; private set; }
+    public bool HasStreams => mapInOutStreams2.Count > 0 || mapInOutStreams.Count > 0;
+    public bool HeaderWritten { get; private set; }
 
     Dictionary<IntPtr, IntPtr>  mapInOutStreams     = [];
     Dictionary<int, IntPtr>     mapInInStream       = [];
@@ -31,7 +31,8 @@ public unsafe class Remuxer
         fixed (AVFormatContext** ptr = &fmtCtx)
             ret = avformat_alloc_output_context2(ptr, null, null, Filename);
 
-        if (ret < 0) return ret;
+        if (ret < 0)
+            return ret;
 
         fmt = fmtCtx->oformat;
         mapInStreamToDts = [];
@@ -44,23 +45,27 @@ public unsafe class Remuxer
     {
         int ret = -1;
 
-        if (in_stream == null || (in_stream->codecpar->codec_type != AVMediaType.Video && in_stream->codecpar->codec_type != AVMediaType.Audio)) return ret;
+        if (in_stream == null || (in_stream->codecpar->codec_type != AVMediaType.Video && in_stream->codecpar->codec_type != AVMediaType.Audio))
+            return ret;
 
         AVStream *out_stream;
         var in_codecpar = in_stream->codecpar;
 
         out_stream = avformat_new_stream(fmtCtx, null);
-        if (out_stream == null) return -1;
+        if (out_stream == null)
+            return -1;
 
         ret = avcodec_parameters_copy(out_stream->codecpar, in_codecpar);
-        if (ret < 0) return ret;
+        if (ret < 0)
+            return ret;
 
         // Copy metadata (currently only language)
         AVDictionaryEntry* b = null;
         while (true)
         {
             b = av_dict_get(in_stream->metadata, "", b, DictReadFlags.IgnoreSuffix);
-            if (b == null) break;
+            if (b == null)
+                break;
 
             if (BytePtrToStringUTF8(b->key).ToLower() == "language" || BytePtrToStringUTF8(b->key).ToLower() == "lang")
                 _ = av_dict_set(&out_stream->metadata, BytePtrToStringUTF8(b->key), BytePtrToStringUTF8(b->value), 0);
@@ -93,16 +98,19 @@ public unsafe class Remuxer
 
     public int WriteHeader()
     {
-        if (!HasStreams) throw new Exception("No streams have been configured for the remuxer");
+        if (!HasStreams)
+            throw new Exception("No streams have been configured for the remuxer");
 
         int ret;
 
         ret = avio_open(&fmtCtx->pb, Filename, IOFlags.Write);
-        if (ret < 0) { Dispose(); return ret; }
+        if (ret < 0)
+        { Dispose(); return ret; }
 
         ret = avformat_write_header(fmtCtx, null);
 
-        if (ret < 0) { Dispose(); return ret; }
+        if (ret < 0)
+        { Dispose(); return ret; }
 
         HeaderWritten = true;
 
@@ -138,9 +146,9 @@ public unsafe class Remuxer
                 packet->dts = AV_NOPTS_VALUE;
             }
 
-            packet->duration        = av_rescale_q(packet->duration,in_stream->time_base, out_stream->time_base);
-            packet->stream_index    = out_stream->index;
-            packet->pos             = -1;
+            packet->duration = av_rescale_q(packet->duration, in_stream->time_base, out_stream->time_base);
+            packet->stream_index = out_stream->index;
+            packet->pos = -1;
 
             int ret = av_interleaved_write_frame(fmtCtx, packet);
             av_packet_free(&packet);
@@ -152,7 +160,8 @@ public unsafe class Remuxer
     public int WriteTrailer() => Dispose();
     public int Dispose()
     {
-        if (Disposed) return -1;
+        if (Disposed)
+            return -1;
 
         int ret = 0;
 

@@ -1,14 +1,11 @@
+using SharpGen.Runtime;
 using System;
 using System.Runtime.InteropServices;
-
-using SharpGen.Runtime;
-
-using Vortice.Direct3D9;
 using Vortice.Direct3D11;
+using Vortice.Direct3D9;
 using Vortice.DXGI;
-
-using ID3D11Texture2D = Vortice.Direct3D11.ID3D11Texture2D;
 using ID3D11RenderTargetView = Vortice.Direct3D11.ID3D11RenderTargetView;
+using ID3D11Texture2D = Vortice.Direct3D11.ID3D11Texture2D;
 
 namespace FlyleafLib.MediaFramework.MediaRenderer;
 
@@ -35,15 +32,15 @@ public class D3DImageManager : IDisposable
 {
     public bool IsEnabled { get; set; }
 
-    public ID3D11Texture2D      SharedTexture11 { get; private set; }
-    public ID3D11RenderTargetView SharedRtv11   { get; private set; }
-    public IDXGIKeyedMutex      KeyedMutex11    { get; private set; }
+    public ID3D11Texture2D SharedTexture11 { get; private set; }
+    public ID3D11RenderTargetView SharedRtv11 { get; private set; }
+    public IDXGIKeyedMutex KeyedMutex11 { get; private set; }
     public ID3D11VideoProcessorOutputView SharedVpov11 { get; private set; }
-    public IDirect3DTexture9    SharedTexture9  { get; private set; }
-    public Vortice.Direct3D9.IDirect3DSurface9 SharedSurface9  { get; private set; }
-    public nint                 SharedHandle    { get; private set; }
-    public long                 FrameCount      { get; internal set; }
-    public bool                 Disposed        { get; private set; }
+    public IDirect3DTexture9 SharedTexture9 { get; private set; }
+    public Vortice.Direct3D9.IDirect3DSurface9 SharedSurface9 { get; private set; }
+    public nint SharedHandle { get; private set; }
+    public long FrameCount { get; internal set; }
+    public bool Disposed { get; private set; }
 
     private object      lockD3D = new();
     Renderer            renderer;
@@ -62,7 +59,8 @@ public class D3DImageManager : IDisposable
 
     private void InitD3D9()
     {
-        if (device9 != null) return;
+        if (device9 != null)
+            return;
         try
         {
             d3d9 = D3D9.Direct3DCreate9Ex();
@@ -70,17 +68,19 @@ public class D3DImageManager : IDisposable
             // Find matching D3D9 adapter for the D3D11 device
             uint adapterIndex = 0;
             var d3d11Luid = renderer.DXGIAdapter.Description.Luid;
-            
+
             for (uint i = 0; i < d3d9.AdapterCount; i++)
             {
-                try {
+                try
+                {
                     if (d3d9.GetAdapterLuid(i) == d3d11Luid)
                     {
                         adapterIndex = i;
                         renderer.Log.Debug($"Matched D3D9 adapter index {i} for LUID {d3d11Luid}");
                         break;
                     }
-                } catch { }
+                }
+                catch { }
             }
 
             Vortice.Direct3D9.PresentParameters pp = new()
@@ -92,9 +92,12 @@ public class D3DImageManager : IDisposable
             };
 
             nint focusWindow = GetDesktopWindow();
-            try {
+            try
+            {
                 device9 = d3d9.CreateDeviceEx(adapterIndex, DeviceType.Hardware, focusWindow, CreateFlags.HardwareVertexProcessing | CreateFlags.Multithreaded | CreateFlags.PureDevice, pp);
-            } catch {
+            }
+            catch
+            {
                 device9 = d3d9.CreateDeviceEx(adapterIndex, DeviceType.Hardware, focusWindow, CreateFlags.SoftwareVertexProcessing | CreateFlags.Multithreaded, pp);
             }
         }
@@ -106,93 +109,99 @@ public class D3DImageManager : IDisposable
 
     public void EnsureSize(int width, int height)
     {
-        if (width <= 0 || height <= 0 || Disposed) return;
+        if (width <= 0 || height <= 0 || Disposed)
+            return;
 
-        if (SharedTexture11 != null && 
-            SharedTexture11.Description.Width == width && 
+        if (SharedTexture11 != null &&
+            SharedTexture11.Description.Width == width &&
             SharedTexture11.Description.Height == height)
             return;
 
         lock (lockD3D)
         {
-            if (Disposed) return;
-            if (SharedTexture11 != null && 
-                SharedTexture11.Description.Width == width && 
+            if (Disposed)
+                return;
+            if (SharedTexture11 != null &&
+                SharedTexture11.Description.Width == width &&
                 SharedTexture11.Description.Height == height)
                 return;
 
             DisposeTextures();
             InitD3D9();
-            if (device9 == null) return;
+            if (device9 == null)
+                return;
 
             ((IVP)renderer).UpdateSize(width, height);
             renderer.VPRequest(VPRequestType.Resize);
 
-        try
-        {
-            Texture2DDescription desc = new Texture2DDescription()
+            try
             {
-                Width = (uint)width,
-                Height = (uint)height,
-                MipLevels = 1,
-                ArraySize = 1,
-                Format = Vortice.DXGI.Format.B8G8R8A8_UNorm,
-                SampleDescription = new SampleDescription(1, 0),
-                Usage = ResourceUsage.Default,
-                BindFlags = BindFlags.RenderTarget | BindFlags.ShaderResource,
-                CPUAccessFlags = Vortice.Direct3D11.CpuAccessFlags.None,
-                MiscFlags = ResourceOptionFlags.Shared // Removed SharedKeyedMutex for D3D9 compatibility
-            };
-
-            SharedTexture11 = renderer.Device.CreateTexture2D(desc);
-            SharedRtv11 = renderer.Device.CreateRenderTargetView(SharedTexture11);
-            // KeyedMutex11 = SharedTexture11.QueryInterfaceOrNull<IDXGIKeyedMutex>(); // Not compatible with D3D9 interop
-
-            if (renderer.vd != null)
-                SharedVpov11 = renderer.vd.CreateVideoProcessorOutputView(SharedTexture11, renderer.ve, vpovd);
-
-            using (var resource = SharedTexture11.QueryInterface<IDXGIResource>())
-            {
-                SharedHandle = resource.SharedHandle;
-                renderer.Log.Debug($"Retrieved SharedHandle: {SharedHandle}");
-            }
-
-            // Update D2D target if available
-            if (renderer.context2d != null)
-            {
-                using var surface = SharedTexture11.QueryInterface<IDXGISurface>();
-                var bitmapProps = new Vortice.Direct2D1.BitmapProperties1
+                Texture2DDescription desc = new Texture2DDescription()
                 {
-                    PixelFormat = new Vortice.DCommon.PixelFormat(Vortice.DXGI.Format.B8G8R8A8_UNorm, Vortice.DCommon.AlphaMode.Premultiplied),
-                    BitmapOptions = Vortice.Direct2D1.BitmapOptions.Target | Vortice.Direct2D1.BitmapOptions.CannotDraw
+                    Width = (uint)width,
+                    Height = (uint)height,
+                    MipLevels = 1,
+                    ArraySize = 1,
+                    Format = Vortice.DXGI.Format.B8G8R8A8_UNorm,
+                    SampleDescription = new SampleDescription(1, 0),
+                    Usage = ResourceUsage.Default,
+                    BindFlags = BindFlags.RenderTarget | BindFlags.ShaderResource,
+                    CPUAccessFlags = Vortice.Direct3D11.CpuAccessFlags.None,
+                    MiscFlags = ResourceOptionFlags.Shared // Removed SharedKeyedMutex for D3D9 compatibility
                 };
-                try {
-                    var bitmap = renderer.context2d.CreateBitmapFromDxgiSurface(surface, bitmapProps);
-                    renderer.context2d.Target = bitmap;
-                    bitmap.Dispose(); // context2d keeps a reference
-                    renderer.Log.Debug("Updated D2D target to SharedTexture11");
-                } catch (Exception d2dex) {
-                    renderer.Log.Warn($"Failed to update D2D target: {d2dex.Message}");
-                }
-            }
 
-            // Create D3D9 shared texture
-            Vortice.Direct3D9.Format format9 = Vortice.Direct3D9.Format.A8R8G8B8; // Matches B8G8R8A8_UNorm
-            nint sharedHandle = SharedHandle;
-            
-            renderer.Log.Debug($"Creating D3D9 Shared Texture: {width}x{height} Format:{format9} Handle:{sharedHandle}");
-            SharedTexture9 = device9.CreateTexture((uint)width, (uint)height, 1, Vortice.Direct3D9.Usage.RenderTarget, format9, Pool.Default, ref sharedHandle);
-            SharedSurface9 = SharedTexture9.GetSurfaceLevel(0);
-            
-            renderer.Log.Info($"D3DImage Shared Textures Created Successfully: {width}x{height}");
-        }
-        catch (Exception ex)
-        {
-            renderer.Log.Error($"Failed to create shared textures: {ex.Message} (Width:{width} Height:{height})");
-            if (ex is SharpGenException sgEx)
-                renderer.Log.Error($"SharpGen Error: {sgEx.ResultCode.NativeApiCode} ({sgEx.ResultCode})");
-            DisposeTextures();
-        }
+                SharedTexture11 = renderer.Device.CreateTexture2D(desc);
+                SharedRtv11 = renderer.Device.CreateRenderTargetView(SharedTexture11);
+                // KeyedMutex11 = SharedTexture11.QueryInterfaceOrNull<IDXGIKeyedMutex>(); // Not compatible with D3D9 interop
+
+                if (renderer.vd != null)
+                    SharedVpov11 = renderer.vd.CreateVideoProcessorOutputView(SharedTexture11, renderer.ve, vpovd);
+
+                using (var resource = SharedTexture11.QueryInterface<IDXGIResource>())
+                {
+                    SharedHandle = resource.SharedHandle;
+                    renderer.Log.Debug($"Retrieved SharedHandle: {SharedHandle}");
+                }
+
+                // Update D2D target if available
+                if (renderer.context2d != null)
+                {
+                    using var surface = SharedTexture11.QueryInterface<IDXGISurface>();
+                    var bitmapProps = new Vortice.Direct2D1.BitmapProperties1
+                    {
+                        PixelFormat = new Vortice.DCommon.PixelFormat(Vortice.DXGI.Format.B8G8R8A8_UNorm, Vortice.DCommon.AlphaMode.Premultiplied),
+                        BitmapOptions = Vortice.Direct2D1.BitmapOptions.Target | Vortice.Direct2D1.BitmapOptions.CannotDraw
+                    };
+                    try
+                    {
+                        var bitmap = renderer.context2d.CreateBitmapFromDxgiSurface(surface, bitmapProps);
+                        renderer.context2d.Target = bitmap;
+                        bitmap.Dispose(); // context2d keeps a reference
+                        renderer.Log.Debug("Updated D2D target to SharedTexture11");
+                    }
+                    catch (Exception d2dex)
+                    {
+                        renderer.Log.Warn($"Failed to update D2D target: {d2dex.Message}");
+                    }
+                }
+
+                // Create D3D9 shared texture
+                Vortice.Direct3D9.Format format9 = Vortice.Direct3D9.Format.A8R8G8B8; // Matches B8G8R8A8_UNorm
+                nint sharedHandle = SharedHandle;
+
+                renderer.Log.Debug($"Creating D3D9 Shared Texture: {width}x{height} Format:{format9} Handle:{sharedHandle}");
+                SharedTexture9 = device9.CreateTexture((uint)width, (uint)height, 1, Vortice.Direct3D9.Usage.RenderTarget, format9, Pool.Default, ref sharedHandle);
+                SharedSurface9 = SharedTexture9.GetSurfaceLevel(0);
+
+                renderer.Log.Info($"D3DImage Shared Textures Created Successfully: {width}x{height}");
+            }
+            catch (Exception ex)
+            {
+                renderer.Log.Error($"Failed to create shared textures: {ex.Message} (Width:{width} Height:{height})");
+                if (ex is SharpGenException sgEx)
+                    renderer.Log.Error($"SharpGen Error: {sgEx.ResultCode.NativeApiCode} ({sgEx.ResultCode})");
+                DisposeTextures();
+            }
         }
     }
 
@@ -226,10 +235,11 @@ public class D3DImageManager : IDisposable
     {
         lock (lockD3D)
         {
-            if (Disposed) return;
+            if (Disposed)
+                return;
             Disposed = true;
         }
-        
+
         DisposeTextures();
         device9?.Dispose();
         device9 = null;

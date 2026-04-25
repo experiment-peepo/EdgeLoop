@@ -1,15 +1,16 @@
-﻿using System.Runtime.InteropServices;
-
-using FlyleafLib.MediaFramework.MediaFrame;
+﻿using FlyleafLib.MediaFramework.MediaFrame;
 using FlyleafLib.MediaFramework.MediaStream;
+using System.Runtime.InteropServices;
 
 namespace FlyleafLib.MediaFramework.MediaDecoder;
+
 public unsafe class DataDecoder : DecoderBase
 {
     public DataStream DataStream => (DataStream)Stream;
 
     public ConcurrentQueue<DataFrame>
-                            Frames              { get; protected set; } = [];
+                            Frames
+    { get; protected set; } = [];
 
     public DataDecoder(Config config, int uniqueId = -1) : base(config, uniqueId) { }
 
@@ -135,7 +136,8 @@ public unsafe class DataDecoder : DecoderBase
             }
         } while (Status == Status.Running);
 
-        if (Status == Status.Draining) Status = Status.Ended;
+        if (Status == Status.Draining)
+            Status = Status.Ended;
     }
 
     private DataFrame ProcessDataFrame(AVPacket* packet)

@@ -1,35 +1,46 @@
 using System;
 using System.IO;
 
-namespace EdgeLoop.Classes {
+namespace EdgeLoop.Classes
+{
     /// <summary>
     /// Centralized management of application data paths.
     /// Supports "Portable Mode" by checking for a local 'Data' folder.
     /// </summary>
-    public static class AppPaths {
+    public static class AppPaths
+    {
         private static string _dataDirectory;
 
-        public static string DataDirectory {
-            get {
-                if (_dataDirectory == null) {
+        public static string DataDirectory
+        {
+            get
+            {
+                if (_dataDirectory == null)
+                {
                     // Try to use local 'Data' folder for Portable Mode
                     var localData = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data");
-                    
-                    try {
+
+                    try
+                    {
                         // Create it if it doesn't exist
-                        if (!Directory.Exists(localData)) {
+                        if (!Directory.Exists(localData))
+                        {
                             Directory.CreateDirectory(localData);
                         }
-                        
+
                         // If we can write to it, use it
-                        if (Directory.Exists(localData)) {
+                        if (Directory.Exists(localData))
+                        {
                             _dataDirectory = localData;
                         }
-                    } catch {
+                    }
+                    catch
+                    {
                         // If we can't create/access local 'Data' (e.g. Program Files), fallback to AppData
                         _dataDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "EdgeLoop");
-                        
-                        if (!Directory.Exists(_dataDirectory)) {
+
+                        if (!Directory.Exists(_dataDirectory))
+                        {
                             Directory.CreateDirectory(_dataDirectory);
                         }
                     }

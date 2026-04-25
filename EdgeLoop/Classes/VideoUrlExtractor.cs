@@ -11,52 +11,60 @@ using System.Threading.Tasks;
 using System.Text.Json;
 using HtmlAgilityPack;
 
-namespace EdgeLoop.Classes {
+namespace EdgeLoop.Classes
+{
     /// <summary>
     /// Service for extracting direct video URLs from page URLs
     /// </summary>
-    public class VideoUrlExtractor : IVideoUrlExtractor {
+    public class VideoUrlExtractor : IVideoUrlExtractor
+    {
         private readonly IHtmlFetcher _htmlFetcher;
         // private readonly LruCache<string, string> _urlCache; // Replaced by PersistentUrlCache
         private readonly YtDlpService _ytDlpService;
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task<string>> _activeExtractions = new System.Collections.Concurrent.ConcurrentDictionary<string, Task<string>>();
 
-        public VideoUrlExtractor(IHtmlFetcher htmlFetcher = null, YtDlpService ytDlpService = null) {
+        public VideoUrlExtractor(IHtmlFetcher htmlFetcher = null, YtDlpService ytDlpService = null)
+        {
             _htmlFetcher = htmlFetcher ?? new StandardHtmlFetcher();
             _ytDlpService = ytDlpService ?? (ServiceContainer.TryGet<YtDlpService>(out var service) ? service : null);
             // _urlCache = new LruCache<string, string>(Constants.MaxFileCacheSize, ttl);
         }
 
-        public virtual async Task<VideoMetadata> ExtractVideoMetadataAsync(string pageUrl, CancellationToken cancellationToken = default) {
+        public virtual async Task<VideoMetadata> ExtractVideoMetadataAsync(string pageUrl, CancellationToken cancellationToken = default)
+        {
             if (string.IsNullOrWhiteSpace(pageUrl)) return new VideoMetadata();
-            
+
             var normalizedUrl = FileValidator.NormalizeUrl(pageUrl);
             var uri = new Uri(normalizedUrl);
             var host = uri.Host.ToLowerInvariant();
-            
-            if (Constants.VideoExtensions.Any(ext => uri.AbsolutePath.EndsWith(ext, StringComparison.OrdinalIgnoreCase))) {
+
+            if (Constants.VideoExtensions.Any(ext => uri.AbsolutePath.EndsWith(ext, StringComparison.OrdinalIgnoreCase)))
+            {
                 return new VideoMetadata(normalizedUrl, Path.GetFileNameWithoutExtension(uri.AbsolutePath), normalizedUrl);
             }
 
             // Check Persistent Cache
             var cachedUrl = PersistentUrlCache.Instance.Get(pageUrl);
-            if (!string.IsNullOrEmpty(cachedUrl)) {
-                 // We have the URL, but maybe not the title. 
-                 // Optimization: If we have a cached URL, return it immediately with a placeholder or cached title if we had it.
-                 // For now, we accept fetching HTML just for title if needed, OR we could skip title fetch if performance is key.
-                 // Let's assume title is less critical or we can extract it from the cached URL if possible.
-                 // But wait, ExtractVideoMetadataAsync is often called when adding a NEW video.
-                 // If we reload from session, we use ExtractVideoUrlAsync (JIT).
-                 // So this method is mostly for "Add URL". We *do* want the title then.
-                 // But if we already cached it, we might skip the heavy lifting of video extraction.
+            if (!string.IsNullOrEmpty(cachedUrl))
+            {
+                // We have the URL, but maybe not the title. 
+                // Optimization: If we have a cached URL, return it immediately with a placeholder or cached title if we had it.
+                // For now, we accept fetching HTML just for title if needed, OR we could skip title fetch if performance is key.
+                // Let's assume title is less critical or we can extract it from the cached URL if possible.
+                // But wait, ExtractVideoMetadataAsync is often called when adding a NEW video.
+                // If we reload from session, we use ExtractVideoUrlAsync (JIT).
+                // So this method is mostly for "Add URL". We *do* want the title then.
+                // But if we already cached it, we might skip the heavy lifting of video extraction.
             }
 
-            if (host.Contains("redgifs.com")) {
+            if (host.Contains("redgifs.com"))
+            {
                 Logger.Warning($"[VideoUrlExtractor] RedGifs support removed. Skipping: {normalizedUrl}");
                 return new VideoMetadata();
             }
 
-            try {
+            try
+            {
                 string videoUrl = null;
                 string title = null;
                 string html = null;
@@ -66,224 +74,301 @@ namespace EdgeLoop.Classes {
                 bool useYtDlpFirst = host.Contains("rule34video.com") || host.Contains("iwara.tv");
 
                 // Download+mux takes precedence if the site requires it (YouTube, Vimeo, etc.)
-                if (_ytDlpService != null && _ytDlpService.IsAvailable && YtDlpService.IsDownloadRequiredSite(host)) {
+                if (_ytDlpService != null && _ytDlpService.IsAvailable && YtDlpService.IsDownloadRequiredSite(host))
+                {
                     useYtDlpFirst = true;
                 }
 
                 // Optimization: If we're going to use yt-dlp first (e.g. YouTube), don't scrape with HttpClient first to avoid 429s
-                if (!useYtDlpFirst) {
+                if (!useYtDlpFirst)
+                {
                     html = await FetchHtmlAsync(normalizedUrl, cancellationToken);
                     hasHtml = !string.IsNullOrWhiteSpace(html);
                     Logger.Debug($"[VideoUrlExtractor] Fetched HTML for {host}, success: {hasHtml}, length: {html?.Length ?? 0}");
                 }
 
-                if (useYtDlpFirst && _ytDlpService != null && _ytDlpService.IsAvailable) {
-                    try {
+                if (useYtDlpFirst && _ytDlpService != null && _ytDlpService.IsAvailable)
+                {
+                    try
+                    {
                         Logger.Debug($"[VideoUrlExtractor] Extracting full metadata using yt-dlp for {host}");
-                        
-                        if (YtDlpService.IsDownloadRequiredSite(host)) {
+
+                        if (YtDlpService.IsDownloadRequiredSite(host))
+                        {
                             // NEW: For sites requiring muxing (YouTube/Vimeo), trigger the high-quality download flow immediately.
                             // This returns a local file path which ensures 1080p+ resolution instead of 360p streaming.
                             Logger.Debug($"[VideoUrlExtractor] Site requires download+mux. Triggering high-quality download pipeline for: {host}");
                             videoUrl = await _ytDlpService.DownloadBestQualityAsync(normalizedUrl, cancellationToken);
-                            
+
                             // If download worked, we still need the title
-                            if (!string.IsNullOrEmpty(videoUrl)) {
+                            if (!string.IsNullOrEmpty(videoUrl))
+                            {
                                 var info = await _ytDlpService.ExtractVideoInfoAsync(normalizedUrl, cancellationToken);
                                 title = SanitizeTitle(info?.Title, host);
                             }
-                        } else {
+                        }
+                        else
+                        {
                             var info = await _ytDlpService.ExtractVideoInfoAsync(normalizedUrl, cancellationToken);
-                            if (info != null) {
+                            if (info != null)
+                            {
                                 if (!string.IsNullOrWhiteSpace(info.Url)) videoUrl = info.Url;
                                 // Ignore generic titles like "view" often returned by iwara's media server
-                                if (!string.IsNullOrWhiteSpace(info.Title) && info.Title != "Unknown" && info.Title.ToLowerInvariant() != "view") {
+                                if (!string.IsNullOrWhiteSpace(info.Title) && info.Title != "Unknown" && info.Title.ToLowerInvariant() != "view")
+                                {
                                     title = SanitizeTitle(info.Title, host);
                                 }
                             }
                         }
-                    } catch (Exception ex) {
+                    }
+                    catch (Exception ex)
+                    {
                         Logger.Warning($"[VideoUrlExtractor] yt-dlp extraction/download failed for {host}: {ex.Message}");
                     }
                 }
 
                 // If yt-dlp failed or was skipped, try getting the URL normally
-                if (string.IsNullOrEmpty(videoUrl)) {
-                    if (!string.IsNullOrEmpty(cachedUrl)) {
+                if (string.IsNullOrEmpty(videoUrl))
+                {
+                    if (!string.IsNullOrEmpty(cachedUrl))
+                    {
                         videoUrl = cachedUrl;
-                    } else if (useYtDlpFirst) {
+                    }
+                    else if (useYtDlpFirst)
+                    {
                         // We already tried ExtractVideoInfoAsync and it failed, but let's strictly fallback
-                        if (host.Contains("rule34video.com")) {
+                        if (host.Contains("rule34video.com"))
+                        {
                             videoUrl = await ExtractRule34VideoUrlAsync(normalizedUrl, cancellationToken);
-                        } else {
+                        }
+                        else
+                        {
                             if (hasHtml) videoUrl = await ExtractGenericVideoUrlAsync(normalizedUrl, cancellationToken);
                         }
-                    } else if (host.Contains("pmvhaven.com")) {
+                    }
+                    else if (host.Contains("pmvhaven.com"))
+                    {
                         videoUrl = await ExtractPmvHavenUrlAsync(normalizedUrl, cancellationToken);
-                    } else if (host.Contains("hypnotube.com")) {
+                    }
+                    else if (host.Contains("hypnotube.com"))
+                    {
                         videoUrl = await ExtractHypnotubeUrlAsync(normalizedUrl, cancellationToken);
-                    } else {
+                    }
+                    else
+                    {
                         if (hasHtml) videoUrl = await ExtractGenericVideoUrlAsync(normalizedUrl, cancellationToken);
                     }
                 }
 
-                if (string.IsNullOrEmpty(title)) {
-                    if (!hasHtml) {
+                if (string.IsNullOrEmpty(title))
+                {
+                    if (!hasHtml)
+                    {
                         html = await FetchHtmlAsync(normalizedUrl, cancellationToken);
                         hasHtml = !string.IsNullOrWhiteSpace(html);
                     }
                     if (hasHtml) title = ExtractTitleFromHtml(html, host);
                 }
-                
-                if (videoUrl != null) {
+
+                if (videoUrl != null)
+                {
                     // NEW: Don't cache the temporary streaming URL for sites that require download+mux.
                     // This ensures that when we actually play the video, we trigger the high-quality resolution
                     // rather than reusing a low-quality link cached during metadata extraction.
-                    if (!YtDlpService.IsDownloadRequiredSite(host)) {
+                    if (!YtDlpService.IsDownloadRequiredSite(host))
+                    {
                         PersistentUrlCache.Instance.Set(pageUrl, videoUrl);
                     }
                 }
 
                 return new VideoMetadata(videoUrl, title, normalizedUrl);
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Error($"Error extracting metadata from {pageUrl}", ex);
                 return new VideoMetadata();
             }
         }
-        public virtual async Task<string> ExtractVideoUrlAsync(string pageUrl, CancellationToken cancellationToken = default, System.IProgress<string> downloadProgress = null) {
+        public virtual async Task<string> ExtractVideoUrlAsync(string pageUrl, CancellationToken cancellationToken = default, System.IProgress<string> downloadProgress = null)
+        {
             if (string.IsNullOrWhiteSpace(pageUrl)) return null;
 
-            try {
+            try
+            {
                 // Coalesce multiple simultaneous requests for the same URL 
                 // using a Task-based dictionary.
                 Task<string> extractionTask;
-                lock (_activeExtractions) {
-                    if (!_activeExtractions.TryGetValue(pageUrl, out extractionTask) || extractionTask.IsFaulted || extractionTask.IsCanceled) {
+                lock (_activeExtractions)
+                {
+                    if (!_activeExtractions.TryGetValue(pageUrl, out extractionTask) || extractionTask.IsFaulted || extractionTask.IsCanceled)
+                    {
                         extractionTask = ExtractVideoUrlInternalAsync(pageUrl, cancellationToken, downloadProgress);
                         _activeExtractions[pageUrl] = extractionTask;
-                        
+
                         // Self-cleanup after completion
-                        extractionTask.ContinueWith(t => {
+                        extractionTask.ContinueWith(t =>
+                        {
                             _activeExtractions.TryRemove(pageUrl, out _);
                         }, TaskContinuationOptions.ExecuteSynchronously);
                     }
                 }
                 return await extractionTask;
-            } catch {
+            }
+            catch
+            {
                 return null;
             }
         }
 
-        private async Task<string> ExtractVideoUrlInternalAsync(string pageUrl, CancellationToken cancellationToken, System.IProgress<string> downloadProgress = null) {
+        private async Task<string> ExtractVideoUrlInternalAsync(string pageUrl, CancellationToken cancellationToken, System.IProgress<string> downloadProgress = null)
+        {
             // Re-check cache inside the task just in case it was updated while waiting in GetOrAdd
             var cachedUrl = PersistentUrlCache.Instance.Get(pageUrl);
-            if (!string.IsNullOrEmpty(cachedUrl)) {
+            if (!string.IsNullOrEmpty(cachedUrl))
+            {
                 // NEW: For download-required sites (YouTube, Vimeo), only use the cache if it's a local file.
                 // If the cache contains a remote URL, it's likely a low-quality/expired link we want to bypass.
-                if (YtDlpService.IsDownloadRequiredSite(new Uri(FileValidator.NormalizeUrl(pageUrl)).Host)) {
+                if (YtDlpService.IsDownloadRequiredSite(new Uri(FileValidator.NormalizeUrl(pageUrl)).Host))
+                {
                     if (!cachedUrl.StartsWith("http")) return cachedUrl;
                     Logger.Debug($"[VideoUrlExtractor] Ignoring cached streaming URL for download-required site: {pageUrl}");
-                } else {
+                }
+                else
+                {
                     return cachedUrl;
                 }
             }
 
-            try {
+            try
+            {
                 var normalizedUrl = FileValidator.NormalizeUrl(pageUrl);
                 var uri = new Uri(normalizedUrl);
                 var host = uri.Host.ToLowerInvariant();
-                
-                if (Constants.VideoExtensions.Any(ext => uri.AbsolutePath.EndsWith(ext, StringComparison.OrdinalIgnoreCase))) {
+
+                if (Constants.VideoExtensions.Any(ext => uri.AbsolutePath.EndsWith(ext, StringComparison.OrdinalIgnoreCase)))
+                {
                     return normalizedUrl;
                 }
-                
+
                 string videoUrl = null;
-                
+
                 // NEW: Download+mux for sites with separate streams (YouTube, Vimeo, etc.)
-                if (_ytDlpService != null && _ytDlpService.IsAvailable && YtDlpService.IsDownloadRequiredSite(host)) {
-                    try {
+                if (_ytDlpService != null && _ytDlpService.IsAvailable && YtDlpService.IsDownloadRequiredSite(host))
+                {
+                    try
+                    {
                         Logger.Debug($"[VideoUrlExtractor] Download+mux extraction for {host}");
                         videoUrl = await _ytDlpService.DownloadBestQualityAsync(normalizedUrl, cancellationToken, downloadProgress);
-                        
-                        if (!string.IsNullOrEmpty(videoUrl)) {
+
+                        if (!string.IsNullOrEmpty(videoUrl))
+                        {
                             PersistentUrlCache.Instance.Set(pageUrl, videoUrl);
                             return videoUrl;  // Returns local file path
                         }
-                    } catch (Exception ex) {
+                    }
+                    catch (Exception ex)
+                    {
                         Logger.Warning($"[VideoUrlExtractor] Download+mux failed for {host}: {ex.Message}");
                     }
                     // Fall through to streaming path as fallback
                 }
 
-                var hasSpecializedScraper = host.Contains("pmvhaven.com") || 
+                var hasSpecializedScraper = host.Contains("pmvhaven.com") ||
                                            host.Contains("hypnotube.com");
-                
+
                 // Explicitly block RedGifs support as requested
-                if (host.Contains("redgifs.com")) {
+                if (host.Contains("redgifs.com"))
+                {
                     Logger.Warning($"[VideoUrlExtractor] RedGifs support has been removed. Skipping: {normalizedUrl}");
                     return null;
                 }
 
                 var useYtDlp = !hasSpecializedScraper;
 
-                if (_ytDlpService != null && _ytDlpService.IsAvailable && useYtDlp) {
-                    try {
+                if (_ytDlpService != null && _ytDlpService.IsAvailable && useYtDlp)
+                {
+                    try
+                    {
                         Logger.Debug($"[VideoUrlExtractor] Attempting yt-dlp extraction for {normalizedUrl}");
                         videoUrl = await _ytDlpService.GetBestVideoUrlAsync(normalizedUrl, cancellationToken);
-                        
-                        if (!string.IsNullOrEmpty(videoUrl)) {
+
+                        if (!string.IsNullOrEmpty(videoUrl))
+                        {
                             // Cache success
                             PersistentUrlCache.Instance.Set(pageUrl, videoUrl);
                             return videoUrl;
                         }
-                    } catch (Exception ex) {
+                    }
+                    catch (Exception ex)
+                    {
                         Logger.Warning($"[VideoUrlExtractor] yt-dlp extraction failed: {ex.Message}, falling back to scraping");
                     }
-                } else if (hasSpecializedScraper) {
+                }
+                else if (hasSpecializedScraper)
+                {
                     Logger.Debug($"[VideoUrlExtractor] Using specialized scraper for {host}");
                 }
-                
-                if (host.Contains("hypnotube.com")) {
+
+                if (host.Contains("hypnotube.com"))
+                {
                     videoUrl = await ExtractHypnotubeUrlAsync(normalizedUrl, cancellationToken);
-                } else if (host.Contains("pmvhaven.com")) {
+                }
+                else if (host.Contains("pmvhaven.com"))
+                {
                     videoUrl = await ExtractPmvHavenUrlAsync(normalizedUrl, cancellationToken);
-                } else if (host.Contains("rule34video.com")) {
+                }
+                else if (host.Contains("rule34video.com"))
+                {
                     videoUrl = await ExtractRule34VideoUrlAsync(normalizedUrl, cancellationToken);
-                } else {
+                }
+                else
+                {
                     videoUrl = await ExtractGenericVideoUrlAsync(normalizedUrl, cancellationToken);
                 }
 
-                if (videoUrl != null) {
+                if (videoUrl != null)
+                {
                     PersistentUrlCache.Instance.Set(pageUrl, videoUrl);
-                } else if (_ytDlpService != null && _ytDlpService.IsAvailable) {
+                }
+                else if (_ytDlpService != null && _ytDlpService.IsAvailable)
+                {
                     // FALLBACK: If specialized scrapers failed, try yt-dlp as a last resort
-                    try {
+                    try
+                    {
                         Logger.Debug($"[VideoUrlExtractor] Specialized scraper for {host} failed, falling back to yt-dlp");
                         videoUrl = await _ytDlpService.GetBestVideoUrlAsync(normalizedUrl, cancellationToken);
-                        if (videoUrl != null) {
+                        if (videoUrl != null)
+                        {
                             PersistentUrlCache.Instance.Set(pageUrl, videoUrl);
                         }
-                    } catch (Exception ex) {
+                    }
+                    catch (Exception ex)
+                    {
                         Logger.Warning($"[VideoUrlExtractor] yt-dlp fallback failing for {host}: {ex.Message}");
                     }
                 }
 
                 return videoUrl;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Error($"Error extracting video URL from {pageUrl}", ex);
                 return null;
             }
         }
 
-        private async Task<string> ExtractHypnotubeUrlAsync(string url, CancellationToken cancellationToken) {
-            try {
+        private async Task<string> ExtractHypnotubeUrlAsync(string url, CancellationToken cancellationToken)
+        {
+            try
+            {
                 var html = await FetchHtmlAsync(url, cancellationToken);
                 if (string.IsNullOrWhiteSpace(html)) return null;
 
                 Logger.Debug($"ExtractHypnotubeUrlAsync: Processing HTML from {url}");
-                
+
                 // Check for "friends only" restriction
-                if (html.Contains("You must be friends with") && html.Contains("to watch this video")) {
+                if (html.Contains("You must be friends with") && html.Contains("to watch this video"))
+                {
                     Logger.Warning($"[Hypnotube] Video is restricted to friends only: {url}");
                     return null;
                 }
@@ -291,9 +376,11 @@ namespace EdgeLoop.Classes {
                 // 1. Try multi-source extraction (Higher Priority)
                 Logger.Debug("Hypnotube: Trying multi-source extraction");
                 var sources = StashPatternExtractor.ExtractAllVideoSources(html, url);
-                if (sources.Any()) {
+                if (sources.Any())
+                {
                     var best = QualitySelector.SelectBest(sources);
-                    if (best != null) {
+                    if (best != null)
+                    {
                         Logger.Debug($"Hypnotube: Selected quality {best.Label} from {sources.Count} sources");
                         return ResolveUrl(best.Url, url);
                     }
@@ -302,7 +389,8 @@ namespace EdgeLoop.Classes {
                 // 2. Try Open Graph video (fallback if multi-source didn't find anything)
                 Logger.Debug("Hypnotube: Trying og:video extraction");
                 var ogVideo = StashPatternExtractor.ExtractOgVideo(html);
-                if (!string.IsNullOrEmpty(ogVideo)) {
+                if (!string.IsNullOrEmpty(ogVideo))
+                {
                     Logger.Debug($"Hypnotube: Found og:video URL");
                     return ResolveUrl(ogVideo, url);
                 }
@@ -315,16 +403,20 @@ namespace EdgeLoop.Classes {
                 // 4. Stricter site-specific fallback: only match scripts/configs if they hint at a video extension
                 var playerPattern = @"(?:video_url|file|src)\s*[:=]\s*[""']([^""']+\.(?:mp4|webm|mkv|m3u8)(?:\?[^""']*)?)[""']";
                 var match = Regex.Match(html, playerPattern, RegexOptions.IgnoreCase);
-                if (match.Success) {
+                if (match.Success)
+                {
                     var resolved = ResolveUrl(match.Groups[1].Value, url);
-                    if (HasVideoExtension(resolved)) {
+                    if (HasVideoExtension(resolved))
+                    {
                         Logger.Debug($"Hypnotube: Found video URL in player config fallback: {resolved}");
                         return resolved;
                     }
                 }
 
                 return null;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Warning($"Error extracting Hypnotube URL: {ex.Message}");
                 return null;
             }
@@ -332,10 +424,13 @@ namespace EdgeLoop.Classes {
 
 
 
-        private async Task<string> ExtractRule34VideoUrlAsync(string url, CancellationToken cancellationToken) {
-            try {
+        private async Task<string> ExtractRule34VideoUrlAsync(string url, CancellationToken cancellationToken)
+        {
+            try
+            {
                 var html = await FetchHtmlAsync(url, cancellationToken);
-                if (string.IsNullOrWhiteSpace(html)) {
+                if (string.IsNullOrWhiteSpace(html))
+                {
                     Logger.Warning($"Rule34Video: Failed to fetch HTML for {url}");
                     return null;
                 }
@@ -344,15 +439,17 @@ namespace EdgeLoop.Classes {
 
                 // 1. Extract tokens (rnd, license_code, etc)
                 var tokens = new Dictionary<string, string>();
-                var tokenPatterns = new[] { 
+                var tokenPatterns = new[] {
                     @"\brnd\s*[:=]\s*['""](\d+)['""]",
                     @"\blicense_code\s*[:=]\s*['""]([^'""]+)['""]",
                     @"\bvid_id\s*[:=]\s*['""](\d+)['""]"
                 };
 
-                foreach (var pattern in tokenPatterns) {
+                foreach (var pattern in tokenPatterns)
+                {
                     var match = Regex.Match(html, pattern, RegexOptions.IgnoreCase);
-                    if (match.Success) {
+                    if (match.Success)
+                    {
                         string key = match.Value.Split(new[] { ':', '=' })[0].Trim();
                         tokens[key] = match.Groups[1].Value;
                         Logger.Debug($"Rule34Video: Found token {key}: {tokens[key]}");
@@ -363,66 +460,75 @@ namespace EdgeLoop.Classes {
                 // These are often the most reliable as they are what the user sees
                 var getFilePattern = @"href=[""']([^""']*\/get_file\/[^""']+\.mp4\/?(?:[^""']*)?)[""']";
                 var getFileMatches = Regex.Matches(html, getFilePattern, RegexOptions.IgnoreCase);
-                
+
                 string bestFoundUrl = null;
                 int bestFoundQuality = 0;
-                
-                foreach (Match linkMatch in getFileMatches) {
+
+                foreach (Match linkMatch in getFileMatches)
+                {
                     var link = linkMatch.Groups[1].Value;
                     int quality = 360; // Default
                     if (link.Contains("1080p")) quality = 1080;
                     else if (link.Contains("720p")) quality = 720;
                     else if (link.Contains("480p")) quality = 480;
                     else if (link.Contains("2160p") || link.Contains("4k")) quality = 2160;
-                    
-                    if (quality > bestFoundQuality) {
+
+                    if (quality > bestFoundQuality)
+                    {
                         bestFoundQuality = quality;
                         bestFoundUrl = ResolveUrl(link, url);
                     }
                 }
 
-                if (bestFoundUrl != null) {
+                if (bestFoundUrl != null)
+                {
                     Logger.Debug($"Rule34Video: Found direct get_file link with {bestFoundQuality}p quality: {bestFoundUrl}");
                     var resolvedUrl = await _htmlFetcher.ResolveRedirectUrlAsync(bestFoundUrl, url, cancellationToken);
                     return resolvedUrl ?? bestFoundUrl;
                 }
 
                 // 3. PRIORITY 2: Extract from player variables (Legacy/Fallback)
-                var priorities = new[] { 
+                var priorities = new[] {
                     ("video_alt_url3", 1080),
                     ("video_alt_url2", 720),
                     ("video_alt_url", 480),
                     ("video_url", 360)
                 };
-                
+
                 string bestUrl = null;
                 int selectedQuality = 0;
 
-                foreach (var (key, quality) in priorities) {
+                foreach (var (key, quality) in priorities)
+                {
                     var pattern = $@"\b{key}\s*[:=]\s*['""]([^'""]+)['""]";
                     var match = Regex.Match(html, pattern, RegexOptions.IgnoreCase);
-                    if (match.Success && match.Groups.Count > 1) {
+                    if (match.Success && match.Groups.Count > 1)
+                    {
                         var rawUrl = match.Groups[1].Value;
-                        if (!string.IsNullOrWhiteSpace(rawUrl) && rawUrl.Contains("mp4")) {
+                        if (!string.IsNullOrWhiteSpace(rawUrl) && rawUrl.Contains("mp4"))
+                        {
                             bestUrl = CleanExtractedUrl(rawUrl);
                             selectedQuality = quality;
                             Logger.Debug($"Rule34Video: Found {quality}p quality from {key} variable");
-                            break; 
+                            break;
                         }
                     }
                 }
 
-                if (bestUrl != null) {
+                if (bestUrl != null)
+                {
                     bestUrl = ResolveUrl(bestUrl, url);
-                    
+
                     // Append tokens if not present
-                    foreach (var token in tokens) {
-                        if (!bestUrl.Contains($"{token.Key}=")) {
+                    foreach (var token in tokens)
+                    {
+                        if (!bestUrl.Contains($"{token.Key}="))
+                        {
                             var separator = bestUrl.Contains("?") ? "&" : "?";
                             bestUrl += $"{separator}{token.Key}={token.Value}";
                         }
                     }
-                    
+
                     Logger.Debug($"Rule34Video: Resolving player variable URL: {bestUrl}");
                     var resolvedUrl = await _htmlFetcher.ResolveRedirectUrlAsync(bestUrl, url, cancellationToken);
                     return resolvedUrl ?? bestUrl;
@@ -430,14 +536,18 @@ namespace EdgeLoop.Classes {
 
                 Logger.Warning("Rule34Video: specialized extraction failed, falling back to generic");
                 return await ExtractGenericVideoUrlAsync(url, cancellationToken);
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Warning($"Error extracting RULE34Video URL: {ex.Message}");
                 return null;
             }
         }
 
-        private async Task<string> ExtractPmvHavenUrlAsync(string url, CancellationToken cancellationToken) {
-            try {
+        private async Task<string> ExtractPmvHavenUrlAsync(string url, CancellationToken cancellationToken)
+        {
+            try
+            {
                 var html = await FetchHtmlAsync(url, cancellationToken);
                 if (string.IsNullOrWhiteSpace(html)) return null;
 
@@ -445,52 +555,61 @@ namespace EdgeLoop.Classes {
                 // Look for "contentUrl":"...m3u8"
                 var jsonLdPattern = @"""contentUrl""\s*:\s*[""']([^""']+\.m3u8(?:[^""']*)?)[""']";
                 var jsonLdMatch = Regex.Match(html, jsonLdPattern, RegexOptions.IgnoreCase);
-                if (jsonLdMatch.Success && jsonLdMatch.Groups.Count > 1) {
+                if (jsonLdMatch.Success && jsonLdMatch.Groups.Count > 1)
+                {
                     var hlsUrl = CleanExtractedUrl(jsonLdMatch.Groups[1].Value);
                     Logger.Debug($"PMVHaven: Found HLS URL in JSON-LD: {hlsUrl}");
-                    
-                    if (!hlsUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase) && !hlsUrl.StartsWith("//", StringComparison.OrdinalIgnoreCase)) {
+
+                    if (!hlsUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase) && !hlsUrl.StartsWith("//", StringComparison.OrdinalIgnoreCase))
+                    {
                         var absolute = "https://video.pmvhaven.com/" + hlsUrl.TrimStart('/');
                         Logger.Debug($"PMVHaven: Resolved relative JSON-LD URL to CDN: {absolute}");
                         return absolute;
                     }
-                    
+
                     return ResolveUrl(hlsUrl, url);
                 }
 
                 // 2. Try generic HLS (.m3u8) patterns
                 var hlsPattern = @"[""']([^""']+\.m3u8(?:[^""']*)?)[""']";
                 var hlsMatches = Regex.Matches(html, hlsPattern, RegexOptions.IgnoreCase);
-                foreach (Match match in hlsMatches) {
-                     if (match.Success && match.Groups.Count > 1) {
+                foreach (Match match in hlsMatches)
+                {
+                    if (match.Success && match.Groups.Count > 1)
+                    {
                         var hlsUrl = CleanExtractedUrl(match.Groups[1].Value);
                         // Filter out common false positives if necessary, but m3u8 is usually good
-                         if (!hlsUrl.Contains("preview", StringComparison.OrdinalIgnoreCase)) {
-                             Logger.Debug($"PMVHaven: Found HLS URL in HTML: {hlsUrl}");
-                             
-                             if (!hlsUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase) && !hlsUrl.StartsWith("//", StringComparison.OrdinalIgnoreCase)) {
-                                 var absolute = "https://video.pmvhaven.com/" + hlsUrl.TrimStart('/');
-                                 Logger.Debug($"PMVHaven: Resolved relative HLS URL to CDN: {absolute}");
-                                 return absolute;
-                             }
-                             
-                             return ResolveUrl(hlsUrl, url);
-                         }
-                     }
+                        if (!hlsUrl.Contains("preview", StringComparison.OrdinalIgnoreCase))
+                        {
+                            Logger.Debug($"PMVHaven: Found HLS URL in HTML: {hlsUrl}");
+
+                            if (!hlsUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase) && !hlsUrl.StartsWith("//", StringComparison.OrdinalIgnoreCase))
+                            {
+                                var absolute = "https://video.pmvhaven.com/" + hlsUrl.TrimStart('/');
+                                Logger.Debug($"PMVHaven: Resolved relative HLS URL to CDN: {absolute}");
+                                return absolute;
+                            }
+
+                            return ResolveUrl(hlsUrl, url);
+                        }
+                    }
                 }
 
                 // 3. Try og:video (often highest quality direct file if not HLS)
                 var ogVideo = StashPatternExtractor.ExtractOgVideo(html);
-                if (!string.IsNullOrEmpty(ogVideo)) {
+                if (!string.IsNullOrEmpty(ogVideo))
+                {
                     Logger.Debug("PMVHaven: Found og:video URL (likely highest quality)");
                     return ResolveUrl(ogVideo, url);
                 }
 
                 // 4. Try multi-source extraction with quality selection
                 var sources = StashPatternExtractor.ExtractAllVideoSources(html, url);
-                if (sources.Any()) {
+                if (sources.Any())
+                {
                     var best = QualitySelector.SelectBest(sources);
-                    if (best != null) {
+                    if (best != null)
+                    {
                         Logger.Debug($"PMVHaven: Selected {best.Label} quality from {sources.Count} sources");
                         return ResolveUrl(best.Url, url);
                     }
@@ -500,51 +619,69 @@ namespace EdgeLoop.Classes {
                 // Explicitly warn or filter if we think generic might pick a preview
                 var videoUrl = ExtractVideoFromHtml(html, url);
                 return videoUrl;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Warning($"Error extracting PMVHaven URL: {ex.Message}");
                 return null;
             }
         }
 
 
-        private async Task<string> ExtractGenericVideoUrlAsync(string url, CancellationToken cancellationToken) {
-            try {
+        private async Task<string> ExtractGenericVideoUrlAsync(string url, CancellationToken cancellationToken)
+        {
+            try
+            {
                 var html = await FetchHtmlAsync(url, cancellationToken);
                 if (string.IsNullOrWhiteSpace(html)) return null;
 
                 var videoUrl = ExtractVideoFromHtml(html, url);
                 return videoUrl;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Warning($"Error extracting generic video URL: {ex.Message}");
                 return null;
             }
         }
 
-        private async Task<string> FetchHtmlAsync(string url, CancellationToken cancellationToken) {
+        private async Task<string> FetchHtmlAsync(string url, CancellationToken cancellationToken)
+        {
             return await FetchHtmlWithRetryAsync(url, cancellationToken);
         }
 
         /// <summary>
         /// Fetches HTML with retry logic for transient failures
         /// </summary>
-        private async Task<string> FetchHtmlWithRetryAsync(string url, CancellationToken cancellationToken, int maxRetries = 2) {
-            for (int i = 0; i <= maxRetries; i++) {
-                try {
+        private async Task<string> FetchHtmlWithRetryAsync(string url, CancellationToken cancellationToken, int maxRetries = 2)
+        {
+            for (int i = 0; i <= maxRetries; i++)
+            {
+                try
+                {
                     var result = await _htmlFetcher.FetchHtmlAsync(url, cancellationToken);
-                    if (!string.IsNullOrEmpty(result)) {
+                    if (!string.IsNullOrEmpty(result))
+                    {
                         return result;
                     }
                     // If result is empty/null but no exception, still retry
-                    if (i < maxRetries) {
+                    if (i < maxRetries)
+                    {
                         Logger.Debug($"[VideoUrlExtractor] Empty response for {url}, retrying ({i + 1}/{maxRetries})...");
                         await Task.Delay(500 * (i + 1), cancellationToken);
                     }
-                } catch (HttpRequestException ex) when (i < maxRetries) {
+                }
+                catch (HttpRequestException ex) when (i < maxRetries)
+                {
                     Logger.Debug($"[VideoUrlExtractor] HTTP error for {url}: {ex.Message}, retrying ({i + 1}/{maxRetries})...");
                     await Task.Delay(500 * (i + 1), cancellationToken); // Exponential backoff
-                } catch (TaskCanceledException) {
+                }
+                catch (TaskCanceledException)
+                {
                     throw; // Don't retry on cancellation
-                } catch (Exception ex) when (i < maxRetries) {
+                }
+                catch (Exception ex) when (i < maxRetries)
+                {
                     Logger.Warning($"[VideoUrlExtractor] Error fetching {url}: {ex.Message}, retrying ({i + 1}/{maxRetries})...");
                     await Task.Delay(500 * (i + 1), cancellationToken);
                 }
@@ -554,17 +691,20 @@ namespace EdgeLoop.Classes {
 
         private static readonly TimeSpan _regexTimeout = TimeSpan.FromSeconds(5);
 
-        private string ExtractVideoFromHtml(string html, string baseUrl) {
+        private string ExtractVideoFromHtml(string html, string baseUrl)
+        {
             if (string.IsNullOrWhiteSpace(html)) return null;
 
             Logger.Debug($"ExtractVideoFromHtml: Processing {html.Length} characters of HTML from {baseUrl}");
 
-            try {
+            try
+            {
                 // Method 1: Look for <video> tags with src attribute
                 Logger.Debug("Trying Method 1: <video> tag with src attribute");
                 var videoSrcPattern = @"<video[^>]+src\s*=\s*[""']([^""']+)[""']";
                 var match = Regex.Match(html, videoSrcPattern, RegexOptions.IgnoreCase, _regexTimeout);
-                if (match.Success && match.Groups.Count > 1) {
+                if (match.Success && match.Groups.Count > 1)
+                {
                     var videoUrl = match.Groups[1].Value;
                     var resolved = ResolveUrl(videoUrl, baseUrl);
                     Logger.Debug($"Method 1: Found video URL: {resolved}");
@@ -576,11 +716,14 @@ namespace EdgeLoop.Classes {
                 var sourcePattern = @"<source[^>]+src\s*=\s*[""']([^""']+)[""']";
                 var sourceMatches = Regex.Matches(html, sourcePattern, RegexOptions.IgnoreCase, _regexTimeout);
                 Logger.Debug($"Method 2: Found {sourceMatches.Count} <source> tags");
-                foreach (Match sourceMatch in sourceMatches) {
-                    if (sourceMatch.Success && sourceMatch.Groups.Count > 1) {
+                foreach (Match sourceMatch in sourceMatches)
+                {
+                    if (sourceMatch.Success && sourceMatch.Groups.Count > 1)
+                    {
                         var videoUrl = CleanExtractedUrl(sourceMatch.Groups[1].Value);
                         // Check for video extensions, allowing for query parameters
-                        if (HasVideoExtension(videoUrl)) {
+                        if (HasVideoExtension(videoUrl))
+                        {
                             var resolved = ResolveUrl(videoUrl, baseUrl);
                             Logger.Debug($"Method 2: Found video URL: {resolved}");
                             return resolved;
@@ -592,10 +735,13 @@ namespace EdgeLoop.Classes {
                 Logger.Debug("Trying Method 3: data attributes");
                 var dataUrlPattern = @"(?:data-url|data-src|data-video-src|data-config)\s*=\s*[""']([^""']+)[""']";
                 var dataMatches = Regex.Matches(html, dataUrlPattern, RegexOptions.IgnoreCase, _regexTimeout);
-                foreach (Match dataMatch in dataMatches) {
-                    if (dataMatch.Success && dataMatch.Groups.Count > 1) {
+                foreach (Match dataMatch in dataMatches)
+                {
+                    if (dataMatch.Success && dataMatch.Groups.Count > 1)
+                    {
                         var url = CleanExtractedUrl(dataMatch.Groups[1].Value);
-                        if (HasVideoExtension(url)) {
+                        if (HasVideoExtension(url))
+                        {
                             var resolved = ResolveUrl(url, baseUrl);
                             Logger.Debug($"Method 3: Found video URL: {resolved}");
                             return resolved;
@@ -615,33 +761,39 @@ namespace EdgeLoop.Classes {
                 // Store potential matches to find the best quality if multiple exist
                 var potentialUrls = new List<string>();
 
-                foreach (var pattern in jsVideoPatterns) {
+                foreach (var pattern in jsVideoPatterns)
+                {
                     var jsMatches = Regex.Matches(html, pattern, RegexOptions.IgnoreCase, _regexTimeout);
                     Logger.Debug($"Method 4: Pattern {pattern} found {jsMatches.Count} potential matches");
-                    foreach (Match jsMatch in jsMatches) {
-                        if (jsMatch.Success && jsMatch.Groups.Count > 1) {
+                    foreach (Match jsMatch in jsMatches)
+                    {
+                        if (jsMatch.Success && jsMatch.Groups.Count > 1)
+                        {
                             var videoUrl = CleanExtractedUrl(jsMatch.Groups[1].Value);
                             var resolvedUrl = ResolveUrl(videoUrl, baseUrl);
-                            if (IsValidVideoUrl(resolvedUrl)) {
+                            if (IsValidVideoUrl(resolvedUrl))
+                            {
                                 potentialUrls.Add(resolvedUrl);
                             }
                         }
                     }
                 }
 
-                if (potentialUrls.Any()) {
+                if (potentialUrls.Any())
+                {
                     // Try to find the highest quality (often denoted by _1080p, _720p, etc. in the URL)
                     // Or just pick the last one if it's from variables like video_alt_url3
-                    var bestUrl = potentialUrls.OrderByDescending(u => {
+                    var bestUrl = potentialUrls.OrderByDescending(u =>
+                    {
                         // Heavily penalize segments or HLS manifests when full containers are available
                         int score = 0;
                         if (u.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase)) score += 10000;
                         if (u.EndsWith(".webm", StringComparison.OrdinalIgnoreCase)) score += 9000;
-                        
+
                         // Penalize segments (e.g. pmvhaven's _000.ts)
                         if (Regex.IsMatch(u, segmentPattern, RegexOptions.IgnoreCase)) score -= 50000;
                         else if (u.EndsWith(".ts", StringComparison.OrdinalIgnoreCase)) score -= 1000;
-                        
+
                         if (u.Contains("_1080p") || u.Contains("1080")) score += 1080;
                         if (u.Contains("_720p") || u.Contains("720")) score += 720;
                         if (u.Contains("_480p") || u.Contains("480")) score += 480;
@@ -658,8 +810,10 @@ namespace EdgeLoop.Classes {
                 var hlsPattern = @"[""']([^""']+\.m3u8(?:[^""']*)?)[""']";
                 var hlsMatches = Regex.Matches(html, hlsPattern, RegexOptions.IgnoreCase, _regexTimeout);
                 Logger.Debug($"Method 5: Found {hlsMatches.Count} potential HLS streams");
-                foreach (Match hlsMatch in hlsMatches) {
-                    if (hlsMatch.Success && hlsMatch.Groups.Count > 1) {
+                foreach (Match hlsMatch in hlsMatches)
+                {
+                    if (hlsMatch.Success && hlsMatch.Groups.Count > 1)
+                    {
                         var hlsUrl = CleanExtractedUrl(hlsMatch.Groups[1].Value);
                         var resolved = ResolveUrl(hlsUrl, baseUrl);
                         Logger.Debug($"Method 5: Found HLS URL: {resolved}");
@@ -671,7 +825,8 @@ namespace EdgeLoop.Classes {
                 Logger.Debug("Trying Method 6: Plyr configuration");
                 var plyrPattern = @"plyr_player\.source\s*=\s*\{[\s\S]*?sources\s*:\s*\[\s*\{\s*[""']?src[""']?\s*:\s*[""']([^""']+)[""']";
                 var plyrMatch = Regex.Match(html, plyrPattern, RegexOptions.IgnoreCase, _regexTimeout);
-                if (plyrMatch.Success && plyrMatch.Groups.Count > 1) {
+                if (plyrMatch.Success && plyrMatch.Groups.Count > 1)
+                {
                     var videoUrl = CleanExtractedUrl(plyrMatch.Groups[1].Value);
                     var resolved = ResolveUrl(videoUrl, baseUrl);
                     Logger.Debug($"Method 6: Found Plyr URL: {resolved}");
@@ -681,64 +836,76 @@ namespace EdgeLoop.Classes {
                 // Method 7: Look for video URLs in JSON data
                 Logger.Debug("Trying Method 7: JSON data");
                 var jsonVideoUrl = ExtractVideoFromJson(html, baseUrl);
-                if (jsonVideoUrl != null) {
+                if (jsonVideoUrl != null)
+                {
                     Logger.Debug($"Method 7: Found JSON video URL: {jsonVideoUrl}");
                     return jsonVideoUrl;
                 }
 
                 Logger.Warning("ExtractVideoFromHtml: All extraction methods failed");
                 return null;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Warning($"Error extracting video from HTML: {ex.Message}");
                 return null;
             }
         }
 
-        private bool HasVideoExtension(string url) {
+        private bool HasVideoExtension(string url)
+        {
             if (string.IsNullOrWhiteSpace(url)) return false;
-            
+
             // Extract the path part before query parameters/fragments
             string path = url;
             int queryIndex = url.IndexOf('?');
             if (queryIndex != -1) path = url.Substring(0, queryIndex);
-            
+
             int fragmentIndex = path.IndexOf('#');
             if (fragmentIndex != -1) path = path.Substring(0, fragmentIndex);
-            
+
             // Remove trailing slash if present (common in some Hypnotube video links)
             path = path.TrimEnd('/');
-            
+
             return Constants.VideoExtensions.Any(ext => path.EndsWith(ext, StringComparison.OrdinalIgnoreCase));
         }
 
-        private string ExtractVideoFromJson(string html, string baseUrl) {
+        private string ExtractVideoFromJson(string html, string baseUrl)
+        {
             if (string.IsNullOrWhiteSpace(html)) return null;
 
-            try {
+            try
+            {
                 // Look for JSON-like structures that might contain video URLs
                 // This version is more lenient with whitespace and escaped characters
                 var jsonPattern = @"""(?:src|url|source|file|videoUrl)""\s*:\s*""([^""]+\.(?:mp4|webm|mkv|avi|mov|wmv|m4v|mpg|mpeg|ts|m2ts)[^""]*)""";
                 var matches = Regex.Matches(html, jsonPattern, RegexOptions.IgnoreCase, _regexTimeout);
-                
-                foreach (Match match in matches) {
-                    if (match.Success && match.Groups.Count > 1) {
+
+                foreach (Match match in matches)
+                {
+                    if (match.Success && match.Groups.Count > 1)
+                    {
                         var videoUrl = CleanExtractedUrl(match.Groups[1].Value);
-                        
+
                         var resolvedUrl = ResolveUrl(videoUrl, baseUrl);
-                        if (IsValidVideoUrl(resolvedUrl)) {
+                        if (IsValidVideoUrl(resolvedUrl))
+                        {
                             return resolvedUrl;
                         }
                     }
                 }
 
                 return null;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Warning($"Error extracting video from JSON: {ex.Message}");
                 return null;
             }
         }
 
-        private string CleanExtractedUrl(string url) {
+        private string CleanExtractedUrl(string url)
+        {
             if (string.IsNullOrWhiteSpace(url)) return url;
 
             // Remove whitespace
@@ -750,10 +917,12 @@ namespace EdgeLoop.Classes {
             // Some sites (like Rule34Video) prefix URLs with metadata like 'function/0/'
             // If the URL contains 'http' but not at the start, try to isolate the actual URL
             int httpIndex = url.IndexOf("http", StringComparison.OrdinalIgnoreCase);
-            if (httpIndex > 0) {
+            if (httpIndex > 0)
+            {
                 var potentialUrl = url.Substring(httpIndex);
                 // Check if the isolated part is a valid absolute URL
-                if (Uri.TryCreate(potentialUrl, UriKind.Absolute, out _)) {
+                if (Uri.TryCreate(potentialUrl, UriKind.Absolute, out _))
+                {
                     Logger.Debug($"CleanExtractedUrl: Isolated URL from prefix: {potentialUrl} (original: {url})");
                     return potentialUrl;
                 }
@@ -762,29 +931,37 @@ namespace EdgeLoop.Classes {
             return url;
         }
 
-        private string ResolveUrl(string url, string baseUrl) {
+        private string ResolveUrl(string url, string baseUrl)
+        {
             if (string.IsNullOrWhiteSpace(url)) return null;
 
-            try {
-                if (Uri.TryCreate(url, UriKind.Absolute, out Uri absoluteUri)) {
+            try
+            {
+                if (Uri.TryCreate(url, UriKind.Absolute, out Uri absoluteUri))
+                {
                     return absoluteUri.ToString();
                 }
 
-                if (Uri.TryCreate(new Uri(baseUrl), url, out Uri resolvedUri)) {
+                if (Uri.TryCreate(new Uri(baseUrl), url, out Uri resolvedUri))
+                {
                     return resolvedUri.ToString();
                 }
 
                 return url;
-            } catch {
+            }
+            catch
+            {
                 return url;
             }
         }
 
-        private bool IsValidVideoUrl(string url) {
+        private bool IsValidVideoUrl(string url)
+        {
             if (string.IsNullOrWhiteSpace(url)) return false;
-            
+
             // Check if it's a valid URL with video extension
-            if (Uri.TryCreate(url, UriKind.Absolute, out Uri uri)) {
+            if (Uri.TryCreate(url, UriKind.Absolute, out Uri uri))
+            {
                 var path = uri.AbsolutePath.ToLowerInvariant();
                 return Constants.VideoExtensions.Any(ext => path.EndsWith(ext)) ||
                        uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps;
@@ -799,236 +976,307 @@ namespace EdgeLoop.Classes {
         /// <param name="pageUrl">The page URL to extract title from</param>
         /// <param name="cancellationToken">Cancellation token</param>
         /// <returns>The video title, or null if extraction failed</returns>
-        public async Task<string> ExtractVideoTitleAsync(string pageUrl, CancellationToken cancellationToken = default) {
+        public async Task<string> ExtractVideoTitleAsync(string pageUrl, CancellationToken cancellationToken = default)
+        {
             if (string.IsNullOrWhiteSpace(pageUrl)) return null;
 
-            try {
+            try
+            {
                 var normalizedUrl = FileValidator.NormalizeUrl(pageUrl);
                 var uri = new Uri(normalizedUrl);
                 var host = uri.Host.ToLowerInvariant();
 
                 // Fast path for sites that require CF bypass / yt-dlp to get title
-                if (host.Contains("rule34video.com") || host.Contains("iwara.tv")) {
-                    if (_ytDlpService != null && _ytDlpService.IsAvailable) {
-                        try {
+                if (host.Contains("rule34video.com") || host.Contains("iwara.tv"))
+                {
+                    if (_ytDlpService != null && _ytDlpService.IsAvailable)
+                    {
+                        try
+                        {
                             Logger.Debug($"[VideoUrlExtractor] Extracting title using yt-dlp for {host}");
                             var info = await _ytDlpService.ExtractVideoInfoAsync(normalizedUrl, cancellationToken);
-                            if (info != null && !string.IsNullOrWhiteSpace(info.Title) && info.Title != "Unknown") {
+                            if (info != null && !string.IsNullOrWhiteSpace(info.Title) && info.Title != "Unknown")
+                            {
                                 return info.Title;
                             }
-                        } catch (Exception ex) {
+                        }
+                        catch (Exception ex)
+                        {
                             Logger.Warning($"[VideoUrlExtractor] yt-dlp title extraction failed for {host}: {ex.Message}");
                         }
                     }
                 }
 
                 var html = await FetchHtmlAsync(normalizedUrl, cancellationToken);
-                if (string.IsNullOrWhiteSpace(html)) {
+                if (string.IsNullOrWhiteSpace(html))
+                {
                     // Fallback to yt-dlp if HTML fetch failed and yt-dlp is available
-                    if (_ytDlpService != null && _ytDlpService.IsAvailable) {
-                        try {
+                    if (_ytDlpService != null && _ytDlpService.IsAvailable)
+                    {
+                        try
+                        {
                             Logger.Debug($"[VideoUrlExtractor] HTML fetch failed, fallback to yt-dlp title extraction for {normalizedUrl}");
                             var info = await _ytDlpService.ExtractVideoInfoAsync(normalizedUrl, cancellationToken);
-                            if (info != null && !string.IsNullOrWhiteSpace(info.Title) && info.Title != "Unknown") {
+                            if (info != null && !string.IsNullOrWhiteSpace(info.Title) && info.Title != "Unknown")
+                            {
                                 return info.Title;
                             }
-                        } catch { }
+                        }
+                        catch { }
                     }
                     return null;
                 }
 
                 return ExtractTitleFromHtml(html, uri.Host);
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Warning($"Error extracting video title from {pageUrl}: {ex.Message}");
                 return null;
             }
         }
 
-        private string ExtractTitleFromHtml(string html, string host) {
+        private string ExtractTitleFromHtml(string html, string host)
+        {
             if (string.IsNullOrWhiteSpace(html)) return null;
 
-            try {
+            try
+            {
                 host = host.ToLowerInvariant();
-                
+
                 // Method 0: Aggressive Regex for common meta tags (Highest Priority for reliability)
                 var ogRegex = Regex.Match(html, @"<meta[^>]*(?:property|name)\s*=\s*[""']og:title[""'][^>]*content\s*=\s*[""']([^""']+)[""']", RegexOptions.IgnoreCase);
-                if (!ogRegex.Success) {
+                if (!ogRegex.Success)
+                {
                     ogRegex = Regex.Match(html, @"<meta[^>]*content\s*=\s*[""']([^""']+)[""'][^>]*(?:property|name)\s*=\s*[""']og:title[""']", RegexOptions.IgnoreCase);
                 }
-                
-                if (ogRegex.Success) {
+
+                if (ogRegex.Success)
+                {
                     var title = WebUtility.HtmlDecode(ogRegex.Groups[1].Value.Trim());
-                    if (!string.IsNullOrWhiteSpace(title)) {
+                    if (!string.IsNullOrWhiteSpace(title))
+                    {
                         var sanitized = SanitizeTitle(title, host);
                         if (!string.IsNullOrWhiteSpace(sanitized)) return sanitized;
                     }
                 }
 
                 // Method 1: Try site-specific title extraction (Highest Priority)
-                if (host.Contains("hypnotube.com")) {
+                if (host.Contains("hypnotube.com"))
+                {
                     var hTitle = StashPatternExtractor.ExtractHypnotubeTitle(html);
-                    if (!string.IsNullOrEmpty(hTitle)) {
+                    if (!string.IsNullOrEmpty(hTitle))
+                    {
                         var sanitized = SanitizeTitle(hTitle, host);
                         if (!string.IsNullOrWhiteSpace(sanitized)) return sanitized;
                     }
-                } else if (host.Contains("rule34video.com")) {
+                }
+                else if (host.Contains("rule34video.com"))
+                {
                     var doc = new HtmlDocument();
                     doc.LoadHtml(html);
                     var h1 = doc.DocumentNode.SelectSingleNode("//h1");
-                    if (h1 != null) {
+                    if (h1 != null)
+                    {
                         var title = WebUtility.HtmlDecode(h1.InnerText?.Trim());
                         if (!string.IsNullOrWhiteSpace(title)) return title;
                     }
                 }
 
                 // Method 2: Try Open Graph meta tags (Robust via HtmlAgilityPack)
-                try {
+                try
+                {
                     var ogTitle = StashPatternExtractor.ExtractOgTitle(html);
                     Logger.Debug($"[VideoUrlExtractor] ExtractOgTitle returned: '{ogTitle}'");
-                    if (!string.IsNullOrWhiteSpace(ogTitle)) {
+                    if (!string.IsNullOrWhiteSpace(ogTitle))
+                    {
                         var sanitized = SanitizeTitle(ogTitle, host);
-                        if (!string.IsNullOrWhiteSpace(sanitized)) {
+                        if (!string.IsNullOrWhiteSpace(sanitized))
+                        {
                             return sanitized;
                         }
                     }
-                } catch (Exception ex) { 
+                }
+                catch (Exception ex)
+                {
                     Logger.Debug($"[VideoUrlExtractor] ExtractOgTitle exception: {ex.Message}");
                 }
 
                 // Method 3: Try Twitter meta tags
-                try {
+                try
+                {
                     var twitterTitle = ExtractMetaTag(html, "twitter:title");
-                    if (!string.IsNullOrWhiteSpace(twitterTitle)) {
+                    if (!string.IsNullOrWhiteSpace(twitterTitle))
+                    {
                         var sanitized = SanitizeTitle(twitterTitle, host);
-                        if (!string.IsNullOrWhiteSpace(sanitized)) {
+                        if (!string.IsNullOrWhiteSpace(sanitized))
+                        {
                             return sanitized;
                         }
                     }
-                } catch { }
+                }
+                catch { }
 
                 // Method 3: Try HTML title tag
-                try {
+                try
+                {
                     var htmlTitle = ExtractHtmlTitle(html);
-                    if (!string.IsNullOrWhiteSpace(htmlTitle)) {
+                    if (!string.IsNullOrWhiteSpace(htmlTitle))
+                    {
                         var sanitized = SanitizeTitle(htmlTitle, host);
-                        if (!string.IsNullOrWhiteSpace(sanitized)) {
+                        if (!string.IsNullOrWhiteSpace(sanitized))
+                        {
                             return sanitized;
                         }
                     }
-                } catch { }
+                }
+                catch { }
 #pragma warning disable CS0618
                 // Method 4: Try page elements (site-specific)
-                try {
+                try
+                {
                     // We need a dummy URL for site-specific logic if we don't have one, 
                     // but usually host is enough or we use generic elements
                     var elementTitle = ExtractTitleFromPageElements(html, host);
-                    if (!string.IsNullOrWhiteSpace(elementTitle)) {
+                    if (!string.IsNullOrWhiteSpace(elementTitle))
+                    {
                         var sanitized = SanitizeTitle(elementTitle, host);
-                        if (!string.IsNullOrWhiteSpace(sanitized)) {
+                        if (!string.IsNullOrWhiteSpace(sanitized))
+                        {
                             return sanitized;
                         }
                     }
-                } catch { }
+                }
+                catch { }
 #pragma warning restore CS0618
                 return null;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Warning($"Error in ExtractTitleFromHtml: {ex.Message}");
                 return null;
             }
         }
 
-        private string ExtractMetaTag(string html, string propertyName) {
+        private string ExtractMetaTag(string html, string propertyName)
+        {
             if (string.IsNullOrWhiteSpace(html)) return null;
 
-            try {
+            try
+            {
                 var pattern = $@"<meta\s+[^>]*(?:property|name)\s*=\s*[""']{Regex.Escape(propertyName)}[""'][^>]*content\s*=\s*[""']([^""']+)[""']";
                 var match = Regex.Match(html, pattern, RegexOptions.IgnoreCase);
-                if (match.Success && match.Groups.Count > 1) {
+                if (match.Success && match.Groups.Count > 1)
+                {
                     return WebUtility.HtmlDecode(match.Groups[1].Value);
                 }
 
                 // Alternative pattern: content before property/name
                 pattern = $@"<meta\s+[^>]*content\s*=\s*[""']([^""']+)[""'][^>]*(?:property|name)\s*=\s*[""']{Regex.Escape(propertyName)}[""']";
                 match = Regex.Match(html, pattern, RegexOptions.IgnoreCase);
-                if (match.Success && match.Groups.Count > 1) {
+                if (match.Success && match.Groups.Count > 1)
+                {
                     return WebUtility.HtmlDecode(match.Groups[1].Value);
                 }
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Warning($"Error extracting meta tag {propertyName}: {ex.Message}");
             }
 
             return null;
         }
 
-        private string ExtractHtmlTitle(string html) {
+        private string ExtractHtmlTitle(string html)
+        {
             if (string.IsNullOrWhiteSpace(html)) return null;
 
-            try {
+            try
+            {
                 var titlePattern = @"<title[^>]*>([^<]+)</title>";
                 var match = Regex.Match(html, titlePattern, RegexOptions.IgnoreCase);
-                if (match.Success && match.Groups.Count > 1) {
+                if (match.Success && match.Groups.Count > 1)
+                {
                     var title = WebUtility.HtmlDecode(match.Groups[1].Value);
-                    
+
                     // Clean up common site suffixes
-                    var suffixes = new[] { " - Hypnotube", " | Hypnotube", " - RULE34VIDEO", " | RULE34VIDEO", 
+                    var suffixes = new[] { " - Hypnotube", " | Hypnotube", " - RULE34VIDEO", " | RULE34VIDEO",
                                           " - PMVHaven", " | PMVHaven" };
-                    foreach (var suffix in suffixes) {
-                        if (title.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) {
+                    foreach (var suffix in suffixes)
+                    {
+                        if (title.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                        {
                             title = title.Substring(0, title.Length - suffix.Length).Trim();
                             break;
                         }
                     }
-                    
+
                     return title;
                 }
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Warning($"Error extracting HTML title: {ex.Message}");
             }
 
             return null;
         }
 
-        private string ExtractTitleFromPageElements(string html, string url) {
+        private string ExtractTitleFromPageElements(string html, string url)
+        {
             if (string.IsNullOrWhiteSpace(html)) return null;
 
-            try {
+            try
+            {
                 var uri = new Uri(url);
                 var host = uri.Host.ToLowerInvariant();
 
                 // Site-specific extraction patterns
-                if (host.Contains("hypnotube.com")) {
+                if (host.Contains("hypnotube.com"))
+                {
                     // Try h1 with video-title class or similar
                     var pattern = @"<h1[^>]*class\s*=\s*[""'][^""']*video[^""']*title[^""']*[""'][^>]*>([^<]+)</h1>";
                     var match = Regex.Match(html, pattern, RegexOptions.IgnoreCase);
-                    if (match.Success && match.Groups.Count > 1) {
+                    if (match.Success && match.Groups.Count > 1)
+                    {
                         return WebUtility.HtmlDecode(match.Groups[1].Value);
                     }
-                } else if (host.Contains("rule34video.com")) {
+                }
+                else if (host.Contains("rule34video.com"))
+                {
                     // Try common title patterns
                     var patterns = new[] {
                         @"<h1[^>]*>([^<]+)</h1>",
                         @"<div[^>]*class\s*=\s*[""'][^""']*title[^""']*[""'][^>]*>([^<]+)</div>"
                     };
-                    foreach (var pattern in patterns) {
+                    foreach (var pattern in patterns)
+                    {
                         var match = Regex.Match(html, pattern, RegexOptions.IgnoreCase);
-                        if (match.Success && match.Groups.Count > 1) {
+                        if (match.Success && match.Groups.Count > 1)
+                        {
                             var title = WebUtility.HtmlDecode(match.Groups[1].Value);
-                            if (!string.IsNullOrWhiteSpace(title) && title.Length > 3) {
+                            if (!string.IsNullOrWhiteSpace(title) && title.Length > 3)
+                            {
                                 return title;
                             }
                         }
                     }
-                } else if (host.Contains("pmvhaven.com")) {
+                }
+                else if (host.Contains("pmvhaven.com"))
+                {
                     // Try h1 or title div
                     var patterns = new[] {
                         @"<h1[^>]*>([^<]+)</h1>",
                         @"<div[^>]*class\s*=\s*[""'][^""']*video[^""']*title[^""']*[""'][^>]*>([^<]+)</div>"
                     };
-                    foreach (var pattern in patterns) {
+                    foreach (var pattern in patterns)
+                    {
                         var match = Regex.Match(html, pattern, RegexOptions.IgnoreCase);
-                        if (match.Success && match.Groups.Count > 1) {
+                        if (match.Success && match.Groups.Count > 1)
+                        {
                             var title = WebUtility.HtmlDecode(match.Groups[1].Value);
-                            if (!string.IsNullOrWhiteSpace(title) && title.Length > 3) {
+                            if (!string.IsNullOrWhiteSpace(title) && title.Length > 3)
+                            {
                                 return title;
                             }
                         }
@@ -1038,69 +1286,82 @@ namespace EdgeLoop.Classes {
                 // Generic fallback: try first h1
                 var genericPattern = @"<h1[^>]*>([^<]+)</h1>";
                 var genericMatch = Regex.Match(html, genericPattern, RegexOptions.IgnoreCase);
-                if (genericMatch.Success && genericMatch.Groups.Count > 1) {
+                if (genericMatch.Success && genericMatch.Groups.Count > 1)
+                {
                     var title = WebUtility.HtmlDecode(genericMatch.Groups[1].Value);
-                    if (!string.IsNullOrWhiteSpace(title) && title.Length > 3) {
+                    if (!string.IsNullOrWhiteSpace(title) && title.Length > 3)
+                    {
                         return title;
                     }
                 }
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Warning($"Error extracting title from page elements: {ex.Message}");
             }
 
             return null;
         }
 
-        private string SanitizeTitle(string title, string host = null) {
+        private string SanitizeTitle(string title, string host = null)
+        {
             if (string.IsNullOrWhiteSpace(title)) return null;
 
-            try {
+            try
+            {
                 // Remove HTML tags
                 title = Regex.Replace(title, @"<[^>]+>", string.Empty);
-                
+
                 // Decode HTML entities
                 title = WebUtility.HtmlDecode(title);
-                
+
                 // Trim whitespace
                 title = title.Trim();
-                
+
                 // Limit length (reasonable max for display)
-                if (title.Length > 200) {
+                if (title.Length > 200)
+                {
                     title = title.Substring(0, 197) + "...";
                 }
-                
+
                 // Remove excessive whitespace
                 title = Regex.Replace(title, @"\s+", " ");
 
                 // Remove common site suffixes
-                string[] suffixes = { 
-                    " - Videos - Hypnotube", 
-                    " - Hypnotube", 
-                    " | Rule34Video", 
-                    " - PMV Haven", 
+                string[] suffixes = {
+                    " - Videos - Hypnotube",
+                    " - Hypnotube",
+                    " | Rule34Video",
+                    " - PMV Haven",
                     " - PMVHaven",
                     " - YouTube"
                 };
 
-                foreach (var suffix in suffixes) {
-                    if (title.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) {
+                foreach (var suffix in suffixes)
+                {
+                    if (title.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
+                    {
                         title = title.Substring(0, title.Length - suffix.Length).Trim();
                         break;
                     }
                 }
 
                 // PMVHaven specific: Remove uploader "by [Name]"
-                if (!string.IsNullOrEmpty(host) && host.Contains("pmvhaven.com")) {
+                if (!string.IsNullOrEmpty(host) && host.Contains("pmvhaven.com"))
+                {
                     // Pattern: "Title by Uploader"
                     // We search for " by " towards the end of the string
                     var byMatch = Regex.Match(title, @"\s+by\s+([^-|]+)$", RegexOptions.IgnoreCase);
-                    if (byMatch.Success) {
+                    if (byMatch.Success)
+                    {
                         title = title.Substring(0, byMatch.Index).Trim();
                     }
                 }
-                
+
                 return string.IsNullOrWhiteSpace(title) ? null : title;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Warning($"Error sanitizing title: {ex.Message}");
                 return null;
             }
@@ -1110,7 +1371,8 @@ namespace EdgeLoop.Classes {
         /// <summary>
         /// Clears the URL cache
         /// </summary>
-        public void ClearCache() {
+        public void ClearCache()
+        {
             PersistentUrlCache.Instance.Clear();
         }
     }

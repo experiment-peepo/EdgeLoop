@@ -3,8 +3,10 @@ using System.Diagnostics;
 using System.IO;
 using System.Threading;
 
-namespace EdgeLoop.Classes {
-    public enum LogLevel {
+namespace EdgeLoop.Classes
+{
+    public enum LogLevel
+    {
         Debug = 0,
         Info = 1,
         Warning = 2,
@@ -17,7 +19,8 @@ namespace EdgeLoop.Classes {
     /// Supports a separate diagnostic log file that captures all log levels
     /// when DiagnosticMode is enabled, independent of the main log's MinimumLevel.
     /// </summary>
-    public static class Logger {
+    public static class Logger
+    {
         public static LogLevel MinimumLevel { get; set; } = LogLevel.Warning;
 
         /// <summary>
@@ -34,11 +37,13 @@ namespace EdgeLoop.Classes {
         private static readonly System.Collections.Concurrent.BlockingCollection<(string entry, bool writeToMain, bool writeToDiag)> _logQueue
             = new System.Collections.Concurrent.BlockingCollection<(string, bool, bool)>();
 
-        static Logger() {
+        static Logger()
+        {
             _logFilePath = AppPaths.LogFile;
-            
+
             // Start background logging thread
-            var thread = new Thread(ProcessLogQueue) {
+            var thread = new Thread(ProcessLogQueue)
+            {
                 IsBackground = true,
                 Name = "LoggerBackgroundThread",
                 Priority = ThreadPriority.BelowNormal
@@ -46,29 +51,41 @@ namespace EdgeLoop.Classes {
             thread.Start();
         }
 
-        private static void ProcessLogQueue() {
-            foreach (var (logEntry, writeToMain, writeToDiag) in _logQueue.GetConsumingEnumerable()) {
+        private static void ProcessLogQueue()
+        {
+            foreach (var (logEntry, writeToMain, writeToDiag) in _logQueue.GetConsumingEnumerable())
+            {
                 // Write to main log file (only if this entry meets MinimumLevel)
-                if (writeToMain && _consecutiveFailures < MaxConsecutiveFailures) {
-                    try {
-                        lock (_lock) {
+                if (writeToMain && _consecutiveFailures < MaxConsecutiveFailures)
+                {
+                    try
+                    {
+                        lock (_lock)
+                        {
                             File.AppendAllText(_logFilePath, logEntry);
                             _consecutiveFailures = 0;
                         }
-                    } catch (Exception fileEx) {
+                    }
+                    catch (Exception fileEx)
+                    {
                         _consecutiveFailures++;
                         System.Diagnostics.Debug.WriteLine($"[LOGGER FILE ERROR] Failed to write to log file ({_consecutiveFailures}/{MaxConsecutiveFailures}): {fileEx.Message}");
                     }
                 }
 
                 // Write to diagnostic log file (captures everything when enabled)
-                if (writeToDiag) {
-                    try {
+                if (writeToDiag)
+                {
+                    try
+                    {
                         var diagPath = AppPaths.DiagnosticsLogFile;
-                        lock (_lock) {
+                        lock (_lock)
+                        {
                             File.AppendAllText(diagPath, logEntry);
                         }
-                    } catch (Exception diagEx) {
+                    }
+                    catch (Exception diagEx)
+                    {
                         System.Diagnostics.Debug.WriteLine($"[LOGGER DIAG ERROR] Failed to write to diagnostics log: {diagEx.Message}");
                     }
                 }
@@ -99,39 +116,48 @@ namespace EdgeLoop.Classes {
         public static void Debug(string message) => Log(LogLevel.Debug, null, message, null);
         public static void Debug(string context, string message) => Log(LogLevel.Debug, context, message, null);
 
-        private static void Log(LogLevel level, string context, string message, Exception exception) {
+        private static void Log(LogLevel level, string context, string message, Exception exception)
+        {
             bool writeToMainLog = level >= MinimumLevel;
             bool writeToDiag = DiagnosticMode;
 
             // Skip entirely if neither destination wants this entry
             if (!writeToMainLog && !writeToDiag) return;
 
-            try {
+            try
+            {
                 var levelStr = level.ToString().ToUpper();
                 var timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
-                var logEntry = string.IsNullOrEmpty(context) 
+                var logEntry = string.IsNullOrEmpty(context)
                     ? $"[{timestamp}] [{levelStr}] {message}"
                     : $"[{timestamp}] [{levelStr}] [{context}] {message}";
-                
-                if (exception != null) {
+
+                if (exception != null)
+                {
                     logEntry += $"\nException: {exception.GetType().Name}: {exception.Message}";
-                    if (exception.StackTrace != null) {
+                    if (exception.StackTrace != null)
+                    {
                         logEntry += $"\nStack Trace: {exception.StackTrace}";
                     }
                 }
-                
+
                 logEntry += Environment.NewLine;
-                
+
                 // Add to background queue with both routing flags
                 _logQueue.Add((logEntry, writeToMain: writeToMainLog, writeToDiag));
-                
+
                 // Also output to Debug for immediate inspection in IDE
                 System.Diagnostics.Debug.WriteLine(logEntry.TrimEnd());
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 // Last resort: try Debug.WriteLine without any formatting
-                try {
+                try
+                {
                     System.Diagnostics.Debug.WriteLine($"[LOGGER CRITICAL ERROR] {message} | Exception: {ex.Message}");
-                } catch {
+                }
+                catch
+                {
                     // Absolutely nothing we can do at this point
                 }
             }
@@ -142,7 +168,8 @@ namespace EdgeLoop.Classes {
         /// Should be called at application startup.
         /// </summary>
         /// <param name="maxSizeBytes">The maximum size in bytes before rotation occurs</param>
-        public static void CheckAndRotateLogFile(long maxSizeBytes) {
+        public static void CheckAndRotateLogFile(long maxSizeBytes)
+        {
             RotateFileIfNeeded(_logFilePath, maxSizeBytes);
         }
 
@@ -151,20 +178,27 @@ namespace EdgeLoop.Classes {
         /// Should be called at application startup when diagnostic mode is enabled.
         /// </summary>
         /// <param name="maxSizeBytes">The maximum size in bytes before rotation occurs</param>
-        public static void CheckAndRotateDiagnosticsLogFile(long maxSizeBytes) {
+        public static void CheckAndRotateDiagnosticsLogFile(long maxSizeBytes)
+        {
             RotateFileIfNeeded(AppPaths.DiagnosticsLogFile, maxSizeBytes);
         }
 
-        private static void RotateFileIfNeeded(string filePath, long maxSizeBytes) {
-            try {
-                lock (_lock) {
+        private static void RotateFileIfNeeded(string filePath, long maxSizeBytes)
+        {
+            try
+            {
+                lock (_lock)
+                {
                     var logFile = new FileInfo(filePath);
-                    if (logFile.Exists && logFile.Length > maxSizeBytes) {
-                        try {
+                    if (logFile.Exists && logFile.Length > maxSizeBytes)
+                    {
+                        try
+                        {
                             var oldLogPath = filePath + ".old";
-                            
+
                             // Delete existing backup if it exists
-                            if (File.Exists(oldLogPath)) {
+                            if (File.Exists(oldLogPath))
+                            {
                                 File.Delete(oldLogPath);
                             }
 
@@ -173,12 +207,16 @@ namespace EdgeLoop.Classes {
 
                             // Initial log entry in new file
                             Log(LogLevel.Info, null, $"Log file rotated. Previous log moved to {oldLogPath}", null);
-                        } catch (Exception ex) {
+                        }
+                        catch (Exception ex)
+                        {
                             System.Diagnostics.Debug.WriteLine($"[LOGGER ROTATION ERROR] Failed to rotate log file: {ex.Message}");
                         }
                     }
                 }
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 System.Diagnostics.Debug.WriteLine($"[LOGGER ROTATION ERROR] Error checking log file size: {ex.Message}");
             }
         }

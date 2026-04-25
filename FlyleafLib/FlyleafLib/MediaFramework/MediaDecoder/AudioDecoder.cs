@@ -1,6 +1,6 @@
-﻿using FlyleafLib.MediaFramework.MediaStream;
-using FlyleafLib.MediaFramework.MediaFrame;
+﻿using FlyleafLib.MediaFramework.MediaFrame;
 using FlyleafLib.MediaFramework.MediaRemuxer;
+using FlyleafLib.MediaFramework.MediaStream;
 
 namespace FlyleafLib.MediaFramework.MediaDecoder;
 
@@ -33,11 +33,12 @@ public unsafe partial class AudioDecoder : DecoderBase
     static readonly int              AOutChannels        = AOutChannelLayout.nb_channels;
     static readonly int              ASampleBytes        = av_get_bytes_per_sample(AOutSampleFormat) * AOutChannels;
 
-    public AudioStream      AudioStream         => (AudioStream) Stream;
+    public AudioStream AudioStream => (AudioStream)Stream;
     public readonly
             VideoDecoder    VideoDecoder;
     public ConcurrentQueue<AudioFrame>
-                            Frames              { get; protected set; } = new();
+                            Frames
+    { get; protected set; } = new();
 
     static readonly int     cBufTimesSize       = 4; // Extra for draining / filters (speed)
     int                     cBufTimesCur        = 1;
@@ -62,7 +63,8 @@ public unsafe partial class AudioDecoder : DecoderBase
             return false;
         }
 
-        if (CanDebug) Log.Debug($"Using {avcodec_get_name(codec->id)} codec");
+        if (CanDebug)
+            Log.Debug($"Using {avcodec_get_name(codec->id)} codec");
 
         codecCtx = avcodec_alloc_context3(codec); // Pass codec to use default settings
         if (codecCtx == null)
@@ -78,18 +80,19 @@ public unsafe partial class AudioDecoder : DecoderBase
             return false;
         }
 
-        codecCtx->pkt_timebase  = Stream.AVStream->time_base;
-        codecCtx->codec_id      = codec->id; // avcodec_parameters_to_context will change this we need to set Stream's Codec Id (eg we change mp2 to mp3)
+        codecCtx->pkt_timebase = Stream.AVStream->time_base;
+        codecCtx->codec_id = codec->id; // avcodec_parameters_to_context will change this we need to set Stream's Codec Id (eg we change mp2 to mp3)
 
         var codecOpts = Config.Decoder.AudioCodecOpt;
         AVDictionary* avopt = null;
-        foreach(var optKV in codecOpts)
+        foreach (var optKV in codecOpts)
             _ = av_dict_set(&avopt, optKV.Key, optKV.Value, 0);
 
         ret = avcodec_open2(codecCtx, null, avopt == null ? null : &avopt);
         if (ret < 0)
         {
-            if (avopt != null) av_dict_free(&avopt);
+            if (avopt != null)
+                av_dict_free(&avopt);
             Log.Error($"Failed to open codec - {FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
             return false;
         }
@@ -112,14 +115,14 @@ public unsafe partial class AudioDecoder : DecoderBase
         DisposeSwr();
         swrCtx = swr_alloc();
 
-        _= av_opt_set_chlayout(swrCtx,      "in_chlayout",          &codecCtx->ch_layout,   0);
-        _= av_opt_set_int(swrCtx,           "in_sample_rate",       codecCtx->sample_rate,  0);
-        _= av_opt_set_sample_fmt(swrCtx,    "in_sample_fmt",        codecCtx->sample_fmt,   0);
+        _ = av_opt_set_chlayout(swrCtx, "in_chlayout", &codecCtx->ch_layout, 0);
+        _ = av_opt_set_int(swrCtx, "in_sample_rate", codecCtx->sample_rate, 0);
+        _ = av_opt_set_sample_fmt(swrCtx, "in_sample_fmt", codecCtx->sample_fmt, 0);
 
-        fixed(AVChannelLayout* ptr = &AOutChannelLayout)
-        _= av_opt_set_chlayout(swrCtx,      "out_chlayout",         ptr, 0);
-        _= av_opt_set_int(swrCtx,           "out_sample_rate",      codecCtx->sample_rate,  0);
-        _= av_opt_set_sample_fmt(swrCtx,    "out_sample_fmt",       AOutSampleFormat,       0);
+        fixed (AVChannelLayout* ptr = &AOutChannelLayout)
+            _ = av_opt_set_chlayout(swrCtx, "out_chlayout", ptr, 0);
+        _ = av_opt_set_int(swrCtx, "out_sample_rate", codecCtx->sample_rate, 0);
+        _ = av_opt_set_sample_fmt(swrCtx, "out_sample_fmt", AOutSampleFormat, 0);
 
         ret = swr_init(swrCtx);
         if (ret < 0)
@@ -134,7 +137,7 @@ public unsafe partial class AudioDecoder : DecoderBase
 
         swr_close(swrCtx);
 
-        fixed(SwrContext** ptr = &swrCtx)
+        fixed (SwrContext** ptr = &swrCtx)
             swr_free(ptr);
 
         swrCtx = null;
@@ -147,7 +150,7 @@ public unsafe partial class AudioDecoder : DecoderBase
         DisposeFilters();
 
         filledFromCodec = false;
-        nextPts         = AV_NOPTS_VALUE;
+        nextPts = AV_NOPTS_VALUE;
     }
     public void DisposeFrames() => Frames = new();
     public void Flush()
@@ -206,7 +209,8 @@ public unsafe partial class AudioDecoder : DecoderBase
                 CriticalArea = true;
 
                 lock (lockStatus)
-                    if (Status == Status.Running) Status = Status.QueueEmpty;
+                    if (Status == Status.Running)
+                        Status = Status.QueueEmpty;
 
                 while (demuxer.AudioPackets.Count == 0 && Status == Status.QueueEmpty)
                 {
@@ -227,7 +231,8 @@ public unsafe partial class AudioDecoder : DecoderBase
                     }
                     else if (!demuxer.IsRunning)
                     {
-                        if (CanDebug) Log.Debug($"Demuxer is not running [Demuxer Status: {demuxer.Status}]");
+                        if (CanDebug)
+                            Log.Debug($"Demuxer is not running [Demuxer Status: {demuxer.Status}]");
 
                         int retries = 5;
 
@@ -235,19 +240,20 @@ public unsafe partial class AudioDecoder : DecoderBase
                         {
                             retries--;
                             Thread.Sleep(10);
-                            if (demuxer.IsRunning) break;
+                            if (demuxer.IsRunning)
+                                break;
                         }
 
                         lock (demuxer.lockStatus)
-                        lock (lockStatus)
-                        {
-                            if (demuxer.Status == Status.Pausing || demuxer.Status == Status.Paused)
-                                Status = Status.Pausing;
-                            else if (demuxer.Status != Status.Ended)
-                                Status = Status.Stopping;
-                            else
-                                continue;
-                        }
+                            lock (lockStatus)
+                            {
+                                if (demuxer.Status == Status.Pausing || demuxer.Status == Status.Paused)
+                                    Status = Status.Pausing;
+                                else if (demuxer.Status != Status.Ended)
+                                    Status = Status.Stopping;
+                                else
+                                    continue;
+                            }
 
                         break;
                     }
@@ -258,8 +264,10 @@ public unsafe partial class AudioDecoder : DecoderBase
                 lock (lockStatus)
                 {
                     CriticalArea = false;
-                    if (Status != Status.QueueEmpty && Status != Status.Draining) break;
-                    if (Status != Status.Draining) Status = Status.Running;
+                    if (Status != Status.QueueEmpty && Status != Status.Draining)
+                        break;
+                    if (Status != Status.Draining)
+                        Status = Status.Running;
                 }
             }
 
@@ -267,12 +275,12 @@ public unsafe partial class AudioDecoder : DecoderBase
             try
             {
                 if (Status == Status.Stopped)
-                    { Monitor.Exit(lockCodecCtx); continue; }
+                { Monitor.Exit(lockCodecCtx); continue; }
 
                 packet = demuxer.AudioPackets.Dequeue();
 
                 if (packet == null)
-                    { Monitor.Exit(lockCodecCtx); continue; }
+                { Monitor.Exit(lockCodecCtx); continue; }
 
                 if (isRecording)
                 {
@@ -296,11 +304,14 @@ public unsafe partial class AudioDecoder : DecoderBase
                     else
                     {
                         allowedErrors--;
-                        if (CanWarn) Log.Warn($"{FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
+                        if (CanWarn)
+                            Log.Warn($"{FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
 
-                        if (allowedErrors == 0) { Log.Error("Too many errors!"); Status = Status.Stopping; break; }
+                        if (allowedErrors == 0)
+                        { Log.Error("Too many errors!"); Status = Status.Stopping; break; }
 
-                        Monitor.Exit(lockCodecCtx); continue;
+                        Monitor.Exit(lockCodecCtx);
+                        continue;
                     }
                 }
 
@@ -359,12 +370,12 @@ public unsafe partial class AudioDecoder : DecoderBase
                         DisposeSwr();
                         DisposeFilters();
 
-                        filledFromCodec         = true;
+                        filledFromCodec = true;
                         AudioStream.Refresh(this, frame);
-                        codecChanged            = false;
+                        codecChanged = false;
                         resyncWithVideoRequired = !VideoDecoder.Disposed;
-                        sampleRateTimebase      = 1000 * 1000.0 / codecCtx->sample_rate;
-                        nextPts                 = AudioStream.StartTimePts;
+                        sampleRateTimebase = 1000 * 1000.0 / codecCtx->sample_rate;
+                        nextPts = AudioStream.StartTimePts;
 
                         if (frame->pts == AV_NOPTS_VALUE)
                             frame->pts = nextPts;
@@ -397,7 +408,8 @@ public unsafe partial class AudioDecoder : DecoderBase
 
                         if (ts < VideoDecoder.StartTime)
                         {
-                            if (CanTrace) Log.Trace($"Drops {TicksToTime(ts)} (< V: {TicksToTime(VideoDecoder.StartTime)})");
+                            if (CanTrace)
+                                Log.Trace($"Drops {TicksToTime(ts)} (< V: {TicksToTime(VideoDecoder.StartTime)})");
                             av_frame_unref(frame);
                             continue;
                         }
@@ -415,15 +427,18 @@ public unsafe partial class AudioDecoder : DecoderBase
                         av_frame_unref(frame);
                     }
                 }
-            } catch { }
+            }
+            catch { }
 
             Monitor.Exit(lockCodecCtx);
 
         } while (Status == Status.Running);
 
-        if (isRecording) { StopRecording(); recCompleted(MediaType.Audio); }
+        if (isRecording)
+        { StopRecording(); recCompleted(MediaType.Audio); }
 
-        if (Status == Status.Draining) Status = Status.Ended;
+        if (Status == Status.Draining)
+            Status = Status.Ended;
     }
     private void Process()
     {
@@ -440,14 +455,15 @@ public unsafe partial class AudioDecoder : DecoderBase
                 dataLen     = speedDataLen,
                 speed       = speed
             };
-            if (CanTrace) Log.Trace($"Processes {TicksToTime(mFrame.Timestamp)}");
+            if (CanTrace)
+                Log.Trace($"Processes {TicksToTime(mFrame.Timestamp)}");
 
             if (frame->nb_samples > cBufSamples)
                 AllocateCircularBuffer(frame->nb_samples);
             else if (cBufPos + Math.Max(dataLen, speedDataLen) >= cBuf.Length)
                 cBufPos = 0;
 
-            fixed (byte *circularBufferPosPtr = &cBuf[cBufPos])
+            fixed (byte* circularBufferPosPtr = &cBuf[cBufPos])
             {
                 int ret = swr_convert(swrCtx, &circularBufferPosPtr, frame->nb_samples, (byte**)&frame->data, frame->nb_samples);
                 if (ret < 0)
@@ -469,7 +485,8 @@ public unsafe partial class AudioDecoder : DecoderBase
             {
                 Monitor.Exit(lockCodecCtx);
                 lock (lockStatus)
-                    if (Status == Status.Running) Status = Status.QueueFull;
+                    if (Status == Status.Running)
+                        Status = Status.QueueFull;
 
                 while (Frames.Count >= Config.Decoder.MaxAudioFrames * cBufTimesCur && Status == Status.QueueFull)
                     Thread.Sleep(20);
@@ -501,20 +518,21 @@ public unsafe partial class AudioDecoder : DecoderBase
         * 4. cBufTimesSize cause filters can pass the limit when we need to use lockSpeed
         */
 
-        samples     = Math.Max(10000, samples); // 10K samples to ensure that currently we will not re-allocate?
+        samples = Math.Max(10000, samples); // 10K samples to ensure that currently we will not re-allocate?
         int size    = Config.Decoder.MaxAudioFrames * samples * ASampleBytes * cBufTimesSize;
-        
+
         if (cBuf != null)
         {
-            if (CanDebug) Log.Debug($"Re-allocating circular buffer ({samples} > {cBufSamples}) with {size}bytes");
+            if (CanDebug)
+                Log.Debug($"Re-allocating circular buffer ({samples} > {cBufSamples}) with {size}bytes");
 
             cBufHistory.Enqueue(cBuf);
             if (cBufHistory.Count > 3)
                 cBufHistory.Dequeue();
         }
-        
-        cBuf        = new byte[size];
-        cBufPos     = 0;
+
+        cBuf = new byte[size];
+        cBufPos = 0;
         cBufSamples = samples;
 
     }
@@ -527,11 +545,12 @@ public unsafe partial class AudioDecoder : DecoderBase
     internal bool isRecording;
     internal void StartRecording(Remuxer remuxer)
     {
-        if (Disposed || isRecording) return;
+        if (Disposed || isRecording)
+            return;
 
-        curRecorder     = remuxer;
-        isRecording     = true;
-        recGotKeyframe  = VideoDecoder.Disposed || VideoDecoder.Stream == null;
+        curRecorder = remuxer;
+        isRecording = true;
+        recGotKeyframe = VideoDecoder.Disposed || VideoDecoder.Stream == null;
     }
     internal void StopRecording() => isRecording = false;
     #endregion

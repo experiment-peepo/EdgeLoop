@@ -12,14 +12,17 @@ using System;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 
-namespace EdgeLoop.Classes {
+namespace EdgeLoop.Classes
+{
     /// <summary>
     /// Handles power management to prevent the monitor from turning off during playback
     /// </summary>
     [SupportedOSPlatform("windows")]
-    public static class PowerManagement {
+    public static class PowerManagement
+    {
         [Flags]
-        public enum EXECUTION_STATE : uint {
+        public enum EXECUTION_STATE : uint
+        {
             ES_AWAYMODE_REQUIRED = 0x00000040,
             ES_CONTINUOUS = 0x80000000,
             ES_DISPLAY_REQUIRED = 0x00000002,
@@ -34,14 +37,18 @@ namespace EdgeLoop.Classes {
         /// <summary>
         /// Prevents the system from entering sleep mode and keeps the display on
         /// </summary>
-        public static void SuppressSleep() {
+        public static void SuppressSleep()
+        {
             if (_isSuppressingSleep) return;
 
-            try {
+            try
+            {
                 Logger.Debug("[PowerManagement] Suppressing sleep and display-off to maintain playback.");
                 SetThreadExecutionState(EXECUTION_STATE.ES_CONTINUOUS | EXECUTION_STATE.ES_DISPLAY_REQUIRED | EXECUTION_STATE.ES_SYSTEM_REQUIRED);
                 _isSuppressingSleep = true;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Error("Failed to suppress sleep", ex);
             }
         }
@@ -49,14 +56,18 @@ namespace EdgeLoop.Classes {
         /// <summary>
         /// Allows the system to enter sleep mode and turn off the display normally
         /// </summary>
-        public static void AllowSleep() {
+        public static void AllowSleep()
+        {
             if (!_isSuppressingSleep) return;
 
-            try {
+            try
+            {
                 Logger.Debug("[PowerManagement] Releasing sleep suppression.");
                 SetThreadExecutionState(EXECUTION_STATE.ES_CONTINUOUS);
                 _isSuppressingSleep = false;
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Error("Failed to release sleep suppression", ex);
             }
         }

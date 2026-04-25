@@ -4,9 +4,11 @@ using System.Runtime.InteropServices;
 using System.Windows.Input;
 using System.Windows.Interop;
 
-namespace EdgeLoop.Classes {
+namespace EdgeLoop.Classes
+{
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    public class HotkeyService : IDisposable {
+    public class HotkeyService : IDisposable
+    {
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
 
@@ -21,8 +23,9 @@ namespace EdgeLoop.Classes {
 
         private IntPtr _windowHandle;
         private HwndSource _source;
-        
-        private class HotkeyRegistration {
+
+        private class HotkeyRegistration
+        {
             public int Id { get; set; }
             public Action Callback { get; set; }
         }
@@ -33,72 +36,90 @@ namespace EdgeLoop.Classes {
 
         public bool IsInitialized => _windowHandle != IntPtr.Zero;
 
-        public void Initialize(IntPtr windowHandle) {
-            if (_windowHandle != IntPtr.Zero) {
+        public void Initialize(IntPtr windowHandle)
+        {
+            if (_windowHandle != IntPtr.Zero)
+            {
                 // Already initialized, detach first if different handle (or just ignore)
                 Dispose();
             }
-            
+
             _windowHandle = windowHandle;
             _source = HwndSource.FromHwnd(_windowHandle);
             _source?.AddHook(HwndHook);
         }
 
-        public bool Register(string name, uint modifiers, string keyName, Action callback) {
+        public bool Register(string name, uint modifiers, string keyName, Action callback)
+        {
             if (_windowHandle == IntPtr.Zero) return false;
-            
+
             // Unregister if exists
             Unregister(name);
 
             // Parse key
             Key key;
             uint virtualKey;
-            
+
             // Handle specific key names that might process oddly or custom requirements
-            if (Enum.TryParse<Key>(keyName, true, out key)) {
+            if (Enum.TryParse<Key>(keyName, true, out key))
+            {
                 virtualKey = (uint)KeyInterop.VirtualKeyFromKey(key);
-            } else {
+            }
+            else
+            {
                 Logger.Warning($"Failed to parse key: {keyName}");
                 return false;
             }
 
             int id = _nextId++;
             bool success = RegisterHotKey(_windowHandle, id, modifiers, virtualKey);
-            
-            if (success) {
+
+            if (success)
+            {
                 var reg = new HotkeyRegistration { Id = id, Callback = callback };
                 _registrations[name] = reg;
                 _idToNameMap[id] = name;
                 Logger.Debug($"Registered hotkey '{name}': {modifiers}+{keyName} (ID: {id})");
-            } else {
+            }
+            else
+            {
                 Logger.Warning($"Failed to register hotkey '{name}': {modifiers}+{keyName} (ErrorCode: {Marshal.GetLastWin32Error()})");
             }
 
             return success;
         }
 
-        public void Unregister(string name) {
-            if (_registrations.TryGetValue(name, out var reg)) {
-                if (_windowHandle != IntPtr.Zero) {
+        public void Unregister(string name)
+        {
+            if (_registrations.TryGetValue(name, out var reg))
+            {
+                if (_windowHandle != IntPtr.Zero)
+                {
                     UnregisterHotKey(_windowHandle, reg.Id);
                 }
                 _idToNameMap.Remove(reg.Id);
                 _registrations.Remove(name);
             }
         }
-        
-        public void UnregisterAll() {
-            foreach (var name in new List<string>(_registrations.Keys)) {
+
+        public void UnregisterAll()
+        {
+            foreach (var name in new List<string>(_registrations.Keys))
+            {
                 Unregister(name);
             }
         }
 
-        private IntPtr HwndHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled) {
+        private IntPtr HwndHook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+        {
             const int WM_HOTKEY = 0x0312;
-            if (msg == WM_HOTKEY) {
+            if (msg == WM_HOTKEY)
+            {
                 int id = wParam.ToInt32();
-                if (_idToNameMap.TryGetValue(id, out string name)) {
-                    if (_registrations.TryGetValue(name, out var reg)) {
+                if (_idToNameMap.TryGetValue(id, out string name))
+                {
+                    if (_registrations.TryGetValue(name, out var reg))
+                    {
                         // Logger.Info($"Hotkey pressed: {name}"); // Optional: log if needed, excessive logging might be bad for hotkeys
                         reg.Callback?.Invoke();
                         handled = true;
@@ -108,10 +129,12 @@ namespace EdgeLoop.Classes {
             return IntPtr.Zero;
         }
 
-        public void Dispose() {
+        public void Dispose()
+        {
             UnregisterAll();
-            
-            if (_source != null) {
+
+            if (_source != null)
+            {
                 _source.RemoveHook(HwndHook);
                 _source = null; // Dispose not explicitly needed for HwndSource created FromHwnd usually
             }

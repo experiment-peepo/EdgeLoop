@@ -2,8 +2,10 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace EdgeLoop.Classes {
-    public interface IVideoDownloadService {
+namespace EdgeLoop.Classes
+{
+    public interface IVideoDownloadService
+    {
         string GetCachePath(string url);
         bool IsCached(string url);
         string GetCachedFilePath(string url);

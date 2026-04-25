@@ -1,4 +1,5 @@
-﻿global using System;
+﻿global using Flyleaf.FFmpeg;
+global using System;
 global using System.Collections.Concurrent;
 global using System.Collections.Generic;
 global using System.Collections.ObjectModel;
@@ -6,18 +7,13 @@ global using System.IO;
 global using System.Text;
 global using System.Threading;
 global using System.Threading.Tasks;
-
-global using Flyleaf.FFmpeg;
-
 global using static Flyleaf.FFmpeg.Raw;
 global using static FlyleafLib.Logger;
 global using static FlyleafLib.Utils;
-
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
-
 using Vortice.DXGI;
 
 namespace FlyleafLib;
@@ -101,7 +97,7 @@ public enum HDRFormat : int
     HDR         = 2,
     HDRPlus     = 3,
     HLG         = 4,
-    
+
 }
 public enum UIRefreshType
 {
@@ -128,17 +124,17 @@ public enum FLFilters
 
 public class GPUOutput
 {
-    public nint             Hwnd            { get; internal set; }
-    public string           DeviceName      { get; internal set; }
-    public int              Left            { get; internal set; }
-    public int              Top             { get; internal set; }
-    public int              Right           { get; internal set; }
-    public int              Bottom          { get; internal set; }
-    public int              Width           => Right- Left;
-    public int              Height          => Bottom- Top;
-    public bool             IsAttached      { get; internal set; }
-    public ModeRotation     Rotation        { get; internal set; }
-    public float            MaxLuminance    { get; internal set; }
+    public nint Hwnd { get; internal set; }
+    public string DeviceName { get; internal set; }
+    public int Left { get; internal set; }
+    public int Top { get; internal set; }
+    public int Right { get; internal set; }
+    public int Bottom { get; internal set; }
+    public int Width => Right - Left;
+    public int Height => Bottom - Top;
+    public bool IsAttached { get; internal set; }
+    public ModeRotation Rotation { get; internal set; }
+    public float MaxLuminance { get; internal set; }
     //public int              RefreshRate     { get; internal set; } // Currently not used
 
     public override string ToString()
@@ -150,20 +146,20 @@ public class GPUOutput
 
 public class GPUAdapter
 {
-    public nuint            SystemMemory    { get; internal set; }
-    public nuint            VideoMemory     { get; internal set; }
-    public nuint            SharedMemory    { get; internal set; }
+    public nuint SystemMemory { get; internal set; }
+    public nuint VideoMemory { get; internal set; }
+    public nuint SharedMemory { get; internal set; }
 
-    public uint             Id              { get; internal set; }
-    public GPUVendor        Vendor          { get; internal set; }
-    public string           Description     { get; internal set; }
-    public long             Luid            { get; internal set; }
+    public uint Id { get; internal set; }
+    public GPUVendor Vendor { get; internal set; }
+    public string Description { get; internal set; }
+    public long Luid { get; internal set; }
 
     internal IDXGIAdapter   dxgiAdapter;
 
-    public List<GPUOutput>  GetGPUOutputs()    => Engine.Video.GetGPUOutputs(dxgiAdapter);
+    public List<GPUOutput> GetGPUOutputs() => Engine.Video.GetGPUOutputs(dxgiAdapter);
 
-    public override string  ToString()
+    public override string ToString()
         => (Vendor + " " + Description).PadRight(40) + $"[ID: {Id,-6}, LUID: {Luid,-6}, DVM: {GetBytesReadable(VideoMemory),-8}, DSM: {GetBytesReadable(SystemMemory),-8}, SSM: {GetBytesReadable(SharedMemory)}]";
 }
 
@@ -227,13 +223,13 @@ public struct AspectRatio : IEquatable<AspectRatio>
     public void FromString(string value)
     {
         if (value == "Keep")
-            { Num = Keep.Num;       Den = Keep.Den;     return; }
+        { Num = Keep.Num; Den = Keep.Den; return; }
         else if (value == "Fill")
-            { Num = Fill.Num;       Den = Fill.Den;     return; }
+        { Num = Fill.Num; Den = Fill.Den; return; }
         else if (value == "Custom")
-            { Num = Custom.Num;     Den = Custom.Den;   return; }
+        { Num = Custom.Num; Den = Custom.Den; return; }
         else if (value == "Invalid")
-            { Num = Invalid.Num;    Den = Invalid.Den;  return; }
+        { Num = Invalid.Num; Den = Invalid.Den; return; }
 
         string newvalue = value.ToString().Replace(',', '.');
 
@@ -241,22 +237,22 @@ public struct AspectRatio : IEquatable<AspectRatio>
         {
             string[] values = newvalue.ToString().Split(':');
             if (values.Length < 2)
-                        values = newvalue.ToString().Split('/');
+                values = newvalue.ToString().Split('/');
 
             Num = double.Parse(values[0], NumberStyles.Any, CultureInfo.InvariantCulture);
             Den = double.Parse(values[1], NumberStyles.Any, CultureInfo.InvariantCulture);
         }
 
         else if (double.TryParse(newvalue.ToString(), NumberStyles.Any, CultureInfo.InvariantCulture, out double result))
-            { Num = result; Den = 1; }
+        { Num = result; Den = 1; }
 
         else
-            { Num = Invalid.Num; Den = Invalid.Den; }
+        { Num = Invalid.Num; Den = Invalid.Den; }
     }
     public override readonly string ToString() => this == Keep ? "Keep" : (this == Fill ? "Fill" : (this == Custom ? "Custom" : (this == Invalid ? "Invalid" : $"{Num}:{Den}")));
 }
 
-public struct CropRect(uint top = 0, uint left= 0, uint bottom= 0, uint right= 0) : IEquatable<CropRect>
+public struct CropRect(uint top = 0, uint left = 0, uint bottom = 0, uint right = 0) : IEquatable<CropRect>
 {
     public static readonly CropRect Empty;
 
@@ -265,9 +261,9 @@ public struct CropRect(uint top = 0, uint left= 0, uint bottom= 0, uint right= 0
     public uint             Bottom  = bottom;
     public uint             Right   = right;
 
-    public readonly uint    Width   => Right  + Left;
-    public readonly uint    Height  => Bottom + Top;
-    public readonly bool    IsEmpty => Top == 0 && Left == 0 && Bottom == 0 && Right == 0;
+    public readonly uint Width => Right + Left;
+    public readonly uint Height => Bottom + Top;
+    public readonly bool IsEmpty => Top == 0 && Left == 0 && Bottom == 0 && Right == 0;
 
     public static CropRect operator +(CropRect a, CropRect b)
         => new(a.Top + b.Top, a.Left + b.Left, a.Bottom + b.Bottom, a.Right + b.Right);
@@ -289,9 +285,9 @@ public struct CropRect(uint top = 0, uint left= 0, uint bottom= 0, uint right= 0
 
 class PlayerStats
 {
-    public long TotalBytes      { get; set; }
-    public long VideoBytes      { get; set; }
-    public long AudioBytes      { get; set; }
+    public long TotalBytes { get; set; }
+    public long VideoBytes { get; set; }
+    public long AudioBytes { get; set; }
     public long FramesDisplayed { get; set; }
 }
 

@@ -13,9 +13,11 @@ using EdgeLoop.ViewModels;
 using System.Diagnostics;
 using Logger = EdgeLoop.Classes.Logger;
 
-namespace EdgeLoop.Windows {
+namespace EdgeLoop.Windows
+{
     [SupportedOSPlatform("windows")]
-    public partial class HypnoWindow : Window, IDisposable {
+    public partial class HypnoWindow : Window, IDisposable
+    {
         private HypnoViewModel _viewModel;
         private System.Windows.Forms.Screen _targetScreen;
         private bool _disposed = false;
@@ -26,34 +28,38 @@ namespace EdgeLoop.Windows {
         public HypnoViewModel ViewModel => _viewModel;
         public string ScreenDeviceName => _targetScreen?.DeviceName ?? "Unknown";
 
-        public HypnoWindow(System.Windows.Forms.Screen screen = null) {
+        public HypnoWindow(System.Windows.Forms.Screen screen = null)
+        {
             InitializeComponent();
             _targetScreen = screen;
             _viewModel = new HypnoViewModel(App.UrlExtractor);
             _viewModel.MonitorName = screen?.DeviceName ?? "Default";
             this.DataContext = _viewModel;
-            
-            if (screen != null) {
+
+            if (screen != null)
+            {
                 Logger.Debug($"[HypnoWindow] Created for screen {screen.DeviceName} | Bounds: {screen.Bounds}");
-                
+
                 // Set window position and size to cover the target screen
                 this.Left = screen.Bounds.Left;
                 this.Top = screen.Bounds.Top;
                 this.Width = screen.Bounds.Width;
                 this.Height = screen.Bounds.Height;
-            } else {
+            }
+            else
+            {
                 Logger.Debug("[HypnoWindow] Created with default screen");
             }
             // ... (keep event subscriptions)
             _viewModel.MediaErrorOccurred += ViewModel_MediaErrorOccurred;
             _viewModel.MediaOpened += ViewModel_MediaOpened;
             _viewModel.TerminalFailure += ViewModel_TerminalFailure;
-            
 
-            
+
+
 
             _viewModel.PropertyChanged += ViewModel_PropertyChanged;
-            
+
 
 
             // Initialize position reporting timer
@@ -63,22 +69,28 @@ namespace EdgeLoop.Windows {
             _syncTimer.Start();
         }
 
-        private void ViewModel_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e) {
+        private void ViewModel_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
             // SpeedRatio and Volume are now handled directly by the ViewModel's Player instance
         }
 
-        private void SyncTimer_Tick(object sender, EventArgs e) {
+        private void SyncTimer_Tick(object sender, EventArgs e)
+        {
             // Logic moved to HypnoViewModel.cs to centralize position tracking
         }
 
         // Removed ViewModel_Request* handlers as they are now handled by Player instance in VM
 
 
-        protected virtual void Dispose(bool disposing) {
-            if (!_disposed) {
-                if (disposing) {
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!_disposed)
+            {
+                if (disposing)
+                {
                     // Unsubscribe from events
-                    if (_viewModel != null) {
+                    if (_viewModel != null)
+                    {
                         _viewModel.MediaErrorOccurred -= ViewModel_MediaErrorOccurred;
                         _viewModel.MediaOpened -= ViewModel_MediaOpened;
                         _viewModel.TerminalFailure -= ViewModel_TerminalFailure;
@@ -89,16 +101,18 @@ namespace EdgeLoop.Windows {
                     // Unregister from VideoService before closing/disposing
                     App.VideoService?.UnregisterPlayer(this);
 
-                    if (_syncTimer != null) {
+                    if (_syncTimer != null)
+                    {
                         _syncTimer.Stop();
                         _syncTimer = null;
                     }
-                    
+
                     // Dispose MediaElement
-                    if (FirstVideo != null) {
-                         // Flyleaf Player disposal is handled by ViewModel
-                         FirstVideo = null;
-                         Logger.Debug("[HypnoWindow] Flyleaf control reference cleared");
+                    if (FirstVideo != null)
+                    {
+                        // Flyleaf Player disposal is handled by ViewModel
+                        FirstVideo = null;
+                        Logger.Debug("[HypnoWindow] Flyleaf control reference cleared");
                     }
                 }
                 _disposed = true;
@@ -106,50 +120,63 @@ namespace EdgeLoop.Windows {
             }
         }
 
-        public void Dispose() {
+        public void Dispose()
+        {
             Dispose(disposing: true);
             GC.SuppressFinalize(this);
         }
 
-        protected override void OnClosed(EventArgs e) {
+        protected override void OnClosed(EventArgs e)
+        {
 
-             Dispose();
-             base.OnClosed(e);
+            Dispose();
+            base.OnClosed(e);
         }
 
         // Removed FirstVideo_MediaEnded/Failed as Flyleaf events are mapped in ViewModel
 
-        private void ViewModel_MediaErrorOccurred(object sender, MediaErrorEventArgs e) {
+        private void ViewModel_MediaErrorOccurred(object sender, MediaErrorEventArgs e)
+        {
             if (_disposed) return;
-            
-            try {
+
+            try
+            {
                 // Forward the error to the VideoPlayerService so it can notify subscribers
                 App.VideoService?.OnMediaError(e);
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Error("Error in ViewModel_MediaErrorOccurred", ex);
             }
         }
 
-        private void ViewModel_TerminalFailure(object sender, EventArgs e) {
+        private void ViewModel_TerminalFailure(object sender, EventArgs e)
+        {
             if (_disposed) return;
-            
+
             // Terminal failure means all videos failed. Close the window.
             // Dispatch to UI thread just in case it's called from a background task
-            Dispatcher.InvokeAsync(() => {
-                if (!_disposed) {
+            Dispatcher.InvokeAsync(() =>
+            {
+                if (!_disposed)
+                {
                     Logger.Debug("[HypnoWindow] Terminal failure occurred. Closing window.");
                     this.Close();
                 }
             });
         }
 
-        private void ViewModel_MediaOpened(object sender, EventArgs e) {
+        private void ViewModel_MediaOpened(object sender, EventArgs e)
+        {
             if (_disposed) return;
-            
-            try {
+
+            try
+            {
                 // Forward the event to the VideoPlayerService
                 App.VideoService?.OnMediaOpened();
-            } catch (Exception ex) {
+            }
+            catch (Exception ex)
+            {
                 Logger.Error("Error in ViewModel_MediaOpened", ex);
             }
         }
@@ -171,35 +198,41 @@ namespace EdgeLoop.Windows {
         const int SW_SHOW = 5;
 
         [SupportedOSPlatform("windows")]
-        private void Window_SourceInitialized(object sender, EventArgs e) {
-            if (_targetScreen != null) {
+        private void Window_SourceInitialized(object sender, EventArgs e)
+        {
+            if (_targetScreen != null)
+            {
                 // Validate that the target screen still exists
                 var allScreens = System.Windows.Forms.Screen.AllScreens;
                 bool screenExists = allScreens.Any(s => s.DeviceName == _targetScreen.DeviceName);
-                
-                if (!screenExists) {
+
+                if (!screenExists)
+                {
                     // Screen was disconnected, fallback to primary screen
                     Logger.Warning($"Target screen {_targetScreen.DeviceName} is no longer available, falling back to primary screen");
                     _targetScreen = System.Windows.Forms.Screen.PrimaryScreen ?? System.Windows.Forms.Screen.AllScreens.FirstOrDefault();
-                    
-                    if (_targetScreen == null) {
+
+                    if (_targetScreen == null)
+                    {
                         Logger.Error("No screens available for window positioning");
                         return;
                     }
                 }
-                
+
                 IntPtr hwnd = new System.Windows.Interop.WindowInteropHelper(this).Handle;
-                
+
                 // --- HARDWARE DIAGNOSTICS ---
                 int renderingTier = (RenderCapability.Tier >> 16);
                 Logger.Debug($"[Hardware] Rendering Tier: {renderingTier} (Tier 2 = Full Hardware Acceleration)");
-                if (renderingTier < 2) {
+                if (renderingTier < 2)
+                {
                     Logger.Warning("[Hardware] WPF is in software rendering mode. This will cause 4K stutter.");
                 }
 
                 // Force Hardware Rendering if possible (ensure not SoftWare only)
                 var source = HwndSource.FromHwnd(hwnd);
-                if (source != null && source.CompositionTarget != null) {
+                if (source != null && source.CompositionTarget != null)
+                {
                     source.CompositionTarget.RenderMode = RenderMode.Default;
                 }
                 // ---------------------------
@@ -211,7 +244,7 @@ namespace EdgeLoop.Windows {
                 // 2. Physical Placement
                 var b = _targetScreen.Bounds;
                 Logger.Debug($"[HypnoWindow] Positioning: {b.Left},{b.Top} {b.Width}x{b.Height}");
-                SetWindowPos(hwnd, new IntPtr(-1), b.Left, b.Top, b.Width, b.Height, 
+                SetWindowPos(hwnd, new IntPtr(-1), b.Left, b.Top, b.Width, b.Height,
                     SWP_NOZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
 
                 // 3. WPF Metadata
@@ -219,7 +252,8 @@ namespace EdgeLoop.Windows {
                 this.WindowState = WindowState.Normal;
 
                 // 4. Delayed WPF logical sync for scaling
-                this.Dispatcher.BeginInvoke(new Action(() => {
+                this.Dispatcher.BeginInvoke(new Action(() =>
+                {
                     var dpi = VisualTreeHelper.GetDpi(this);
                     this.Left = b.Left / dpi.DpiScaleX;
                     this.Top = b.Top / dpi.DpiScaleY;
@@ -230,7 +264,7 @@ namespace EdgeLoop.Windows {
 
             }
         }
-        
+
 
 
     }

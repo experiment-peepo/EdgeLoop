@@ -1,12 +1,15 @@
 using System.Collections.Generic;
 
-namespace EdgeLoop.Classes {
-    public class Playlist {
+namespace EdgeLoop.Classes
+{
+    public class Playlist
+    {
         public int Version { get; set; } = 1;
         public List<PlaylistItem> Items { get; set; } = new List<PlaylistItem>();
     }
 
-    public class PlaylistItem {
+    public class PlaylistItem
+    {
         public string FilePath { get; set; }
         public string ScreenDeviceName { get; set; }
         public double Opacity { get; set; } = 0.9;

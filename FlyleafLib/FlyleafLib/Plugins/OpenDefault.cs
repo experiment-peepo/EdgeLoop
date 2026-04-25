@@ -12,7 +12,7 @@ public class OpenDefault : PluginBase, IOpen, IScrapeItem
      *
      */
 
-    public new int  Priority    { get; set; } = 3000;
+    public new int Priority { get; set; } = 3000;
 
     public bool CanOpen() => true;
 
@@ -24,9 +24,9 @@ public class OpenDefault : PluginBase, IOpen, IScrapeItem
             {
                 AddPlaylistItem(new()
                 {
-                    IOStream= Playlist.IOStream,
-                    Title   = "Custom IO Stream",
-                    FileSize= Playlist.IOStream.Length
+                    IOStream = Playlist.IOStream,
+                    Title = "Custom IO Stream",
+                    FileSize = Playlist.IOStream.Length
                 });
 
                 Handler.OnPlaylistCompleted();
@@ -42,10 +42,11 @@ public class OpenDefault : PluginBase, IOpen, IScrapeItem
 
             try
             {
-                uri         = new(Playlist.Url);
-                isWeb       = uri.Scheme.StartsWith("http");
-                localPath   = uri.LocalPath;
-            } catch { }
+                uri = new(Playlist.Url);
+                isWeb = uri.Scheme.StartsWith("http");
+                localPath = uri.LocalPath;
+            }
+            catch { }
 
 
             // Playlists (M3U, M3U8, PLS | TODO: WPL, XSPF)
@@ -56,15 +57,15 @@ public class OpenDefault : PluginBase, IOpen, IScrapeItem
 
                 var items = isWeb ? M3UPlaylist.ParseFromHttp(Playlist.Url) : M3UPlaylist.Parse(Playlist.Url);
 
-                foreach(var mitem in items)
+                foreach (var mitem in items)
                 {
                     AddPlaylistItem(new()
                     {
-                        Title       = mitem.Title,
-                        Url         = mitem.Url,
-                        DirectUrl   = mitem.Url,
-                        UserAgent   = mitem.UserAgent,
-                        Referrer    = mitem.Referrer
+                        Title = mitem.Title,
+                        Url = mitem.Url,
+                        DirectUrl = mitem.Url,
+                        UserAgent = mitem.UserAgent,
+                        Referrer = mitem.Referrer
                     });
                 }
 
@@ -79,13 +80,13 @@ public class OpenDefault : PluginBase, IOpen, IScrapeItem
 
                 var items = PLSPlaylist.Parse(Playlist.Url);
 
-                foreach(var mitem in items)
+                foreach (var mitem in items)
                 {
                     AddPlaylistItem(new()
                     {
-                        Title       = mitem.Title,
-                        Url         = mitem.Url,
-                        DirectUrl   = mitem.Url,
+                        Title = mitem.Title,
+                        Url = mitem.Url,
+                        DirectUrl = mitem.Url,
                         // Duration
                     });
                 }
@@ -121,15 +122,15 @@ public class OpenDefault : PluginBase, IOpen, IScrapeItem
                 }
 
                 // TBR: UNC && !uri.IsLoopback (not clear yet why we separate file/unc*) | Rename UNC to RemoteUNC?
-                Playlist.InputType = uri.IsUnc ? InputType.UNC : InputType.File; 
+                Playlist.InputType = uri.IsUnc ? InputType.UNC : InputType.File;
             }
             else // InputType.Unknown
                 Playlist.FolderBase = Path.GetTempPath();
 
             if (fi != null)
             {
-                item.Title      = fi.Name;
-                item.FileSize   = fi.Length; // TBR: we could still get file size from AVIO (mainly for search online subs/hash)
+                item.Title = fi.Name;
+                item.FileSize = fi.Length; // TBR: we could still get file size from AVIO (mainly for search online subs/hash)
             }
             else
             {

@@ -2,42 +2,49 @@ using System;
 using System.IO;
 using EdgeLoop.Classes;
 
-namespace EdgeLoop.ViewModels {
+namespace EdgeLoop.ViewModels
+{
     /// <summary>
     /// Validation status for a video file
     /// </summary>
-    public enum FileValidationStatus {
+    public enum FileValidationStatus
+    {
         Unknown,
         Valid,
         Missing,
         Invalid
     }
 
-    public class VideoItem : ObservableObject {
+    public class VideoItem : ObservableObject
+    {
         private string _filePath;
-        public string FilePath {
+        public string FilePath
+        {
             get => _filePath;
             set => SetProperty(ref _filePath, value);
         }
 
         private bool _isPlaying;
-        public bool IsPlaying {
+        public bool IsPlaying
+        {
             get => _isPlaying;
             set => SetProperty(ref _isPlaying, value);
         }
-        
+
         /// <summary>
         /// Gets whether this item is a URL (not a local file path)
         /// </summary>
-        public bool IsUrl => Uri.TryCreate(FilePath, UriKind.Absolute, out Uri uri) && 
+        public bool IsUrl => Uri.TryCreate(FilePath, UriKind.Absolute, out Uri uri) &&
                              (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
 
         /// <summary>
         /// Gets a stable identifier for tracking playback position.
         /// Prioritizes OriginalPageUrl, then normalized FilePath.
         /// </summary>
-        public string TrackingPath {
-            get {
+        public string TrackingPath
+        {
+            get
+            {
                 var path = !string.IsNullOrEmpty(OriginalPageUrl) ? OriginalPageUrl : FilePath;
                 if (string.IsNullOrEmpty(path)) return string.Empty;
 
@@ -46,40 +53,50 @@ namespace EdgeLoop.ViewModels {
                 return path.Trim();
             }
         }
-        
+
         /// <summary>
         /// Optional title extracted from the video page. If null or empty, FileName will fall back to URL-based extraction.
         /// </summary>
         private string _title;
-        public string Title {
+        public string Title
+        {
             get => _title;
             set => SetProperty(ref _title, value);
         }
-        
+
         /// <summary>
         /// Gets the display name for the video item
         /// </summary>
-        public string FileName {
-            get {
+        public string FileName
+        {
+            get
+            {
                 // Prefer Title if available and not empty
-                if (!string.IsNullOrWhiteSpace(Title)) {
+                if (!string.IsNullOrWhiteSpace(Title))
+                {
                     return Title;
                 }
-                
+
                 // Fall back to URL-based or file-based extraction
-                if (IsUrl) {
-                    try {
+                if (IsUrl)
+                {
+                    try
+                    {
                         var uri = new Uri(FilePath);
                         var segments = uri.Segments;
-                        if (segments.Length > 0) {
+                        if (segments.Length > 0)
+                        {
                             var lastSegment = segments[segments.Length - 1];
-                            if (!string.IsNullOrWhiteSpace(lastSegment) && lastSegment != "/") {
+                            if (!string.IsNullOrWhiteSpace(lastSegment) && lastSegment != "/")
+                            {
                                 return Uri.UnescapeDataString(lastSegment);
                             }
                         }
                         // Fallback to domain + path
                         return $"{uri.Host}{uri.AbsolutePath}";
-                    } catch {
+                    }
+                    catch
+                    {
                         return FilePath;
                     }
                 }
@@ -88,31 +105,36 @@ namespace EdgeLoop.ViewModels {
         }
 
         private ScreenViewer _assignedScreen;
-        public ScreenViewer AssignedScreen {
+        public ScreenViewer AssignedScreen
+        {
             get => _assignedScreen;
             set => SetProperty(ref _assignedScreen, value);
         }
 
         private double _opacity = 0.9;
-        public double Opacity {
+        public double Opacity
+        {
             get => _opacity;
             set => SetProperty(ref _opacity, value);
         }
 
         private double _volume = 0.5;
-        public double Volume {
+        public double Volume
+        {
             get => _volume;
             set => SetProperty(ref _volume, value);
         }
 
         private FileValidationStatus _validationStatus = FileValidationStatus.Unknown;
-        public FileValidationStatus ValidationStatus {
+        public FileValidationStatus ValidationStatus
+        {
             get => _validationStatus;
             set => SetProperty(ref _validationStatus, value);
         }
 
         private string _validationError;
-        public string ValidationError {
+        public string ValidationError
+        {
             get => _validationError;
             set => SetProperty(ref _validationError, value);
         }
@@ -121,7 +143,8 @@ namespace EdgeLoop.ViewModels {
         /// The original page URL with full path (including slug). Used for re-extraction when video URLs expire.
         /// </summary>
         private string _originalPageUrl;
-        public string OriginalPageUrl {
+        public string OriginalPageUrl
+        {
             get => _originalPageUrl;
             set => SetProperty(ref _originalPageUrl, value);
         }
@@ -129,20 +152,27 @@ namespace EdgeLoop.ViewModels {
         /// <summary>
         /// Gets the domain/source name for URLs, or "Local" for files
         /// </summary>
-        public string SourceName {
-            get {
-                if (IsUrl) {
-                    try {
+        public string SourceName
+        {
+            get
+            {
+                if (IsUrl)
+                {
+                    try
+                    {
                         var uri = new Uri(!string.IsNullOrEmpty(OriginalPageUrl) ? OriginalPageUrl : FilePath);
                         var host = uri.Host.ToLowerInvariant();
                         if (host.StartsWith("www.")) host = host.Substring(4);
-                        
+
                         // Capitalize first letter of domain for better display
-                        if (host.Contains(".")) {
+                        if (host.Contains("."))
+                        {
                             var parts = host.Split('.');
-                            if (parts.Length >= 2) {
+                            if (parts.Length >= 2)
+                            {
                                 var mainPart = parts[parts.Length - 2];
-                                if (!string.IsNullOrEmpty(mainPart)) {
+                                if (!string.IsNullOrEmpty(mainPart))
+                                {
                                     if (mainPart.Equals("pmvhaven", StringComparison.OrdinalIgnoreCase)) return "PMVHaven";
                                     if (mainPart.Equals("rule34video", StringComparison.OrdinalIgnoreCase)) return "RULE34Video";
                                     return char.ToUpper(mainPart[0]) + mainPart.Substring(1);
@@ -150,7 +180,9 @@ namespace EdgeLoop.ViewModels {
                             }
                         }
                         return char.ToUpper(host[0]) + host.Substring(1);
-                    } catch {
+                    }
+                    catch
+                    {
                         return "Web";
                     }
                 }
@@ -163,40 +195,53 @@ namespace EdgeLoop.ViewModels {
         /// </summary>
         public bool IsValid => ValidationStatus == FileValidationStatus.Valid;
 
-        public VideoItem(string filePath, ScreenViewer defaultScreen = null) {
+        public VideoItem(string filePath, ScreenViewer defaultScreen = null)
+        {
             FilePath = filePath;
             AssignedScreen = defaultScreen;
         }
 
-        public override string ToString() {
+        public override string ToString()
+        {
             return FileName;
         }
 
         /// <summary>
         /// Validates the file or URL and updates the validation status
         /// </summary>
-        public void Validate() {
-            if (string.IsNullOrWhiteSpace(FilePath)) {
+        public void Validate()
+        {
+            if (string.IsNullOrWhiteSpace(FilePath))
+            {
                 ValidationStatus = FileValidationStatus.Invalid;
                 ValidationError = "File path or URL is empty";
                 return;
             }
 
-            if (IsUrl) {
+            if (IsUrl)
+            {
                 // Validate URL
-                if (!FileValidator.ValidateVideoUrl(FilePath, out string errorMessage)) {
+                if (!FileValidator.ValidateVideoUrl(FilePath, out string errorMessage))
+                {
                     ValidationStatus = FileValidationStatus.Invalid;
                     ValidationError = errorMessage;
-                } else {
+                }
+                else
+                {
                     ValidationStatus = FileValidationStatus.Valid;
                     ValidationError = null;
                 }
-            } else {
+            }
+            else
+            {
                 // Validate local file
-                if (!FileValidator.ValidateVideoFile(FilePath, out string errorMessage)) {
+                if (!FileValidator.ValidateVideoFile(FilePath, out string errorMessage))
+                {
                     ValidationStatus = File.Exists(FilePath) ? FileValidationStatus.Invalid : FileValidationStatus.Missing;
                     ValidationError = errorMessage;
-                } else {
+                }
+                else
+                {
                     ValidationStatus = FileValidationStatus.Valid;
                     ValidationError = null;
                 }

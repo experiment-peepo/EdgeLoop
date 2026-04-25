@@ -1,12 +1,10 @@
+using FlyleafLib.MediaFramework.MediaFrame;
 using System.Numerics;
 using System.Runtime.InteropServices;
-
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
 using Vortice.Mathematics;
-
-using FlyleafLib.MediaFramework.MediaFrame;
 
 namespace FlyleafLib.MediaFramework.MediaRenderer;
 
@@ -55,7 +53,7 @@ public unsafe partial class Renderer
     {
         Filter          = Filter.MinMagMipLinear,
         AddressU        = TextureAddressMode.Clamp,
-        AddressV        = TextureAddressMode.Clamp, 
+        AddressV        = TextureAddressMode.Clamp,
         AddressW        = TextureAddressMode.Clamp,
         ComparisonFunc  = ComparisonFunction.Never,
         MinLOD          = 0,
@@ -65,7 +63,7 @@ public unsafe partial class Renderer
     {
         Filter          = Filter.MinMagMipPoint,
         AddressU        = TextureAddressMode.Clamp,
-        AddressV        = TextureAddressMode.Clamp, 
+        AddressV        = TextureAddressMode.Clamp,
         AddressW        = TextureAddressMode.Clamp,
         ComparisonFunc  = ComparisonFunction.Never,
         MinLOD          = 0,
@@ -93,43 +91,43 @@ public unsafe partial class Renderer
     {
         for (int i = 0; i < txtDesc.Length; i++)
         {   // TBR: For SW disposing per frame... Immutable might not worth it (D3 requires RenderTarget / Default usage)
-            txtDesc[i].Usage                = ResourceUsage.Default;
-            txtDesc[i].BindFlags            = BindFlags.ShaderResource | BindFlags.RenderTarget;
-            txtDesc[i].SampleDescription    = new(1, 0);
-            txtDesc[i].ArraySize            = 1;
-            txtDesc[i].MipLevels            = 1;
+            txtDesc[i].Usage = ResourceUsage.Default;
+            txtDesc[i].BindFlags = BindFlags.ShaderResource | BindFlags.RenderTarget;
+            txtDesc[i].SampleDescription = new(1, 0);
+            txtDesc[i].ArraySize = 1;
+            txtDesc[i].MipLevels = 1;
         }
 
         for (int i = 0; i < txtDesc.Length; i++)
         {
-            srvDesc[i].Texture2D        = new() { MipLevels = 1, MostDetailedMip = 0 };
-            srvDesc[i].Texture2DArray   = new() { MipLevels = 1, ArraySize = 1 };
+            srvDesc[i].Texture2D = new() { MipLevels = 1, MostDetailedMip = 0 };
+            srvDesc[i].Texture2DArray = new() { MipLevels = 1, ArraySize = 1 };
         }
     }
 
     void FLSetup()
     {
-        vsBuffer        = device.CreateBuffer(vsDesc);
-        psBuffer        = device.CreateBuffer(psDesc);
-        vertexBuffer    = device.CreateBuffer<float>(vertexBufferData, vertexBufferDesc);
-        inputLayout     = device.CreateInputLayout(inputElements, ShaderCompiler.VSBlob);
-        samplerLinear   = device.CreateSamplerState(samplerLinearDesc);
-        samplerPoint    = device.CreateSamplerState(samplerPointDesc);
-        vsMain          = device.CreateVertexShader(ShaderCompiler.VSBlob);
-        vsSimple        = device.CreateVertexShader(ShaderCompiler.VSSimpleBlob);
-        rsStateHVFlip   = device.CreateRasterizerState(new(CullMode.None, FillMode.Solid));
+        vsBuffer = device.CreateBuffer(vsDesc);
+        psBuffer = device.CreateBuffer(psDesc);
+        vertexBuffer = device.CreateBuffer<float>(vertexBufferData, vertexBufferDesc);
+        inputLayout = device.CreateInputLayout(inputElements, ShaderCompiler.VSBlob);
+        samplerLinear = device.CreateSamplerState(samplerLinearDesc);
+        samplerPoint = device.CreateSamplerState(samplerPointDesc);
+        vsMain = device.CreateVertexShader(ShaderCompiler.VSBlob);
+        vsSimple = device.CreateVertexShader(ShaderCompiler.VSSimpleBlob);
+        rsStateHVFlip = device.CreateRasterizerState(new(CullMode.None, FillMode.Solid));
 
         // TBR: Currently Bitmap Subs only (possible ChildRenderer too - might separate them or create separate PS for it)
         blendStateAlpha = device.CreateBlendState(blendDesc);
-        psShader["rgba"]= ShaderCompiler.CompilePS(device, "rgba", "color = float4(Texture1.Sample(Sampler, input.Texture).rgba);");
-        
-        context.IASetVertexBuffer       (0, vertexBuffer, sizeof(float) * 5);
-        context.IASetInputLayout        (inputLayout);
-        context.IASetPrimitiveTopology  (PrimitiveTopology.TriangleList);
-        context.PSSetConstantBuffer     (0, psBuffer);
-        context.VSSetConstantBuffer     (0, vsBuffer);
-        context.VSSetShader             (vsMain);
-        context.PSSetSampler            (0, samplerLinear);
+        psShader["rgba"] = ShaderCompiler.CompilePS(device, "rgba", "color = float4(Texture1.Sample(Sampler, input.Texture).rgba);");
+
+        context.IASetVertexBuffer(0, vertexBuffer, sizeof(float) * 5);
+        context.IASetInputLayout(inputLayout);
+        context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
+        context.PSSetConstantBuffer(0, psBuffer);
+        context.VSSetConstantBuffer(0, vsBuffer);
+        context.VSSetShader(vsMain);
+        context.PSSetSampler(0, samplerLinear);
 
         FLFiltersSetup();
     }
@@ -143,7 +141,7 @@ public unsafe partial class Renderer
     {
         SetRotation();
 
-        vsData.Matrix = Matrix4x4.CreateFromYawPitchRoll(0.0f, 0.0f, (float) (Math.PI / 180 * rotation));
+        vsData.Matrix = Matrix4x4.CreateFromYawPitchRoll(0.0f, 0.0f, (float)(Math.PI / 180 * rotation));
 
         vflip = ucfg.vflip ^ scfg.VFlip;
 
@@ -159,9 +157,9 @@ public unsafe partial class Renderer
     }
     void FLSetCrop()
     {
-        crop            = scfg.Crop + ucfg.crop;
-        VisibleWidth    = scfg.txtWidth  - crop.Width;
-        VisibleHeight   = scfg.txtHeight - crop.Height;
+        crop = scfg.Crop + ucfg.crop;
+        VisibleWidth = scfg.txtWidth - crop.Width;
+        VisibleHeight = scfg.txtHeight - crop.Height;
 
         if (VideoProcessor == VideoProcessors.SwsScale &&
             (scfg.Cropping.HasFlag(Cropping.Codec) || scfg.Cropping.HasFlag(Cropping.Texture)))
@@ -174,8 +172,8 @@ public unsafe partial class Renderer
             vsData.Crop = new()
             {
                 X = crop.Left / ((float)totalWidth),
-                Y = crop.Top  / ((float)totalHeight),
-                Z = (totalWidth  - crop.Right)  / ((float)totalWidth),
+                Y = crop.Top / ((float)totalHeight),
+                Z = (totalWidth - crop.Right) / ((float)totalWidth),
                 W = (totalHeight - crop.Bottom) / ((float)totalHeight)
             };
         }
@@ -183,24 +181,24 @@ public unsafe partial class Renderer
             vsData.Crop = new()
             {
                 X = crop.Left / (float)scfg.txtWidth,
-                Y = crop.Top  / (float)scfg.txtHeight,
-                Z = (scfg.txtWidth  - crop.Right)  / (float)scfg.txtWidth, //1.0f - (right  / (float)textWidth),
+                Y = crop.Top / (float)scfg.txtHeight,
+                Z = (scfg.txtWidth - crop.Right) / (float)scfg.txtWidth, //1.0f - (right  / (float)textWidth),
                 W = (scfg.txtHeight - crop.Bottom) / (float)scfg.txtHeight //1.0f - (bottom / (float)textHeight)
             };
 
         var alphaPos = ucfg._SplitFrameAlphaPosition;
         if (alphaPos != SplitFrameAlphaPosition.None)
         {
-            if      (alphaPos == SplitFrameAlphaPosition.Left  || alphaPos == SplitFrameAlphaPosition.Right)
+            if (alphaPos == SplitFrameAlphaPosition.Left || alphaPos == SplitFrameAlphaPosition.Right)
                 VisibleWidth /= 2;
-            else if (alphaPos == SplitFrameAlphaPosition.Top   || alphaPos == SplitFrameAlphaPosition.Bottom)
+            else if (alphaPos == SplitFrameAlphaPosition.Top || alphaPos == SplitFrameAlphaPosition.Bottom)
                 VisibleHeight /= 2;
         }
 
         SetVisibleSizeAndRatioHelper();
 
         vpRequests &= ~VPRequestType.Crop;
-        vpRequests |=  VPRequestType.Viewport | VPRequestType.UpdateVS;
+        vpRequests |= VPRequestType.Viewport | VPRequestType.UpdateVS;
     }
     void FLSetHDRtoSDR()
     {
@@ -222,7 +220,7 @@ public unsafe partial class Renderer
         }
 
         vpRequests &= ~VPRequestType.HDRtoSDR;
-        vpRequests |=  VPRequestType.UpdatePS;
+        vpRequests |= VPRequestType.UpdatePS;
     }
 
     void FLProcessRequests()
@@ -237,8 +235,8 @@ public unsafe partial class Renderer
                     return;
             }
 
-            vpRequests  = vpRequestsIn;
-            vpRequestsIn= VPRequestType.Empty;
+            vpRequests = vpRequestsIn;
+            vpRequestsIn = VPRequestType.Empty;
 
             if (vpRequests.HasFlag(VPRequestType.BackColor))
                 SetBackColor();
@@ -265,8 +263,8 @@ public unsafe partial class Renderer
                 context.UpdateSubresource(vsData, vsBuffer);
 
             if (vpRequests.HasFlag(VPRequestType.UpdatePS))
-                context.UpdateSubresource(psData, psBuffer);   
-                
+                context.UpdateSubresource(psData, psBuffer);
+
         }
     }
     void FLRender(VideoFrame frame)
@@ -305,20 +303,20 @@ public unsafe partial class Renderer
             snapshot = null;
         }
 
-        foreach(var shader in psShader.Values)
+        foreach (var shader in psShader.Values)
             shader.Dispose();
         psShader.Clear();
         psIdPrev = "f^";
-        
-        vsBuffer.       Dispose();
-        psBuffer.       Dispose();
-        inputLayout.    Dispose();
-        vertexBuffer.   Dispose();
-        samplerLinear.  Dispose();
-        samplerPoint.   Dispose();
-        vsMain.         Dispose();
-        vsSimple.       Dispose();
-        rsStateHVFlip.  Dispose();
+
+        vsBuffer.Dispose();
+        psBuffer.Dispose();
+        inputLayout.Dispose();
+        vertexBuffer.Dispose();
+        samplerLinear.Dispose();
+        samplerPoint.Dispose();
+        vsMain.Dispose();
+        vsSimple.Dispose();
+        rsStateHVFlip.Dispose();
         blendStateAlpha.Dispose();
     }
 
@@ -346,11 +344,11 @@ public unsafe partial class Renderer
 
         public PSBufferType()
         {
-            Brightness  = 0;
-            Contrast    = 1;
-            Hue         = 0;
-            Saturation  = 1;
-            Tonemap     = HDRtoSDRMethod.Hable;
+            Brightness = 0;
+            Contrast = 1;
+            Hue = 0;
+            Saturation = 1;
+            Tonemap = HDRtoSDRMethod.Hable;
         }
     }
 
@@ -367,11 +365,11 @@ public unsafe partial class Renderer
     {
         public Matrix4x4    Matrix; // Rotation | HV Flip
         public Vector4      Crop;
-        
+
         public VSBufferType()
         {
-            Matrix  = Matrix4x4.Identity;
-            Crop    = new(0, 0, 1, 1);
+            Matrix = Matrix4x4.Identity;
+            Crop = new(0, 0, 1, 1);
         }
     }
 }

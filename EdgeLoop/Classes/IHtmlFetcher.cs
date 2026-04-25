@@ -1,11 +1,13 @@
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace EdgeLoop.Classes {
+namespace EdgeLoop.Classes
+{
     /// <summary>
     /// Interface for fetching HTML content from URLs
     /// </summary>
-    public interface IHtmlFetcher {
+    public interface IHtmlFetcher
+    {
         /// <summary>
         /// Fetches HTML content from the specified URL
         /// </summary>

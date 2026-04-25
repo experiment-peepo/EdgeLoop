@@ -2,12 +2,15 @@ using System;
 using System.Windows.Input;
 using EdgeLoop.Classes;
 
-namespace EdgeLoop.ViewModels {
-    public class ActivePlayerViewModel : ObservableObject {
+namespace EdgeLoop.ViewModels
+{
+    public class ActivePlayerViewModel : ObservableObject
+    {
         private string _screenName;
         private HypnoViewModel _playerVm;
 
-        public string ScreenName {
+        public string ScreenName
+        {
             get => _screenName;
             set => SetProperty(ref _screenName, value);
         }
@@ -20,14 +23,20 @@ namespace EdgeLoop.ViewModels {
         public ICommand SkipCommand => _playerVm?.SkipCommand;
         public ICommand TogglePlayPauseCommand => _playerVm?.TogglePlayPauseCommand;
 
-        public ActivePlayerViewModel(string screenName, HypnoViewModel playerVm) {
+        public ActivePlayerViewModel(string screenName, HypnoViewModel playerVm)
+        {
             _screenName = screenName;
             _playerVm = playerVm;
-            if (_playerVm != null) {
-                _playerVm.PropertyChanged += (s, e) => {
-                    if (e.PropertyName == nameof(HypnoViewModel.MediaState)) {
+            if (_playerVm != null)
+            {
+                _playerVm.PropertyChanged += (s, e) =>
+                {
+                    if (e.PropertyName == nameof(HypnoViewModel.MediaState))
+                    {
                         OnPropertyChanged(nameof(IsPlaying));
-                    } else if (e.PropertyName == nameof(HypnoViewModel.CurrentItem)) {
+                    }
+                    else if (e.PropertyName == nameof(HypnoViewModel.CurrentItem))
+                    {
                         OnPropertyChanged(nameof(CurrentVideoTitle));
                     }
                 };

@@ -17,21 +17,26 @@ using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
-namespace EdgeLoop.Classes {
+namespace EdgeLoop.Classes
+{
     [SupportedOSPlatform("windows")]
-    public class ScreenViewer {
+    public class ScreenViewer
+    {
         public Screen Screen;
         public string DeviceName;
         public bool IsAllScreens { get; private set; }
 
-        public ScreenViewer(Screen screen) {
+        public ScreenViewer(Screen screen)
+        {
             Screen = screen;
             DeviceName = screen?.DeviceName;
             IsAllScreens = false;
         }
 
-        public int ScreenIndex {
-            get {
+        public int ScreenIndex
+        {
+            get
+            {
                 if (IsAllScreens) return 0;
                 if (string.IsNullOrEmpty(DeviceName)) return 100;
                 var match = System.Text.RegularExpressions.Regex.Match(DeviceName, @"DISPLAY(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
@@ -39,8 +44,10 @@ namespace EdgeLoop.Classes {
             }
         }
 
-        public static ScreenViewer CreateAllScreens() {
-            return new ScreenViewer(null) {
+        public static ScreenViewer CreateAllScreens()
+        {
+            return new ScreenViewer(null)
+            {
                 DeviceName = "ALL_SCREENS",
                 IsAllScreens = true
             };
@@ -49,19 +56,20 @@ namespace EdgeLoop.Classes {
         public override bool Equals(object obj) => obj is ScreenViewer other && other.DeviceName == this.DeviceName;
         public override int GetHashCode() => DeviceName?.GetHashCode() ?? 0;
 
-        public override string ToString() {
+        public override string ToString()
+        {
             if (IsAllScreens) return "All Monitors";
 
             // Extract screen number from DeviceName (e.g., "\\\\.\\DISPLAY1" -> "Screen 1")
             int screenNumber = ScreenIndex;
-            
+
             var bounds = Screen?.Bounds;
             var res = bounds.HasValue ? ($"{bounds.Value.Width}x{bounds.Value.Height}") : "Unknown";
-            
+
             // Check if this is the primary screen
             bool isPrimary = Screen?.Primary ?? false;
             string primaryText = isPrimary ? " (Primary)" : "";
-            
+
             return $"Screen {screenNumber} : {res}{primaryText}";
         }
     }

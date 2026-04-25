@@ -3,7 +3,8 @@ namespace FlyleafLib.MediaFramework;
 public abstract class RunThreadBase : NotifyPropertyChanged
 {
     Status _Status = Status.Stopped;
-    public Status               Status          {
+    public Status Status
+    {
         get => _Status;
         set
         {
@@ -16,23 +17,26 @@ public abstract class RunThreadBase : NotifyPropertyChanged
             }
         }
     }
-    public bool                 IsRunning       {
+    public bool IsRunning
+    {
         get
         {
             bool ret = false;
-            lock (lockStatus) ret = thread != null && thread.IsAlive && Status != Status.Paused;
+            lock (lockStatus)
+                ret = thread != null && thread.IsAlive && Status != Status.Paused;
             return ret;
         }
     }
 
-    public bool                 Disposed        { get; protected set; } = true;
-    public int                  UniqueId        { get; protected set; } = -1;
-    public bool                 PauseOnQueueFull{ get; set; }
+    public bool Disposed { get; protected set; } = true;
+    public int UniqueId { get; protected set; } = -1;
+    public bool PauseOnQueueFull { get; set; }
 
     protected volatile bool     CriticalArea;
     protected Thread            thread;
     protected AutoResetEvent    threadARE       = new(false);
-    protected string            threadName      {
+    protected string threadName
+    {
         get => _threadName;
         set
         {
@@ -57,10 +61,12 @@ public abstract class RunThreadBase : NotifyPropertyChanged
             {
                 PauseOnQueueFull = false;
 
-                if (Disposed || thread == null || !thread.IsAlive || Status == Status.Stopping || Status == Status.Stopped || Status == Status.Ended || Status == Status.Pausing || Status == Status.Paused) return;
+                if (Disposed || thread == null || !thread.IsAlive || Status == Status.Stopping || Status == Status.Stopped || Status == Status.Ended || Status == Status.Pausing || Status == Status.Paused)
+                    return;
                 Status = Status.Pausing;
             }
-            while (Status == Status.Pausing) Thread.Sleep(5);
+            while (Status == Status.Pausing)
+                Thread.Sleep(5);
         }
     }
     public void Start()
@@ -74,42 +80,51 @@ public abstract class RunThreadBase : NotifyPropertyChanged
                 retries++;
                 if (retries > 16)
                 {
-                    if (CanTrace) Log.Trace($"Start() exhausted");
+                    if (CanTrace)
+                        Log.Trace($"Start() exhausted");
                     return;
                 }
             }
 
             lock (lockStatus)
             {
-                if (Disposed) return;
+                if (Disposed)
+                    return;
 
                 PauseOnQueueFull = false;
 
-                while (Status == Status.Draining) Thread.Sleep(3);
-                while (Status == Status.Stopping) Thread.Sleep(3);
-                while (Status == Status.Pausing)  Thread.Sleep(3);
+                while (Status == Status.Draining)
+                    Thread.Sleep(3);
+                while (Status == Status.Stopping)
+                    Thread.Sleep(3);
+                while (Status == Status.Pausing)
+                    Thread.Sleep(3);
 
-                if (Status == Status.Ended) return;
+                if (Status == Status.Ended)
+                    return;
 
                 if (Status == Status.Paused)
                 {
                     threadARE.Set();
-                    while (Status == Status.Paused) Thread.Sleep(3);
+                    while (Status == Status.Paused)
+                        Thread.Sleep(3);
                     return;
                 }
 
-                if (thread != null && thread.IsAlive) return; // might re-check CriticalArea
+                if (thread != null && thread.IsAlive)
+                    return; // might re-check CriticalArea
 
                 thread = new(Run)
                 {
-                    #if DEBUG
+#if DEBUG
                     Name = $"[#{UniqueId}] [{threadName}]",
-                    #endif
-                    IsBackground= true,
+#endif
+                    IsBackground = true,
                 };
                 Status = Status.Running;
                 thread.Start();
-                while (!thread.IsAlive) { if (CanTrace) Log.Trace("Waiting thread to come up"); Thread.Sleep(3); }
+                while (!thread.IsAlive)
+                { if (CanTrace) Log.Trace("Waiting thread to come up"); Thread.Sleep(3); }
             }
         }
     }
@@ -121,19 +136,24 @@ public abstract class RunThreadBase : NotifyPropertyChanged
             {
                 PauseOnQueueFull = false;
 
-                if (Disposed || thread == null || !thread.IsAlive || Status == Status.Stopping || Status == Status.Stopped || Status == Status.Ended) return;
-                if (Status == Status.Pausing) while (Status != Status.Pausing) Thread.Sleep(3);
+                if (Disposed || thread == null || !thread.IsAlive || Status == Status.Stopping || Status == Status.Stopped || Status == Status.Ended)
+                    return;
+                if (Status == Status.Pausing)
+                    while (Status != Status.Pausing)
+                        Thread.Sleep(3);
                 Status = Status.Stopping;
                 threadARE.Set();
             }
 
-            while (Status == Status.Stopping && thread != null && thread.IsAlive) Thread.Sleep(5);
+            while (Status == Status.Stopping && thread != null && thread.IsAlive)
+                Thread.Sleep(5);
         }
     }
 
     protected void Run()
     {
-        if (CanDebug) Log.Debug($"Thread started ({Status})");
+        if (CanDebug)
+            Log.Debug($"Thread started ({Status})");
 
         do
         {
@@ -146,16 +166,19 @@ public abstract class RunThreadBase : NotifyPropertyChanged
                 threadARE.WaitOne();
                 if (Status == Status.Paused)
                 {
-                    if (CanDebug) Log.Debug($"{_Status} -> {Status.Running}");
+                    if (CanDebug)
+                        Log.Debug($"{_Status} -> {Status.Running}");
                     _Status = Status.Running;
                 }
             }
 
         } while (Status == Status.Running);
 
-        if (Status != Status.Ended) Status = Status.Stopped;
+        if (Status != Status.Ended)
+            Status = Status.Stopped;
 
-        if (CanDebug) Log.Debug($"Thread stopped ({Status})");
+        if (CanDebug)
+            Log.Debug($"Thread stopped ({Status})");
     }
     protected abstract void RunInternal();
 }

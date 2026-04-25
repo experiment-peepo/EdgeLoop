@@ -1,7 +1,6 @@
-﻿using System.Linq;
-
-using FlyleafLib.MediaFramework.MediaPlaylist;
+﻿using FlyleafLib.MediaFramework.MediaPlaylist;
 using FlyleafLib.MediaFramework.MediaStream;
+using System.Linq;
 
 namespace FlyleafLib.Plugins;
 
@@ -28,8 +27,10 @@ public unsafe class StreamSuggester : PluginBase, ISuggestPlaylistItem, ISuggest
                             bool aExists = false, vExists = false;
                             foreach (var pstream in stream.Demuxer.Programs[i].Streams)
                             {
-                                if (pstream.StreamIndex == stream.StreamIndex) aExists = true;
-                                else if (pstream.StreamIndex == stream.Demuxer.VideoStream?.StreamIndex) vExists = true;
+                                if (pstream.StreamIndex == stream.StreamIndex)
+                                    aExists = true;
+                                else if (pstream.StreamIndex == stream.Demuxer.VideoStream?.StreamIndex)
+                                    vExists = true;
                             }
 
                             if (aExists && vExists)
@@ -78,7 +79,8 @@ public unsafe class StreamSuggester : PluginBase, ISuggestPlaylistItem, ISuggest
             int streamIndex;
             lock (streams[0].Demuxer.lockFmtCtx)
                 streamIndex = av_find_best_stream(streams[0].Demuxer.FormatContext, AVMediaType.Video, -1, -1, null, 0);
-            if (streamIndex < 0) return null;
+            if (streamIndex < 0)
+                return null;
 
             foreach (var vstream in streams)
                 if (vstream.StreamIndex == streamIndex)
@@ -110,14 +112,14 @@ public unsafe class StreamSuggester : PluginBase, ISuggestPlaylistItem, ISuggest
 
         foreach (var lang in langs)
         {
-            foreach(var embStream in decoder.VideoDemuxer.SubtitlesStreams)
+            foreach (var embStream in decoder.VideoDemuxer.SubtitlesStreams)
                 if (embStream.Language == lang)
                 {
                     stream = embStream;
                     return;
                 }
 
-            foreach(var extStream2 in extStreams)
+            foreach (var extStream2 in extStreams)
                 if (extStream2.Language == lang)
                 {
                     extStream = extStream2;
@@ -130,7 +132,7 @@ public unsafe class StreamSuggester : PluginBase, ISuggestPlaylistItem, ISuggest
     {
         var extStreams = Selected.ExternalSubtitlesStreams.OrderBy(x => x.Language.ToString()).ThenByDescending(x => x.Rating).ThenBy(x => x.Downloaded);
 
-        foreach(var extStream in extStreams)
+        foreach (var extStream in extStreams)
             if (extStream.Language == Config.Subtitles.Languages[0])
                 return extStream;
 
@@ -139,8 +141,8 @@ public unsafe class StreamSuggester : PluginBase, ISuggestPlaylistItem, ISuggest
 
     public SubtitlesStream SuggestSubtitles(ObservableCollection<SubtitlesStream> streams, List<Language> langs)
     {
-        foreach(var lang in langs)
-            foreach(var stream in streams)
+        foreach (var lang in langs)
+            foreach (var stream in streams)
                 if (lang == stream.Language)
                     return stream;
 

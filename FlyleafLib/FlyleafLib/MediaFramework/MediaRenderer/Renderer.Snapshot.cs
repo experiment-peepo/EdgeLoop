@@ -1,18 +1,15 @@
+using FlyleafLib.MediaFramework.MediaFrame;
+using SharpGen.Runtime;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Windows.Media.Imaging;
-
-using SharpGen.Runtime;
 using Vortice;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
 using Vortice.Mathematics;
-
-using ID3D11Device      = Vortice.Direct3D11.ID3D11Device;
-using ID3D11Texture2D   = Vortice.Direct3D11.ID3D11Texture2D;
+using ID3D11Device = Vortice.Direct3D11.ID3D11Device;
+using ID3D11Texture2D = Vortice.Direct3D11.ID3D11Texture2D;
 using ID3D11VideoDevice = Vortice.Direct3D11.ID3D11VideoDevice;
-
-using FlyleafLib.MediaFramework.MediaFrame;
 
 namespace FlyleafLib.MediaFramework.MediaRenderer;
 
@@ -46,11 +43,11 @@ public unsafe partial class Renderer
 
                 if (VideoProcessor == VideoProcessors.D3D11)
                 {
-                    vc.VideoProcessorGetStreamDestRect  (vp, 0, out _, out var d3destOld);
-                    vc.VideoProcessorGetOutputTargetRect(vp,    out _, out var d3outOld);
+                    vc.VideoProcessorGetStreamDestRect(vp, 0, out _, out var d3destOld);
+                    vc.VideoProcessorGetOutputTargetRect(vp, out _, out var d3outOld);
                     D3Render(rFrame.VPIV, snapshot.d3rtv, snapshot.d3view);
-                    vc.VideoProcessorSetStreamDestRect  (vp, 0, true, d3destOld);
-                    vc.VideoProcessorSetOutputTargetRect(vp,    true, d3outOld);
+                    vc.VideoProcessorSetStreamDestRect(vp, 0, true, d3destOld);
+                    vc.VideoProcessorSetOutputTargetRect(vp, true, d3outOld);
                 }
                 else
                 {
@@ -119,13 +116,13 @@ public unsafe partial class Renderer
 
         if (width == 0 && height == 0)
         {
-            width  = VisibleWidth;
+            width = VisibleWidth;
             height = VisibleHeight;
         }
         else if (width != 0 && height == 0)
             height = (uint)(width / curRatio);
         else if (height != 0 && width == 0)
-            width  = (uint)(height * curRatio);
+            width = (uint)(height * curRatio);
 
         var snapshot = GetSnapshot(width, height);
 
@@ -133,7 +130,7 @@ public unsafe partial class Renderer
             D3Render(frame.VPIV, snapshot.d3rtv, snapshot.d3view);
         else
             FLRender(frame.SRV, snapshot.rtv, snapshot.view);
-            
+
         context.CopyResource(snapshot.txtStage, snapshot.txt);
 
         return GetBitmap(snapshot.txtStage);
@@ -155,8 +152,8 @@ public unsafe partial class Renderer
             {
                 MemoryHelpers.CopyMemory(dstPtr, srcPtr, bmp.Width * 4);
 
-                srcPtr  = nint.Add(srcPtr, (int)db.RowPitch);
-                dstPtr  = nint.Add(dstPtr, bmpData.Stride);
+                srcPtr = nint.Add(srcPtr, (int)db.RowPitch);
+                dstPtr = nint.Add(dstPtr, bmpData.Stride);
             }
         }
 
@@ -200,8 +197,8 @@ public unsafe partial class Renderer
 
 class Snapshot
 {
-    public uint Width    { get; set; }
-    public uint Height   { get; set; }
+    public uint Width { get; set; }
+    public uint Height { get; set; }
 
     public ID3D11Texture2D                 txt, txtStage;
     public ID3D11RenderTargetView          rtv;
@@ -211,9 +208,9 @@ class Snapshot
 
     public Snapshot(ID3D11Device device, ID3D11VideoDevice vd, ID3D11VideoProcessorEnumerator ve, uint width, uint height)
     {
-        Width       = width;
-        Height      = height;
-        view        = new(Width, Height);
+        Width = width;
+        Height = height;
+        view = new(Width, Height);
 
         var txtStageDesc= new Texture2DDescription()
         {
@@ -240,22 +237,22 @@ class Snapshot
             Height              = Height
         };
 
-        txtStage    = device.CreateTexture2D        (txtStageDesc);
-        txt         = device.CreateTexture2D        (txtDesc);
-        rtv         = device.CreateRenderTargetView (txt);
+        txtStage = device.CreateTexture2D(txtStageDesc);
+        txt = device.CreateTexture2D(txtDesc);
+        rtv = device.CreateRenderTargetView(txt);
 
         if (vd != null)
         {
-            d3view  = new(0, 0, (int)Width, (int)Height);
-            d3rtv   = vd.CreateVideoProcessorOutputView(txt, ve, new() { ViewDimension = VideoProcessorOutputViewDimension.Texture2D });
+            d3view = new(0, 0, (int)Width, (int)Height);
+            d3rtv = vd.CreateVideoProcessorOutputView(txt, ve, new() { ViewDimension = VideoProcessorOutputViewDimension.Texture2D });
         }
     }
 
     public void Dispose()
     {
-        d3rtv?.     Dispose();
-        rtv.        Dispose();
-        txtStage.   Dispose();
-        txt.        Dispose();
+        d3rtv?.Dispose();
+        rtv.Dispose();
+        txtStage.Dispose();
+        txt.Dispose();
     }
 }

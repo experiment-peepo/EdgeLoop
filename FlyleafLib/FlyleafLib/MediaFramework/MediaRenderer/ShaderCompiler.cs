@@ -61,9 +61,9 @@ internal static partial class ShaderCompiler
         Span<byte> buffer   = bufferPool;
         PS_HEADER.CopyTo(buffer);
         int offset          = PS_HEADER.Length;
-        offset             += Encoding.UTF8.GetBytes(hlslSample, buffer[offset..]);
+        offset += Encoding.UTF8.GetBytes(hlslSample, buffer[offset..]);
         PS_FOOTER.CopyTo(buffer[offset..]);
-        offset             += PS_FOOTER.Length;
+        offset += PS_FOOTER.Length;
         bw.blob = Compile(buffer[..offset], true, defines);
         ArrayPool<byte>.Shared.Return(bufferPool);
 
@@ -82,7 +82,7 @@ internal static partial class ShaderCompiler
             // NOTE: requires NULL termination (+1)
             definesMacro = new ShaderMacro[defines.Count + 1];
 
-            for(int i = 0; i < defines.Count; i++)
+            for (int i = 0; i < defines.Count; i++)
                 definesMacro[i].Name = defines[i];
         }
 
@@ -108,7 +108,7 @@ internal static partial class ShaderCompiler
     }
 
     static void LogError(string msg) { if (Engine.Log != null) Engine.Log.Error($"{LOG_PREFIX}{msg}"); }
-    static void LogInfo (string msg) { if (Engine.Log != null) Engine.Log.Info ($"{LOG_PREFIX}{msg}"); }
+    static void LogInfo(string msg) { if (Engine.Log != null) Engine.Log.Info($"{LOG_PREFIX}{msg}"); }
     static void LogDebug(string msg) { if (Engine.Log != null) Engine.Log.Debug($"{LOG_PREFIX}{msg}"); }
     static void LogTrace(string msg) { if (Engine.Log != null) Engine.Log.Trace($"{LOG_PREFIX}{msg}"); }
 }

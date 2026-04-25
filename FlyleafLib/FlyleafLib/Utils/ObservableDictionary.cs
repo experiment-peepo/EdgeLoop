@@ -17,7 +17,8 @@ public static partial class Utils
 
             set
             {
-                if (ContainsKey(key) && base[key].Equals(value)) return;
+                if (ContainsKey(key) && base[key].Equals(value))
+                    return;
 
                 if (CollectionChanged != null)
                 {

@@ -22,10 +22,11 @@ public unsafe class VideoFrame : FrameBase
 
         if (AVFrame != null)
         {
-            fixed(AVFrame** ptr = &AVFrame) av_frame_free(ptr);
+            fixed (AVFrame** ptr = &AVFrame)
+                av_frame_free(ptr);
             AVFrame = null;
         }
-            
+
     }
 
     public void DisposeTexture()

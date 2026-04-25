@@ -41,7 +41,8 @@ partial class Player
             UI(() => Status = status);
         }
 
-        while (taskPlayRuns || taskSeekRuns) Thread.Sleep(5);
+        while (taskPlayRuns || taskSeekRuns)
+            Thread.Sleep(5);
         taskPlayRuns = true;
 
         Thread t = new(PlayThread)
@@ -63,9 +64,9 @@ partial class Player
             Engine.TimeBeginPeriod1();
             Engine.ThreadExecutionStateBegin();
 
-            onBufferingStarted   = 0;
+            onBufferingStarted = 0;
             onBufferingCompleted = 0;
-            requiresBuffering    = true;
+            requiresBuffering = true;
 
             if (lastError != null)
             {
@@ -144,7 +145,8 @@ partial class Player
             }
 
             OnPlaybackStopped(stoppedWithError);
-            if (CanDebug) Log.Debug($"[SCREAMER] Finished (Status: {status}, Error: {stoppedWithError})");
+            if (CanDebug)
+                Log.Debug($"[SCREAMER] Finished (Status: {status}, Error: {stoppedWithError})");
 
             UI(() =>
             {
@@ -169,7 +171,8 @@ partial class Player
             status = Status.Paused;
             UI(() => Status = status);
 
-            while (taskPlayRuns) Thread.Sleep(5);
+            while (taskPlayRuns)
+                Thread.Sleep(5);
         }
     }
 
@@ -297,7 +300,8 @@ partial class Player
                         ret = decoder.Seek(seekData.accurate ? Math.Max(0, seekData.ms - 3000) : seekData.ms, seekData.forward, !seekData.accurate); // 3sec ffmpeg bug for seek accurate when fails to seek backwards (see videodecoder getframe)
                         if (ret < 0)
                         {
-                            if (CanWarn) Log.Warn("Seek failed");
+                            if (CanWarn)
+                                Log.Warn("Seek failed");
                             SeekCompleted?.Invoke(this, -1);
                         }
                         else if (!ReversePlayback && CanPlay)
@@ -319,7 +323,8 @@ partial class Player
             }
             catch (Exception e)
             {
-                lock (seeks) taskSeekRuns = false;
+                lock (seeks)
+                    taskSeekRuns = false;
                 Log.Error($"Seek failed ({e.Message})");
             }
             finally
@@ -354,12 +359,12 @@ partial class Player
 
 public class PlaybackStoppedArgs : EventArgs
 {
-    public string   Error       { get; }
-    public bool     Success     { get; }
+    public string Error { get; }
+    public bool Success { get; }
 
     public PlaybackStoppedArgs(string error)
     {
-        Error   = error;
+        Error = error;
         Success = Error == null;
     }
 }
@@ -370,5 +375,5 @@ class SeekData
     public bool forward;
     public bool accurate;
     public SeekData(int ms, bool forward, bool accurate)
-        { this.ms = ms; this.forward = forward && !accurate; this.accurate = accurate; }
+    { this.ms = ms; this.forward = forward && !accurate; this.accurate = accurate; }
 }

@@ -9,11 +9,14 @@ using FluentAssertions;
 using EdgeLoop.Classes;
 using EdgeLoop.ViewModels;
 
-namespace EdgeLoop.Tests.Stability {
-    public class NicheSiteBugsTests : TestBase {
-        
+namespace EdgeLoop.Tests.Stability
+{
+    public class NicheSiteBugsTests : TestBase
+    {
+
         [Fact]
-        public async Task Rule34Video_TokenInjection_ShouldMaintainExistingParams() {
+        public async Task Rule34Video_TokenInjection_ShouldMaintainExistingParams()
+        {
             // Arrange
             var mockFetcher = new Mock<IHtmlFetcher>();
             var html = @"
@@ -24,15 +27,15 @@ namespace EdgeLoop.Tests.Stability {
                     var license_code = 'secret_code';
                 </script>
                 </html>";
-            
+
             mockFetcher.Setup(f => f.FetchHtmlAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(html);
-            
+
             var extractor = new VideoUrlExtractor(mockFetcher.Object);
-            
+
             // Act
             var result = await extractor.ExtractVideoUrlAsync("https://rule34video.com/video/12345/test-slug");
-            
+
             // Assert
             result.Should().Contain("existing=param");
             result.Should().Contain("rnd=98765");
@@ -40,7 +43,8 @@ namespace EdgeLoop.Tests.Stability {
         }
 
         [Fact]
-        public async Task PMVHaven_NestedLDJSON_ShouldExtractCorrectUrl() {
+        public async Task PMVHaven_NestedLDJSON_ShouldExtractCorrectUrl()
+        {
             // Arrange
             var mockFetcher = new Mock<IHtmlFetcher>();
             var html = @"
@@ -55,21 +59,22 @@ namespace EdgeLoop.Tests.Stability {
                 }
                 </script>
                 </html>";
-            
+
             mockFetcher.Setup(f => f.FetchHtmlAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(html);
-            
+
             var extractor = new VideoUrlExtractor(mockFetcher.Object);
-            
+
             // Act
             var result = await extractor.ExtractVideoUrlAsync("https://pmvhaven.com/videos/some-video");
-            
+
             // Assert
             result.Should().Be("https://video.pmvhaven.com/streams/master.m3u8");
         }
 
         [Fact]
-        public async Task Hypnotube_PlayerConfigFallback_ShouldWorkWhenTagsFail() {
+        public async Task Hypnotube_PlayerConfigFallback_ShouldWorkWhenTagsFail()
+        {
             // Arrange
             var mockFetcher = new Mock<IHtmlFetcher>();
             // No <video> or <source> tags, only JS config
@@ -85,49 +90,52 @@ namespace EdgeLoop.Tests.Stability {
                     </script>
                 </body>
                 </html>";
-            
+
             mockFetcher.Setup(f => f.FetchHtmlAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(html);
-            
+
             var extractor = new VideoUrlExtractor(mockFetcher.Object);
-            
+
             // Act
             var result = await extractor.ExtractVideoUrlAsync("https://hypnotube.com/video/12345.html");
-            
+
             // Assert
             result.Should().Be("https://media.hypnotube.com/v/fallback_video.mp4");
         }
 
         [Fact]
-        public async Task ConcurrentExtraction_ShouldCoalesceCalls() {
+        public async Task ConcurrentExtraction_ShouldCoalesceCalls()
+        {
             // Arrange
             PersistentUrlCache.Instance.Clear();
             var mockFetcher = new Mock<IHtmlFetcher>();
             int fetchCount = 0;
-            
+
             mockFetcher.Setup(f => f.FetchHtmlAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .Returns(async (string url, CancellationToken ct) => {
+                .Returns(async (string url, CancellationToken ct) =>
+                {
                     Interlocked.Increment(ref fetchCount);
                     await Task.Delay(100); // Simulate network latency
                     return "<html><video src='video.mp4'></video></html>";
                 });
-            
+
             var extractor = new VideoUrlExtractor(mockFetcher.Object);
             var url = "https://pmvhaven.com/videos/concurrent-test";
-            
+
             // Act
             // Fire multiple extractions for the same URL simultaneously
             var tasks = Enumerable.Range(0, 5)
                 .Select(_ => extractor.ExtractVideoUrlAsync(url))
                 .ToList();
-            
+
             await Task.WhenAll(tasks);
-            
+
             // Assert
             fetchCount.Should().Be(1, "Multiple concurrent requests for the same URL should only trigger ONE network fetch");
             tasks.All(t => t.IsCompletedSuccessfully).Should().BeTrue();
-            
-            foreach (var task in tasks) {
+
+            foreach (var task in tasks)
+            {
                 var result = await task;
                 result.Should().NotBeNull();
                 result.Should().Contain("video.mp4");
@@ -135,36 +143,41 @@ namespace EdgeLoop.Tests.Stability {
         }
 
         [Fact]
-        public async Task OpeningStall_RemoteUrl_ShouldUse60sTimeout() {
+        public async Task OpeningStall_RemoteUrl_ShouldUse60sTimeout()
+        {
             // Arrange
             var mockExtractor = new Mock<IVideoUrlExtractor>();
-            
+
             // Fast extraction 
             mockExtractor.Setup(x => x.ExtractVideoUrlAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync("https://pmvhaven.com/slow-stream.m3u8");
 
             var vm = new HypnoViewModel(mockExtractor.Object);
             var item = new VideoItem("https://pmvhaven.com/video/slow");
-            item.Validate(); 
+            item.Validate();
 
             bool timeoutTriggered = false;
-            vm.MediaFailed += (s, e) => {
+            vm.MediaFailed += (s, e) =>
+            {
                 if (e.Exception is TimeoutException) timeoutTriggered = true;
             };
 
             // Act
             vm.SetQueue(new[] { item });
-            
+
             // Wait for extraction to complete and Player.Open to be called
             await Task.Delay(1000);
-            
+
             // Periodically force status to Opening to fighting Flyleaf's internal failure thread
-            using (var cts = new CancellationTokenSource()) {
-                var task = Task.Run(async () => {
+            using (var cts = new CancellationTokenSource())
+            {
+                var task = Task.Run(async () =>
+                {
                     var isLoadingField = typeof(HypnoViewModel).GetField("_isLoading", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
                     var playerStatusField = typeof(FlyleafLib.MediaPlayer.Player).GetField("status", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-                    
-                    while (!cts.IsCancellationRequested) {
+
+                    while (!cts.IsCancellationRequested)
+                    {
                         vm.Player.Status = FlyleafLib.MediaPlayer.Status.Opening;
                         playerStatusField?.SetValue(vm.Player, FlyleafLib.MediaPlayer.Status.Opening);
                         isLoadingField?.SetValue(vm, true);
@@ -179,18 +192,19 @@ namespace EdgeLoop.Tests.Stability {
 
                 // Wait another 20 seconds (total 65s+)
                 await Task.Delay(20000);
-                
+
                 cts.Cancel();
                 await task;
             }
-            
+
             // Assert
             timeoutTriggered.Should().BeTrue("Timeout SHOULD trigger after 60s for stalled URL extraction");
         }
-        
+
         [Fact]
-        public async Task Rule34Video_DirectDownloadPriority_ShouldSelectHighestQuality() {
-             // Arrange
+        public async Task Rule34Video_DirectDownloadPriority_ShouldSelectHighestQuality()
+        {
+            // Arrange
             var mockFetcher = new Mock<IHtmlFetcher>();
             var html = @"
                 <html>
@@ -200,15 +214,15 @@ namespace EdgeLoop.Tests.Stability {
                     <a href='/get_file/1/abc/720p.mp4/'>Download 720p</a>
                 </body>
                 </html>";
-            
+
             mockFetcher.Setup(f => f.FetchHtmlAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(html);
-            
+
             var extractor = new VideoUrlExtractor(mockFetcher.Object);
-            
+
             // Act
             var result = await extractor.ExtractVideoUrlAsync("https://rule34video.com/video/123/test");
-            
+
             // Assert
             result.Should().Contain("1080p.mp4");
         }

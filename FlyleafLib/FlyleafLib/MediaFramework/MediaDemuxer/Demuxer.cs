@@ -1,10 +1,8 @@
-﻿using System.Runtime.InteropServices;
-using System.Windows.Data;
-
-using static FlyleafLib.Config;
-
-using FlyleafLib.MediaFramework.MediaProgram;
+﻿using FlyleafLib.MediaFramework.MediaProgram;
 using FlyleafLib.MediaFramework.MediaStream;
+using System.Runtime.InteropServices;
+using System.Windows.Data;
+using static FlyleafLib.Config;
 
 namespace FlyleafLib.MediaFramework.MediaDemuxer;
 
@@ -17,75 +15,82 @@ public unsafe class Demuxer : RunThreadBase
      */
 
     #region Properties
-    public MediaType                Type            { get; private set; }
-    public DemuxerConfig            Config          { get; set; }
+    public MediaType Type { get; private set; }
+    public DemuxerConfig Config { get; set; }
 
     // Format Info
-    public string                   Url             { get; private set; }
-    public string                   Name            { get; private set; }
-    public string                   LongName        { get; private set; }
-    public string                   Extensions      { get; private set; }
-    public string                   Extension       { get; private set; }
-    public long                     StartTime       { get; private set; }
-    public DateTime                 StartRealTime   { get; private set; }
-    public long                     Duration        { get; internal set; }
+    public string Url { get; private set; }
+    public string Name { get; private set; }
+    public string LongName { get; private set; }
+    public string Extensions { get; private set; }
+    public string Extension { get; private set; }
+    public long StartTime { get; private set; }
+    public DateTime StartRealTime { get; private set; }
+    public long Duration { get; internal set; }
     public void ForceDuration(long duration) { Duration = duration; IsLive = duration != 0; }
 
     public Dictionary<string, string>
-                                    Metadata        { get; internal set; } = [];
+                                    Metadata
+    { get; internal set; } = [];
 
     /// <summary>
     /// The time of first packet in the queue (zero based, substracts start time)
     /// </summary>
-    public long                     CurTime         => CurPackets.CurTime != 0 ? CurPackets.CurTime : lastSeekTime;
+    public long CurTime => CurPackets.CurTime != 0 ? CurPackets.CurTime : lastSeekTime;
 
     /// <summary>
     /// The buffered time in the queue (last packet time - first packet time)
     /// </summary>
-    public long                     BufferedDuration=> CurPackets.BufferedDuration;
+    public long BufferedDuration => CurPackets.BufferedDuration;
 
-    public bool                     IsLive          { get; private set; }
-    public bool                     IsHLSLive       { get; private set; }
+    public bool IsLive { get; private set; }
+    public bool IsHLSLive { get; private set; }
 
-    public AVFormatContext*         FormatContext   => fmtCtx;
-    public CustomIOContext          CustomIOContext { get; private set; }
+    public AVFormatContext* FormatContext => fmtCtx;
+    public CustomIOContext CustomIOContext { get; private set; }
 
     // Media Programs
     public ObservableCollection<Program>
-                                    Programs        { get; private set; } = [];
+                                    Programs
+    { get; private set; } = [];
 
     // Media Streams
     public ObservableCollection<AudioStream>
-                                    AudioStreams    { get; private set; } = [];
+                                    AudioStreams
+    { get; private set; } = [];
     public ObservableCollection<VideoStream>
-                                    VideoStreams    { get; private set; } = [];
+                                    VideoStreams
+    { get; private set; } = [];
     public ObservableCollection<SubtitlesStream>
-                                    SubtitlesStreams{ get; private set; } = [];
+                                    SubtitlesStreams
+    { get; private set; } = [];
     public ObservableCollection<DataStream>
-                                    DataStreams     { get; private set; } = [];
+                                    DataStreams
+    { get; private set; } = [];
     readonly object lockStreams = new();
 
-    public List<int>                EnabledStreams  { get; private set; } = [];
+    public List<int> EnabledStreams { get; private set; } = [];
     public Dictionary<int, StreamBase>
-                                    AVStreamToStream{ get; private set; }
+                                    AVStreamToStream
+    { get; private set; }
 
-    public AudioStream              AudioStream     { get; private set; }
-    public VideoStream              VideoStream     { get; private set; }
-    public SubtitlesStream          SubtitlesStream { get; private set; }
-    public DataStream               DataStream      { get; private set; }
+    public AudioStream AudioStream { get; private set; }
+    public VideoStream VideoStream { get; private set; }
+    public SubtitlesStream SubtitlesStream { get; private set; }
+    public DataStream DataStream { get; private set; }
 
     // Audio/Video Stream's HLSPlaylist
-    internal playlist*              HLSPlaylist     { get; private set; }
+    internal playlist* HLSPlaylist { get; private set; }
 
     // Media Packets
-    public PacketQueue              Packets         { get; private set; }
-    public PacketQueue              AudioPackets    { get; private set; }
-    public PacketQueue              VideoPackets    { get; private set; }
-    public PacketQueue              SubtitlesPackets{ get; private set; }
-    public PacketQueue              DataPackets     { get; private set; }
-    public PacketQueue              CurPackets      { get; private set; }
+    public PacketQueue Packets { get; private set; }
+    public PacketQueue AudioPackets { get; private set; }
+    public PacketQueue VideoPackets { get; private set; }
+    public PacketQueue SubtitlesPackets { get; private set; }
+    public PacketQueue DataPackets { get; private set; }
+    public PacketQueue CurPackets { get; private set; }
 
-    public bool                     UseAVSPackets   { get; private set; }
+    public bool UseAVSPackets { get; private set; }
     public PacketQueue GetPacketsPtr(MediaType type)
         => !UseAVSPackets
         ? Packets
@@ -93,23 +98,24 @@ public unsafe class Demuxer : RunThreadBase
 
     public ConcurrentQueue<ConcurrentStack<List<nint>>>
                                     VideoPacketsReverse
-                                                    { get; private set; } = [];
+    { get; private set; } = [];
 
-    public bool                     IsReversePlayback
-                                                    { get; private set; }
+    public bool IsReversePlayback
+    { get; private set; }
 
-    public long                     TotalBytes      { get; private set; } = 0;
+    public long TotalBytes { get; private set; } = 0;
 
     // Interrupt
-    public Interrupter              Interrupter     { get; private set; }
+    public Interrupter Interrupter { get; private set; }
 
     public ObservableCollection<Chapter>
-                                    Chapters        { get; private set; } = [];
+                                    Chapters
+    { get; private set; } = [];
     public class Chapter
     {
-        public long     StartTime   { get; set; }
-        public long     EndTime     { get; set; }
-        public string   Title       { get; set; }
+        public long StartTime { get; set; }
+        public long EndTime { get; set; }
+        public string Title { get; set; }
     }
 
     // CurPackets Callbacks
@@ -184,31 +190,31 @@ public unsafe class Demuxer : RunThreadBase
 
     public Demuxer(DemuxerConfig config, MediaType type = MediaType.Video, int uniqueId = -1, bool useAVSPackets = true) : base(uniqueId)
     {
-        Config          = config;
-        Type            = type;
-        UseAVSPackets   = useAVSPackets;
-        Interrupter     = new Interrupter(this);
+        Config = config;
+        Type = type;
+        UseAVSPackets = useAVSPackets;
+        Interrupter = new Interrupter(this);
         CustomIOContext = new CustomIOContext(this);
 
-        Packets         = new PacketQueue(this);
-        AudioPackets    = new PacketQueue(this);
-        VideoPackets    = new PacketQueue(this);
-        SubtitlesPackets= new PacketQueue(this);
-        DataPackets     = new PacketQueue(this);
-        CurPackets      = Packets; // Will be updated on stream switch in case of AVS
+        Packets = new PacketQueue(this);
+        AudioPackets = new PacketQueue(this);
+        VideoPackets = new PacketQueue(this);
+        SubtitlesPackets = new PacketQueue(this);
+        DataPackets = new PacketQueue(this);
+        CurPackets = Packets; // Will be updated on stream switch in case of AVS
 
         string typeStr = Type == MediaType.Video ? "Main" : Type.ToString();
         threadName = $"Demuxer: {typeStr,5}";
 
         UIInvokeIfRequired(() =>
         {
-            BindingOperations.EnableCollectionSynchronization(Programs,         lockStreams);
-            BindingOperations.EnableCollectionSynchronization(AudioStreams,     lockStreams);
-            BindingOperations.EnableCollectionSynchronization(VideoStreams,     lockStreams);
+            BindingOperations.EnableCollectionSynchronization(Programs, lockStreams);
+            BindingOperations.EnableCollectionSynchronization(AudioStreams, lockStreams);
+            BindingOperations.EnableCollectionSynchronization(VideoStreams, lockStreams);
             BindingOperations.EnableCollectionSynchronization(SubtitlesStreams, lockStreams);
-            BindingOperations.EnableCollectionSynchronization(DataStreams,      lockStreams);
+            BindingOperations.EnableCollectionSynchronization(DataStreams, lockStreams);
 
-            BindingOperations.EnableCollectionSynchronization(Chapters,         lockStreams);
+            BindingOperations.EnableCollectionSynchronization(Chapters, lockStreams);
         });
 
         ioopen = IOOpen;
@@ -230,8 +236,8 @@ public unsafe class Demuxer : RunThreadBase
         else
             Packets.Clear();
 
-        hlsStartTime        = NoTs;
-        lastVideoPacketPts  = NoTs;
+        hlsStartTime = NoTs;
+        lastVideoPacketPts = NoTs;
     }
 
     public void DisposePacketsReverse()
@@ -244,7 +250,8 @@ public unsafe class Demuxer : RunThreadBase
                 t1.TryPop(out var t2);
                 for (int i = 0; i < t2.Count; i++)
                 {
-                    if (t2[i] == 0) continue;
+                    if (t2[i] == 0)
+                        continue;
                     AVPacket* packet = (AVPacket*)t2[i];
                     av_packet_free(&packet);
                 }
@@ -256,7 +263,8 @@ public unsafe class Demuxer : RunThreadBase
             curReverseVideoStack.TryPop(out var t2);
             for (int i = 0; i < t2.Count; i++)
             {
-                if (t2[i] == 0) continue;
+                if (t2[i] == 0)
+                    continue;
                 AVPacket* packet = (AVPacket*)t2[i];
                 av_packet_free(&packet);
             }
@@ -274,14 +282,14 @@ public unsafe class Demuxer : RunThreadBase
 
             Stop();
 
-            Url                 = null;
-            hlsCtx              = null;
-            analyzed            = false;
-            IsReversePlayback   = false;
-            curReverseStopPts   = NoTs;
-            curReverseStartPts  = NoTs;
-            hlsPrevSeqNo        = NoTs;
-            lastSeekTime        = 0;
+            Url = null;
+            hlsCtx = null;
+            analyzed = false;
+            IsReversePlayback = false;
+            curReverseStopPts = NoTs;
+            curReverseStartPts = NoTs;
+            hlsPrevSeqNo = NoTs;
+            lastSeekTime = 0;
 
             // Free Streams
             lock (lockStreams)
@@ -295,23 +303,28 @@ public unsafe class Demuxer : RunThreadBase
                 Chapters.Clear();
             }
             EnabledStreams.Clear();
-            AudioStream         = null;
-            VideoStream         = null;
-            SubtitlesStream     = null;
-            DataStream          = null;
-            queryParams         = null;
-            queryCachedBytes    = null;
+            AudioStream = null;
+            VideoStream = null;
+            SubtitlesStream = null;
+            DataStream = null;
+            queryParams = null;
+            queryCachedBytes = null;
 
             DisposePackets();
 
             if (fmtCtx != null)
             {
                 Interrupter.CloseRequest();
-                fixed (AVFormatContext** ptr = &fmtCtx) { avformat_close_input(ptr); fmtCtx = null; }
+                fixed (AVFormatContext** ptr = &fmtCtx)
+                { avformat_close_input(ptr); fmtCtx = null; }
             }
 
-            if (avoptCopy != null) fixed (AVDictionary** ptr = &avoptCopy) av_dict_free(ptr);
-            if (packet != null) fixed (AVPacket** ptr = &packet) av_packet_free(ptr);
+            if (avoptCopy != null)
+                fixed (AVDictionary** ptr = &avoptCopy)
+                    av_dict_free(ptr);
+            if (packet != null)
+                fixed (AVPacket** ptr = &packet)
+                    av_packet_free(ptr);
 
             CustomIOContext.Dispose();
 
@@ -325,8 +338,8 @@ public unsafe class Demuxer : RunThreadBase
     #endregion
 
     #region Open / Seek / Run
-    public string Open(string url)      => Open(url, null);
-    public string Open(Stream stream)   => Open(null, stream);
+    public string Open(string url) => Open(url, null);
+    public string Open(Stream stream) => Open(null, stream);
     public string Open(string url, Stream stream)
     {
         bool    gotLockActions  = false;
@@ -335,7 +348,7 @@ public unsafe class Demuxer : RunThreadBase
 
         try
         {
-            Monitor.Enter(lockActions,ref gotLockActions);
+            Monitor.Enter(lockActions, ref gotLockActions);
             Dispose();
             Monitor.Enter(lockFmtCtx, ref gotLockFmtCtx);
             Url = url;
@@ -349,7 +362,7 @@ public unsafe class Demuxer : RunThreadBase
             int             ret         = -1;
 
             Disposed = false;
-            Status   = Status.Opening;
+            Status = Status.Opening;
 
             // Allocate / Prepare Format Context
             fmtCtx = avformat_alloc_context();
@@ -406,19 +419,19 @@ public unsafe class Demuxer : RunThreadBase
                     int     inputEnds   = query.IndexOf('&');
 
                     if (inputEnds == -1)
-                        urlFromUrl  = query;
+                        urlFromUrl = query;
                     else
                     {
-                        urlFromUrl  = query[..inputEnds];
-                        query       = query[(inputEnds + 1)..];
+                        urlFromUrl = query[..inputEnds];
+                        query = query[(inputEnds + 1)..];
 
                         fmtOptExtra = ParseQueryString(query);
                     }
                 }
 
-                url     = urlFromUrl;
-                fmtStr  = fmtStr.Replace("/", "");
-                inFmt   = av_find_input_format(fmtStr);
+                url = urlFromUrl;
+                fmtStr = fmtStr.Replace("/", "");
+                inFmt = av_find_input_format(fmtStr);
                 if (inFmt == null)
                     return error = $"[av_find_input_format] {fmtStr} not found";
             }
@@ -497,8 +510,10 @@ public unsafe class Demuxer : RunThreadBase
             else
                 OpenFormat(url, inFmt, fmtOptExtra, out ret);
 
-            if ((ret == AVERROR_EXIT && !Interrupter.Timedout) || Status != Status.Opening || Interrupter.ForceInterrupt == 1) { if (ret < 0) fmtCtx = null; return error = "Cancelled"; }
-            if (ret < 0) { fmtCtx = null; return error = Interrupter.Timedout ? "[avformat_open_input] Timeout" : $"[avformat_open_input] {FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})"; }
+            if ((ret == AVERROR_EXIT && !Interrupter.Timedout) || Status != Status.Opening || Interrupter.ForceInterrupt == 1)
+            { if (ret < 0) fmtCtx = null; return error = "Cancelled"; }
+            if (ret < 0)
+            { fmtCtx = null; return error = Interrupter.Timedout ? "[avformat_open_input] Timeout" : $"[avformat_open_input] {FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})"; }
 
             Name = BytePtrToStringUTF8(fmtCtx->iformat->name);
 
@@ -525,7 +540,7 @@ public unsafe class Demuxer : RunThreadBase
                         if (fmtCtx->streams[i]->codecpar->codec_id == AVCodecID.HdmvPgsSubtitle ||
                             fmtCtx->streams[i]->codecpar->codec_id == AVCodecID.DvdSubtitle
                             )
-                            { requiresMoreAnalyse = true; break; }
+                        { requiresMoreAnalyse = true; break; }
 
                     if (requiresMoreAnalyse)
                     {
@@ -535,8 +550,10 @@ public unsafe class Demuxer : RunThreadBase
                 }
 
                 ret = avformat_find_stream_info(fmtCtx, null);
-                if (ret == AVERROR_EXIT || Status != Status.Opening || Interrupter.ForceInterrupt == 1) return error = "Cancelled";
-                if (ret < 0) return error = $"[avformat_find_stream_info] {FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})";
+                if (ret == AVERROR_EXIT || Status != Status.Opening || Interrupter.ForceInterrupt == 1)
+                    return error = "Cancelled";
+                if (ret < 0)
+                    return error = $"[avformat_find_stream_info] {FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})";
                 analyzed = true;
             }
 
@@ -569,8 +586,10 @@ public unsafe class Demuxer : RunThreadBase
             if (error != null)
                 Dispose();
 
-            if (gotLockFmtCtx)  Monitor.Exit(lockFmtCtx);
-            if (gotLockActions) Monitor.Exit(lockActions);
+            if (gotLockFmtCtx)
+                Monitor.Exit(lockFmtCtx);
+            if (gotLockActions)
+                Monitor.Exit(lockActions);
         }
     }
 
@@ -604,7 +623,7 @@ public unsafe class Demuxer : RunThreadBase
             AVDictionaryEntry* existingHeaders = av_dict_get(*avFmtOpts, "headers", null, DictReadFlags.IgnoreSuffix);
             if (existingHeaders != null)
                 headers = BytePtrToStringUTF8(existingHeaders->value) + headers;
-            
+
             _ = av_dict_set(avFmtOpts, "headers", headers, 0);
         }
 
@@ -633,7 +652,7 @@ public unsafe class Demuxer : RunThreadBase
                 urlNoQuery.CopyTo(urlSpan);
                 queryCachedBytes.AsSpan().CopyTo(urlSpan[urlNoQuery.Length..]);
 
-                fixed(byte* urlPtr =  urlSpan)
+                fixed (byte* urlPtr = urlSpan)
                     ret = ioopenDefault(s, pb, urlPtr, flags, avFmtOpts);
             }
 
@@ -657,7 +676,7 @@ public unsafe class Demuxer : RunThreadBase
                 urlNoQuery.CopyTo(urlSpan);
                 Encoding.UTF8.GetBytes(newQuery).AsSpan().CopyTo(urlSpan[urlNoQuery.Length..]);
 
-                fixed(byte* urlPtr =  urlSpan)
+                fixed (byte* urlPtr = urlSpan)
                     ret = ioopenDefault(s, pb, urlPtr, flags, avFmtOpts);
             }
         }
@@ -703,10 +722,10 @@ public unsafe class Demuxer : RunThreadBase
                 _ = av_dict_set(&avopt, optKV.Key, optKV.Value, 0);
 
         // Always copy to avoptCopy to ensure it's available for sub-requests via IOOpen
-        fixed(AVDictionary** ptr = &avoptCopy)
+        fixed (AVDictionary** ptr = &avoptCopy)
             _ = av_dict_copy(ptr, avopt, 0);
 
-        fixed(AVFormatContext** fmtCtxPtr = &fmtCtx)
+        fixed (AVFormatContext** fmtCtxPtr = &fmtCtx)
             ret = avformat_open_input(fmtCtxPtr, url, inFmt, avopt == null ? null : &avopt);
 
         if (avopt != null)
@@ -723,9 +742,9 @@ public unsafe class Demuxer : RunThreadBase
     }
     private void FillInfo()
     {
-        LongName    = BytePtrToStringUTF8(fmtCtx->iformat->long_name);
-        Extensions  = BytePtrToStringUTF8(fmtCtx->iformat->extensions);
-        Extension   = GetValidExtension();
+        LongName = BytePtrToStringUTF8(fmtCtx->iformat->long_name);
+        Extensions = BytePtrToStringUTF8(fmtCtx->iformat->extensions);
+        Extension = GetValidExtension();
 
         // External Streams (mainly for .sub will have as start time the first subs timestamp)
         StartTime = fmtCtx->start_time == NoTs || (fmtCtx->nb_streams == 1 && fmtCtx->streams[0]->codecpar->codec_type == AVMediaType.Subtitle) ? 0 : fmtCtx->start_time * 10;
@@ -737,13 +756,14 @@ public unsafe class Demuxer : RunThreadBase
         while (true)
         {
             b = av_dict_get(fmtCtx->metadata, "", b, DictReadFlags.IgnoreSuffix);
-            if (b == null) break;
+            if (b == null)
+                break;
             Metadata[BytePtrToStringUTF8(b->key)] = BytePtrToStringUTF8(b->value); // Same key might exists twice (https://github.com/SuRGeoNix/Flyleaf/issues/662)
         }
 
         bool audioHasEng= false;
         bool subsHasEng = false;
-        AVStreamToStream= [];
+        AVStreamToStream = [];
 
         for (int i = 0; i < fmtCtx->nb_streams; i++)
         {
@@ -783,7 +803,7 @@ public unsafe class Demuxer : RunThreadBase
                         VideoStreams.Add(new(this, stream));
                         AVStreamToStream.Add(stream->index, VideoStreams[^1]);
                     }
-                        
+
                     break;
 
                 case AVMediaType.Subtitle:
@@ -806,12 +826,12 @@ public unsafe class Demuxer : RunThreadBase
         }
 
         if (!audioHasEng)
-            for (int i=0; i<AudioStreams.Count; i++)
+            for (int i = 0; i < AudioStreams.Count; i++)
                 if (AudioStreams[i].Language.Culture == null && AudioStreams[i].Language.OriginalInput == null)
                     AudioStreams[i].Language = Language.English;
 
         if (!subsHasEng && Type == MediaType.Video)
-            for (int i=0; i<SubtitlesStreams.Count; i++)
+            for (int i = 0; i < SubtitlesStreams.Count; i++)
                 if (SubtitlesStreams[i].Language.Culture == null && SubtitlesStreams[i].Language.OriginalInput == null)
                     SubtitlesStreams[i].Language = Language.English;
 
@@ -830,7 +850,7 @@ public unsafe class Demuxer : RunThreadBase
         // Try to fill duration when missing (not analyzed mainly) | Considers CFR
         if (duration == 0 && !analyzed && hlsCtx == null)
         {
-            foreach(var videoStream in VideoStreams)
+            foreach (var videoStream in VideoStreams)
                 if (videoStream.TotalFrames > 0 && videoStream.FrameDuration > 0)
                 {
                     duration = videoStream.TotalFrames * videoStream.FrameDuration;
@@ -883,7 +903,7 @@ public unsafe class Demuxer : RunThreadBase
             if (fmtCtx->nb_programs > 0)
                 dump += $"\r\n[Programs]\r\n{GetDumpPrograms()}";
 
-            foreach(var stream in AVStreamToStream.Values)
+            foreach (var stream in AVStreamToStream.Values)
                 dump += $"\r\n{stream.GetDump()}\r\n";
 
             if (dumpChapters != "")
@@ -914,13 +934,13 @@ public unsafe class Demuxer : RunThreadBase
             }
 
             if (CanDebug)
-                dump += $"\t#{i+1:D2}: {TicksToTime((long)(chp->start * tb) - StartTime)} - {TicksToTime((long)(chp->end * tb) - StartTime)} | {title}\r\n";
+                dump += $"\t#{i + 1:D2}: {TicksToTime((long)(chp->start * tb) - StartTime)} - {TicksToTime((long)(chp->end * tb) - StartTime)} | {title}\r\n";
 
             Chapters.Add(new Chapter()
             {
-                StartTime   = (long)((chp->start * tb) - StartTime),
-                EndTime     = (long)((chp->end * tb) - StartTime),
-                Title       = title
+                StartTime = (long)((chp->start * tb) - StartTime),
+                EndTime = (long)((chp->end * tb) - StartTime),
+                Title = title
             });
         }
 
@@ -928,7 +948,7 @@ public unsafe class Demuxer : RunThreadBase
     }
     string GetDump(string chapters) =>
         $"""
-        [Time	 ] {TicksToTime(StartTime)} / {TicksToTime(Duration)}{(fmtCtx->duration != NoTs ? $" (based on {fmtCtx->duration_estimation_method})" : "")}{(fmtCtx->start_time_realtime != NoTs ? $" [RealTime: {StartRealTime.ToLocalTime()}]" : "")}{(fmtCtx->bit_rate > 0 ? $", {fmtCtx->bit_rate/1000} kb/s" : "")}
+        [Time	 ] {TicksToTime(StartTime)} / {TicksToTime(Duration)}{(fmtCtx->duration != NoTs ? $" (based on {fmtCtx->duration_estimation_method})" : "")}{(fmtCtx->start_time_realtime != NoTs ? $" [RealTime: {StartRealTime.ToLocalTime()}]" : "")}{(fmtCtx->bit_rate > 0 ? $", {fmtCtx->bit_rate / 1000} kb/s" : "")}
         [Format  ] {LongName} ({Name}){(fmtCtx->iformat->flags != FmtFlags.None ? $" [Flags: {fmtCtx->iformat->flags}]" : "")}{(fmtCtx->ctx_flags != FmtCtxFlags.None ? $" [CtxFlags: {fmtCtx->ctx_flags}]" : "")}{(fmtCtx->iformat->mime_type != null ? $" [Mime: {BytePtrToStringUTF8(fmtCtx->iformat->mime_type)}]" : "")}{(Extensions != null ? $" [Ext(s): {Extensions}]" : "")}
         """;
     string GetDumpPrograms()
@@ -952,7 +972,7 @@ public unsafe class Demuxer : RunThreadBase
     string GetDumpStreams()
     {
         string dump = "";
-        foreach(var stream in AVStreamToStream.Values)
+        foreach (var stream in AVStreamToStream.Values)
             dump += stream.GetDump() + "\r\n";
 
         return dump;
@@ -962,7 +982,8 @@ public unsafe class Demuxer : RunThreadBase
     {
         lock (lockActions)
         {
-            if (Disposed) return -1;
+            if (Disposed)
+                return -1;
 
             /* Seek within current bufffered queue
              *
@@ -976,7 +997,7 @@ public unsafe class Demuxer : RunThreadBase
 
             if (hlsCtx != null)
             {
-                ticks    += hlsStartTime - (hlsCtx->first_timestamp * 10);
+                ticks += hlsStartTime - (hlsCtx->first_timestamp * 10);
                 startTime = hlsStartTime;
             }
 
@@ -988,11 +1009,11 @@ public unsafe class Demuxer : RunThreadBase
                     var packet = VideoPackets.Peek();
                     if (packet->pts != NoTs && ticks < packet->pts * VideoStream.Timebase && (packet->flags & PktFlags.Key) != 0)
                     {
-                        if (!forward && ticks < (long) (packet->pts * VideoStream.Timebase)) // asked backward but the keyframe is forward
+                        if (!forward && ticks < (long)(packet->pts * VideoStream.Timebase)) // asked backward but the keyframe is forward
                             break;
 
                         found = true;
-                        ticks = (long) (packet->pts * VideoStream.Timebase);
+                        ticks = (long)(packet->pts * VideoStream.Timebase);
                         lastVideoPacketPts = packet->pts;
                         break;
                     }
@@ -1068,7 +1089,8 @@ public unsafe class Demuxer : RunThreadBase
 
         lock (lockActions)
         {
-            if (Disposed) return -1;
+            if (Disposed)
+                return -1;
 
             int ret;
             long savedPbPos = 0;
@@ -1095,37 +1117,40 @@ public unsafe class Demuxer : RunThreadBase
                 Interrupter.SeekRequest();
                 if (VideoStream != null)
                 {
-                    if (CanDebug) Log.Debug($"[Seek({(forward ? "->" : "<-")})] Requested at {new TimeSpan(ticks)}");
+                    if (CanDebug)
+                        Log.Debug($"[Seek({(forward ? "->" : "<-")})] Requested at {new TimeSpan(ticks)}");
 
                     // TODO: After proper calculation of Duration
                     //if (VideoStream.FixTimestamps && Duration > 0)
-                        //ret = av_seek_frame(fmtCtx, -1, (long)((ticks/(double)Duration) * avio_size(fmtCtx->pb)), AVSEEK_FLAG_BYTE);
+                    //ret = av_seek_frame(fmtCtx, -1, (long)((ticks/(double)Duration) * avio_size(fmtCtx->pb)), AVSEEK_FLAG_BYTE);
                     //else
                     ret = ticks == StartTime // we should also call this if we seek anywhere within the first Gop
                         ? avformat_seek_file(fmtCtx, -1, 0, 0, 0, 0)
                         : av_seek_frame(fmtCtx, -1, ticks / 10, forward ? SeekFlags.Frame : SeekFlags.Backward);
 
                     curReverseStopPts = NoTs;
-                    curReverseStartPts= NoTs;
+                    curReverseStartPts = NoTs;
                 }
                 else
                 {
-                    if (CanDebug) Log.Debug($"[Seek({(forward ? "->" : "<-")})] Requested at {new TimeSpan(ticks)} | ANY");
+                    if (CanDebug)
+                        Log.Debug($"[Seek({(forward ? "->" : "<-")})] Requested at {new TimeSpan(ticks)} | ANY");
                     ret = forward ?
-                        avformat_seek_file(fmtCtx, -1, ticks / 10   , ticks / 10, long.MaxValue , SeekFlags.Any):
-                        avformat_seek_file(fmtCtx, -1, long.MinValue, ticks / 10, ticks / 10    , SeekFlags.Any);
+                        avformat_seek_file(fmtCtx, -1, ticks / 10, ticks / 10, long.MaxValue, SeekFlags.Any) :
+                        avformat_seek_file(fmtCtx, -1, long.MinValue, ticks / 10, ticks / 10, SeekFlags.Any);
                 }
 
                 if (ret < 0)
                 {
-                    if (hlsCtx != null) fmtCtx->ctx_flags &= ~FmtCtxFlags.Unseekable;
+                    if (hlsCtx != null)
+                        fmtCtx->ctx_flags &= ~FmtCtxFlags.Unseekable;
                     Log.Info($"Seek failed 1/2 (retrying) {FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
 
                     ret = VideoStream != null
                         ? av_seek_frame(fmtCtx, -1, ticks / 10, forward ? SeekFlags.Backward : SeekFlags.Frame)
                         : forward ?
-                            avformat_seek_file(fmtCtx, -1, long.MinValue, ticks / 10, ticks / 10    , SeekFlags.Any):
-                            avformat_seek_file(fmtCtx, -1, ticks / 10   , ticks / 10, long.MaxValue , SeekFlags.Any);
+                            avformat_seek_file(fmtCtx, -1, long.MinValue, ticks / 10, ticks / 10, SeekFlags.Any) :
+                            avformat_seek_file(fmtCtx, -1, ticks / 10, ticks / 10, long.MaxValue, SeekFlags.Any);
 
                     if (ret < 0)
                     {
@@ -1148,7 +1173,9 @@ public unsafe class Demuxer : RunThreadBase
                     lastSeekTime = ticks - StartTime - (hlsCtx != null ? hlsStartTime : 0);
 
                 DisposePackets();
-                lock (lockStatus) if (Status == Status.Ended) Status = Status.Stopped;
+                lock (lockStatus)
+                    if (Status == Status.Ended)
+                        Status = Status.Stopped;
             }
 
             return ret; // >= 0 for success
@@ -1174,15 +1201,18 @@ public unsafe class Demuxer : RunThreadBase
             if (BufferedDuration > Config.BufferDuration || (Config.BufferPackets != 0 && CurPackets.Count > Config.BufferPackets))
             {
                 lock (lockStatus)
-                    if (Status == Status.Running) Status = Status.QueueFull;
+                    if (Status == Status.Running)
+                        Status = Status.QueueFull;
 
                 while (!PauseOnQueueFull && (BufferedDuration > Config.BufferDuration || (Config.BufferPackets != 0 && CurPackets.Count > Config.BufferPackets)) && Status == Status.QueueFull)
                     Thread.Sleep(20);
 
                 lock (lockStatus)
                 {
-                    if (PauseOnQueueFull) { PauseOnQueueFull = false; Status = Status.Pausing; }
-                    if (Status != Status.QueueFull) break;
+                    if (PauseOnQueueFull)
+                    { PauseOnQueueFull = false; Status = Status.Pausing; }
+                    if (Status != Status.QueueFull)
+                        break;
                     Status = Status.Running;
                 }
             }
@@ -1224,9 +1254,11 @@ public unsafe class Demuxer : RunThreadBase
                     }
 
                     allowedErrors--;
-                    if (CanWarn) Log.Warn($"{FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
+                    if (CanWarn)
+                        Log.Warn($"{FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
 
-                    if (allowedErrors == 0) { Log.Error("Too many errors!"); Status = Status.Stopping; break; }
+                    if (allowedErrors == 0)
+                    { Log.Error("Too many errors!"); Status = Status.Stopping; break; }
 
                     gotAVERROR_EXIT = true;
                     continue;
@@ -1235,7 +1267,8 @@ public unsafe class Demuxer : RunThreadBase
                 TotalBytes += packet->size;
 
                 // Skip Disabled Streams | TODO: It's possible that the streams will changed (add/remove or even update/change of codecs)
-                if (!EnabledStreams.Contains(packet->stream_index)) { av_packet_unref(packet); continue; }
+                if (!EnabledStreams.Contains(packet->stream_index))
+                { av_packet_unref(packet); continue; }
 
                 if (IsHLSLive)
                     UpdateHLSTime();
@@ -1337,14 +1370,18 @@ public unsafe class Demuxer : RunThreadBase
             if (VideoPacketsReverse.Count > maxQueueSize)
             {
                 lock (lockStatus)
-                    if (Status == Status.Running) Status = Status.QueueFull;
+                    if (Status == Status.Running)
+                        Status = Status.QueueFull;
 
-                while (!PauseOnQueueFull && VideoPacketsReverse.Count > maxQueueSize && Status == Status.QueueFull) { Thread.Sleep(20); }
+                while (!PauseOnQueueFull && VideoPacketsReverse.Count > maxQueueSize && Status == Status.QueueFull)
+                { Thread.Sleep(20); }
 
                 lock (lockStatus)
                 {
-                    if (PauseOnQueueFull) { PauseOnQueueFull = false; Status = Status.Pausing; }
-                    if (Status != Status.QueueFull) break;
+                    if (PauseOnQueueFull)
+                    { PauseOnQueueFull = false; Status = Status.Pausing; }
+                    if (Status != Status.QueueFull)
+                        break;
                     Status = Status.Running;
                 }
             }
@@ -1363,7 +1400,8 @@ public unsafe class Demuxer : RunThreadBase
                 ret = av_read_frame(fmtCtx, packet);
                 if (Interrupter.ForceInterrupt != 0)
                 {
-                    av_packet_unref(packet); gotAVERROR_EXIT = true;
+                    av_packet_unref(packet);
+                    gotAVERROR_EXIT = true;
                     continue;
                 }
 
@@ -1412,15 +1450,18 @@ public unsafe class Demuxer : RunThreadBase
                     }
 
                     allowedErrors--;
-                    if (CanWarn) Log.Warn($"{ FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
+                    if (CanWarn)
+                        Log.Warn($"{FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
 
-                    if (allowedErrors == 0) { Log.Error("Too many errors!"); Status = Status.Stopping; break; }
+                    if (allowedErrors == 0)
+                    { Log.Error("Too many errors!"); Status = Status.Stopping; break; }
 
                     gotAVERROR_EXIT = true;
                     continue;
                 }
 
-                if (VideoStream.StreamIndex != packet->stream_index) { av_packet_unref(packet); continue; }
+                if (VideoStream.StreamIndex != packet->stream_index)
+                { av_packet_unref(packet); continue; }
 
                 if ((packet->flags & PktFlags.Key) != 0)
                 {
@@ -1439,16 +1480,18 @@ public unsafe class Demuxer : RunThreadBase
                 }
 
                 if (packet->pts != NoTs && (
-                    (curReverseStopRequestedPts != NoTs && curReverseStopRequestedPts <= packet->pts)  ||
-                    (curReverseStopPts == NoTs && (packet->flags & PktFlags.Key) != 0 && packet->pts != curReverseStartPts)     ||
+                    (curReverseStopRequestedPts != NoTs && curReverseStopRequestedPts <= packet->pts) ||
+                    (curReverseStopPts == NoTs && (packet->flags & PktFlags.Key) != 0 && packet->pts != curReverseStartPts) ||
                     (packet->pts == curReverseStopPts)
                     ))
                 {
                     if (curReverseStartPts == NoTs || curReverseStopPts == curReverseStartPts)
                     {
                         curReverseSeekOffset *= 2;
-                        if (curReverseStartPts == NoTs) curReverseStartPts = curReverseStopPts;
-                        if (curReverseStartPts == NoTs) curReverseStartPts = curReverseStopRequestedPts;
+                        if (curReverseStartPts == NoTs)
+                            curReverseStartPts = curReverseStopPts;
+                        if (curReverseStartPts == NoTs)
+                            curReverseStartPts = curReverseStopRequestedPts;
                     }
 
                     curReverseStopRequestedPts = NoTs;
@@ -1487,8 +1530,8 @@ public unsafe class Demuxer : RunThreadBase
                         break;
                     }
 
-                    curReverseStopPts   = curReverseStartPts;
-                    curReverseStartPts  = NoTs;
+                    curReverseStopPts = curReverseStartPts;
+                    curReverseStartPts = NoTs;
                 }
                 else
                 {
@@ -1517,8 +1560,8 @@ public unsafe class Demuxer : RunThreadBase
     #region Switch Programs / Streams
     public bool IsProgramEnabled(StreamBase stream)
     {
-        for (int i=0; i<Programs.Count; i++)
-            for (int l=0; l<Programs[i].Streams.Count; l++)
+        for (int i = 0; i < Programs.Count; i++)
+            for (int l = 0; l < Programs[i].Streams.Count; l++)
                 if (Programs[i].Streams[l].StreamIndex == stream.StreamIndex && fmtCtx->programs[i]->discard != AVDiscard.All)
                     return true;
 
@@ -1528,35 +1571,38 @@ public unsafe class Demuxer : RunThreadBase
     {
         if (IsProgramEnabled(stream))
         {
-            if (CanDebug) Log.Debug($"[Stream #{stream.StreamIndex}] Program already enabled");
+            if (CanDebug)
+                Log.Debug($"[Stream #{stream.StreamIndex}] Program already enabled");
             return;
         }
 
-        for (int i=0; i<Programs.Count; i++)
-            for (int l=0; l<Programs[i].Streams.Count; l++)
+        for (int i = 0; i < Programs.Count; i++)
+            for (int l = 0; l < Programs[i].Streams.Count; l++)
                 if (Programs[i].Streams[l].StreamIndex == stream.StreamIndex)
                 {
-                    if (CanDebug) Log.Debug($"[Stream #{stream.StreamIndex}] Enables program #{i}");
+                    if (CanDebug)
+                        Log.Debug($"[Stream #{stream.StreamIndex}] Enables program #{i}");
                     fmtCtx->programs[i]->discard = AVDiscard.Default;
                     return;
                 }
     }
     public void DisableProgram(StreamBase stream)
     {
-        for (int i=0; i<Programs.Count; i++)
-            for (int l=0; l<Programs[i].Streams.Count; l++)
+        for (int i = 0; i < Programs.Count; i++)
+            for (int l = 0; l < Programs[i].Streams.Count; l++)
                 if (Programs[i].Streams[l].StreamIndex == stream.StreamIndex && fmtCtx->programs[i]->discard != AVDiscard.All)
                 {
                     bool isNeeded = false;
-                    for (int l2=0; l2<Programs[i].Streams.Count; l2++)
+                    for (int l2 = 0; l2 < Programs[i].Streams.Count; l2++)
                     {
                         if (Programs[i].Streams[l2].StreamIndex != stream.StreamIndex && EnabledStreams.Contains(Programs[i].Streams[l2].StreamIndex))
-                            {isNeeded = true; break; }
+                        { isNeeded = true; break; }
                     }
 
                     if (!isNeeded)
                     {
-                        if (CanDebug) Log.Debug($"[Stream #{stream.StreamIndex}] Disables program #{i}");
+                        if (CanDebug)
+                            Log.Debug($"[Stream #{stream.StreamIndex}] Disables program #{i}");
                         fmtCtx->programs[i]->discard = AVDiscard.All;
                     }
                     else if (CanDebug)
@@ -1568,7 +1614,8 @@ public unsafe class Demuxer : RunThreadBase
     {
         lock (lockFmtCtx)
         {
-            if (Disposed || stream == null || EnabledStreams.Contains(stream.StreamIndex)) return;
+            if (Disposed || stream == null || EnabledStreams.Contains(stream.StreamIndex))
+                return;
 
             EnabledStreams.Add(stream.StreamIndex);
             fmtCtx->streams[stream.StreamIndex]->discard = AVDiscard.Default;
@@ -1578,7 +1625,7 @@ public unsafe class Demuxer : RunThreadBase
             switch (stream.Type)
             {
                 case MediaType.Audio:
-                    AudioStream = (AudioStream) stream;
+                    AudioStream = (AudioStream)stream;
                     if (VideoStream == null)
                     {
                         if (AudioStream.HLSPlaylist != null)
@@ -1597,7 +1644,7 @@ public unsafe class Demuxer : RunThreadBase
                     break;
 
                 case MediaType.Video:
-                    VideoStream = (VideoStream) stream;
+                    VideoStream = (VideoStream)stream;
                     VideoPackets.frameDuration = VideoStream.FrameDuration > 0 ? VideoStream.FrameDuration : 30 * 1000 * 10000;
                     if (VideoStream.HLSPlaylist != null)
                     {
@@ -1614,12 +1661,12 @@ public unsafe class Demuxer : RunThreadBase
                     break;
 
                 case MediaType.Subs:
-                    SubtitlesStream = (SubtitlesStream) stream;
+                    SubtitlesStream = (SubtitlesStream)stream;
 
                     break;
 
                 case MediaType.Data:
-                    DataStream = (DataStream) stream;
+                    DataStream = (DataStream)stream;
 
                     break;
             }
@@ -1627,14 +1674,16 @@ public unsafe class Demuxer : RunThreadBase
             if (UseAVSPackets)
                 CurPackets = VideoStream != null ? VideoPackets : (AudioStream != null ? AudioPackets : (SubtitlesStream != null ? SubtitlesPackets : DataPackets));
 
-            if (CanInfo) Log.Info($"[{stream.Type} #{stream.StreamIndex}] Enabled");
+            if (CanInfo)
+                Log.Info($"[{stream.Type} #{stream.StreamIndex}] Enabled");
         }
     }
     public void DisableStream(StreamBase stream)
     {
         lock (lockFmtCtx)
         {
-            if (Disposed || stream == null || !EnabledStreams.Contains(stream.StreamIndex)) return;
+            if (Disposed || stream == null || !EnabledStreams.Contains(stream.StreamIndex))
+                return;
 
             /* TBR
              * We freeze UI here on Live Streams while demuxer is holding the lock and waits for new packets
@@ -1710,7 +1759,8 @@ public unsafe class Demuxer : RunThreadBase
             if (UseAVSPackets)
                 CurPackets = VideoStream != null ? VideoPackets : (AudioStream != null ? AudioPackets : SubtitlesPackets);
 
-            if (CanInfo) Log.Info($"[{stream.Type} #{stream.StreamIndex}] Disabled");
+            if (CanInfo)
+                Log.Info($"[{stream.Type} #{stream.StreamIndex}] Disabled");
         }
     }
     public void SwitchStream(StreamBase stream)
@@ -1751,7 +1801,7 @@ public unsafe class Demuxer : RunThreadBase
                 duration += HLSPlaylist->segments[i]->duration;
 
             hlsCurDuration *= 10;
-            Duration        = duration * 10;
+            Duration = duration * 10;
         }
 
         if (hlsStartTime == NoTs && CurPackets.LastTimestamp != NoTs)
@@ -1779,33 +1829,39 @@ public unsafe class Demuxer : RunThreadBase
         bool isRaw = false;
 
         foreach (var stream in AudioStreams)
-            if (stream.Codec.Contains("pcm")) hasPcm = true;
+            if (stream.Codec.Contains("pcm"))
+                hasPcm = true;
 
         foreach (var stream in VideoStreams)
-            if (stream.Codec.Contains("raw")) isRaw = true;
+            if (stream.Codec.Contains("raw"))
+                isRaw = true;
 
-        if (isRaw) defaultExtenstion = "avi";
+        if (isRaw)
+            defaultExtenstion = "avi";
 
         // MP4 container doesn't support PCM
-        if (hasPcm) defaultExtenstion = "mkv";
+        if (hasPcm)
+            defaultExtenstion = "mkv";
 
         // TODO
         // Check also shortnames
         //if (Name == "mpegts") return "ts";
         //if ((fmtCtx->iformat->flags & AVFMT_TS_DISCONT) != 0) should be mp4 or container that supports segments
 
-        if (string.IsNullOrEmpty(Extensions)) return defaultExtenstion;
+        if (string.IsNullOrEmpty(Extensions))
+            return defaultExtenstion;
         string[] extensions = Extensions.Split(',');
-        if (extensions == null || extensions.Length < 1) return defaultExtenstion;
+        if (extensions == null || extensions.Length < 1)
+            return defaultExtenstion;
 
         // Try to set the output container same as input
-        for (int i=0; i<extensions.Length; i++)
+        for (int i = 0; i < extensions.Length; i++)
             if (supportedOutput.Contains(extensions[i]))
                 return extensions[i] == "mp4" && isRaw ? "mov" : extensions[i];
 
         return defaultExtenstion;
     }
-    
+
     /// <summary>
     /// Gets next VideoPacket from the existing queue or demuxes it if required (Demuxer must not be running)
     /// </summary>
@@ -1859,7 +1915,7 @@ public unsafe class Demuxer : RunThreadBase
             }
             else if (EnabledStreams.Contains(packet->stream_index))
                 return 0;
-            
+
             av_packet_unref(packet);
         }
     }
@@ -1872,40 +1928,41 @@ public unsafe class PacketQueue : Queue<nint>
     readonly Demuxer demuxer;
     public long frameDuration = 30 * 1000 * 10000; // in case of negative buffer duration calculate it based on packets count / FPS
 
-    public long Bytes               { get; private set; }
-    public long BufferedDuration    { get; private set; }
-    public long CurTime             { get; private set; }
+    public long Bytes { get; private set; }
+    public long BufferedDuration { get; private set; }
+    public long CurTime { get; private set; }
 
-    public long FirstTimestamp      { get; private set; } = NoTs;
-    public long LastTimestamp       { get; private set; } = NoTs;
-    public bool IsEmpty             => Count == 0;
+    public long FirstTimestamp { get; private set; } = NoTs;
+    public long LastTimestamp { get; private set; } = NoTs;
+    public bool IsEmpty => Count == 0;
 
     public PacketQueue(Demuxer demuxer) : base()
         => this.demuxer = demuxer;
 
-    #if DEBUG
+#if DEBUG
     // Ensures we don't access base queue directly
-    public new void Enqueue     (nint _)    => throw new NotImplementedException("Use AVPacket*");
-    public new bool TryDequeue  (out nint _)=> throw new NotImplementedException("Use AVPacket*");
-    public new bool TryPeek     (out nint _)=> throw new NotImplementedException("Use AVPacket*");
-    #endif
+    public new void Enqueue(nint _) => throw new NotImplementedException("Use AVPacket*");
+    public new bool TryDequeue(out nint _) => throw new NotImplementedException("Use AVPacket*");
+    public new bool TryPeek(out nint _) => throw new NotImplementedException("Use AVPacket*");
+#endif
 
     public new void Clear()
     {
-        lock(this)
+        lock (this)
         {
             while (base.TryDequeue(out nint packetPtr))
             {
-                if (packetPtr == 0) continue; // TBR: can be disposed?
+                if (packetPtr == 0)
+                    continue; // TBR: can be disposed?
                 AVPacket* packet = (AVPacket*)packetPtr;
                 av_packet_free(&packet);
             }
 
-            FirstTimestamp  = NoTs;
-            LastTimestamp   = NoTs;
-            Bytes           = 0;
-            BufferedDuration= 0;
-            CurTime         = 0;
+            FirstTimestamp = NoTs;
+            LastTimestamp = NoTs;
+            Bytes = 0;
+            BufferedDuration = 0;
+            CurTime = 0;
         }
     }
 
@@ -1918,7 +1975,7 @@ public unsafe class PacketQueue : Queue<nint>
             if (packet->dts != NoTs || packet->pts != NoTs)
             {
                 LastTimestamp = packet->dts != NoTs ?
-                    (long)(packet->dts * demuxer.AVStreamToStream[packet->stream_index].Timebase):
+                    (long)(packet->dts * demuxer.AVStreamToStream[packet->stream_index].Timebase) :
                     (long)(packet->pts * demuxer.AVStreamToStream[packet->stream_index].Timebase);
 
                 if (FirstTimestamp == NoTs)
@@ -1942,7 +1999,7 @@ public unsafe class PacketQueue : Queue<nint>
 
     public new AVPacket* Dequeue()
     {
-        lock(this)
+        lock (this)
             if (base.TryDequeue(out nint packetPtr))
             {
                 AVPacket* packet = (AVPacket*)packetPtr;
@@ -1950,7 +2007,7 @@ public unsafe class PacketQueue : Queue<nint>
                 if (packet->dts != NoTs || packet->pts != NoTs)
                 {
                     FirstTimestamp = packet->dts != NoTs ?
-                        (long)(packet->dts * demuxer.AVStreamToStream[packet->stream_index].Timebase):
+                        (long)(packet->dts * demuxer.AVStreamToStream[packet->stream_index].Timebase) :
                         (long)(packet->pts * demuxer.AVStreamToStream[packet->stream_index].Timebase);
 
                     UpdateCurTime();
