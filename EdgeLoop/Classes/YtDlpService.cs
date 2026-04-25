@@ -40,7 +40,7 @@ namespace EdgeLoop.Classes {
                 // Detect version asynchronously (non-blocking)
                 _ = DetectVersionAsync();
                 
-                Logger.Info($"yt-dlp service initialized: {_ytDlpPath}");
+                Logger.Debug($"yt-dlp service initialized: {_ytDlpPath}");
             } catch (Exception ex) {
                 Logger.Error("Failed to initialize yt-dlp service", ex);
                 _isAvailable = false;
@@ -64,11 +64,11 @@ namespace EdgeLoop.Classes {
                 string cookieFile = null;
                 try {
                     if (attempt > 0) {
-                        Logger.Info($"[yt-dlp] Retry attempt {attempt}/{MaxRetries} for: {url}");
+                        Logger.Debug($"[yt-dlp] Retry attempt {attempt}/{MaxRetries} for: {url}");
                         await Task.Delay(500 * attempt, cancellationToken);
                     }
 
-                    Logger.Info($"[yt-dlp] Extracting video URL: {url}");
+                    Logger.Debug($"[yt-dlp] Extracting video URL: {url}");
                     
                     OptionSet options = BuildOptionsForUrl(url, out cookieFile);
                     
@@ -94,8 +94,17 @@ namespace EdgeLoop.Classes {
                     }
 
                     var videoUrl = result.Data?.Url;
+
+                    // Fallback: check ManifestUrl if direct URL is null
+                    if (string.IsNullOrEmpty(videoUrl)) {
+                        videoUrl = SafeGetProperty<string>(result.Data, "ManifestUrl", null);
+                        if (!string.IsNullOrEmpty(videoUrl)) {
+                            Logger.Debug($"[yt-dlp] No direct URL, using ManifestUrl");
+                        }
+                    }
+
                     if (!string.IsNullOrEmpty(videoUrl)) {
-                        Logger.Info($"[yt-dlp] Successfully extracted URL");
+                        Logger.Debug($"[yt-dlp] Successfully extracted URL");
                         LogVideoQuality(result.Data);
                     }
                     
@@ -118,6 +127,10 @@ namespace EdgeLoop.Classes {
         private OptionSet BuildOptionsForUrl(string url, out string cookieFile) {
             cookieFile = null;
             OptionSet options = new OptionSet();
+
+            // Request best combined stream for player compatibility (for streaming path)
+            options.Format = "best";
+
             if (!string.IsNullOrEmpty(App.Settings?.UserAgent)) {
                 options.AddHeaders = new[] { $"User-Agent:{App.Settings.UserAgent}" };
             }
@@ -125,10 +138,35 @@ namespace EdgeLoop.Classes {
             try {
                 var uri = new Uri(url);
                 var host = uri.Host.ToLowerInvariant();
+
+            // Impersonate Chrome for all sites to help bypass bot detection
+            options.AddCustomOption<string>("--impersonate", "chrome");
+            
+            // Global high-resolution enforcement
+            options.AddCustomOption<string>("--format-sort", "res,br,fps,quality");
+            options.AddCustomOption<string>("--no-check-certificates", null);
+
+            // YouTube EJS Challenge Solver (Requires Node.js installed on host)
+            options.AddCustomOption<string>("--js-runtimes", "node");
+            options.AddCustomOption<string>("--remote-components", "ejs:github");
                 
-                if (host.Contains("hypnotube.com") && !string.IsNullOrEmpty(App.Settings?.HypnotubeCookies)) {
+                bool isYouTube = host.Contains("youtube.com") || host.Contains("youtu.be");
+                bool isIwara = host.Contains("iwara.tv");
+                bool isHypno = host.Contains("hypnotube.com");
+
+                if (isHypno && !string.IsNullOrEmpty(App.Settings?.HypnotubeCookies)) {
                     Logger.Debug($"[yt-dlp] Using Hypnotube cookies for extraction");
                     cookieFile = CreateTempCookieFile(App.Settings.HypnotubeCookies, "hypnotube.com");
+                } else if (isYouTube || isIwara || isHypno) {
+                    // Use browser cookies for major sites that benefit from being logged in
+                    if (!string.IsNullOrEmpty(App.Settings?.Cookies) && (App.Settings.Cookies.Contains(host) || host.Split('.').Any(part => App.Settings.Cookies.Contains(part)))) {
+                        Logger.Debug($"[yt-dlp] Using global cookies for {host}");
+                        cookieFile = CreateTempCookieFile(App.Settings.Cookies, host);
+                    } else {
+                        var browser = App.Settings?.BrowserForCookies ?? "chrome";
+                        options.AddCustomOption<string>("--cookies-from-browser", browser);
+                        Logger.Debug($"[yt-dlp] Using --cookies-from-browser {browser} for {host}");
+                    }
                 } else if (!string.IsNullOrEmpty(App.Settings?.Cookies)) {
                     if (App.Settings.Cookies.Contains(host) || host.Split('.').Any(part => App.Settings.Cookies.Contains(part))) {
                         Logger.Debug($"[yt-dlp] Using global cookies for extraction on {host}");
@@ -140,10 +178,10 @@ namespace EdgeLoop.Classes {
                     options.Cookies = cookieFile;
                 }
                 
-                // Fix for Iwara Cloudflare JSONDecodeError
-                if (host.Contains("iwara.tv")) {
-                    options.AddCustomOption<string>("--impersonate", "chrome");
-                    Logger.Info($"[yt-dlp] Added --impersonate chrome for {host} to bypass Cloudflare");
+                // Fix for Iwara Cloudflare JSONDecodeError and Quality Selection
+                if (isIwara) {
+                    options.Format = "Source/bestvideo+bestaudio/best";
+                    Logger.Debug($"[yt-dlp] Prioritizing 'Source' format for Iwara.tv");
                 }
             } catch (Exception ex) {
                 Logger.Warning($"[yt-dlp] Error setting up cookies/options: {ex.Message}");
@@ -159,7 +197,7 @@ namespace EdgeLoop.Classes {
 
             string cookieFile = null;
             try {
-                Logger.Info($"[yt-dlp] Extracting video info: {url}");
+                Logger.Debug($"[yt-dlp] Extracting video info: {url}");
                 
                 OptionSet options = BuildOptionsForUrl(url, out cookieFile);
                 
@@ -183,7 +221,7 @@ namespace EdgeLoop.Classes {
                     Uploader = SafeGetProperty<string>(data, nameof(data.Uploader), null)
                 };
 
-                Logger.Info($"[yt-dlp] Successfully extracted info: {info.Title}");
+                Logger.Debug($"[yt-dlp] Successfully extracted info: {info.Title}");
                 return info;
             } catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) {
                 Logger.Warning($"[yt-dlp] Info extraction timed out");
@@ -205,11 +243,12 @@ namespace EdgeLoop.Classes {
 
             string cookieFile = null;
             try {
-                Logger.Info($"[yt-dlp] Extracting playlist URLs: {url}");
+                Logger.Debug($"[yt-dlp] Extracting playlist URLs: {url}");
                 
                 var args = new List<string> {
                     "--flat-playlist",
-                    "--print", "url"
+                    "--print", "url",
+                    "--impersonate", "chrome"
                 };
 
                 // Manually handle User-Agent if configured
@@ -225,13 +264,31 @@ namespace EdgeLoop.Classes {
                     args.Add(options.Cookies);
                 }
                 
-                // Add Cloudflare bypass logic
+                // Add Cloudflare/Bot bypass logic
                 var uri = new Uri(url);
                 var host = uri.Host.ToLowerInvariant();
-                if (host.Contains("iwara.tv")) {
+                bool isYouTube = host.Contains("youtube.com") || host.Contains("youtu.be");
+
+                if (host.Contains("iwara.tv") || isYouTube) {
                     args.Add("--impersonate");
                     args.Add("chrome");
                 }
+
+                if (isYouTube && string.IsNullOrEmpty(options.Cookies)) {
+                    var browser = App.Settings?.BrowserForCookies ?? "chrome";
+                    args.Add("--cookies-from-browser");
+                    args.Add(browser);
+                }
+                
+                // Add impersonation to metadata extraction too
+                args.Add("--impersonate");
+                args.Add("chrome");
+
+                // YouTube EJS Challenge Solver
+                args.Add("--js-runtimes");
+                args.Add("node");
+                args.Add("--remote-components");
+                args.Add("ejs:github");
 
                 args.Add(url);
 
@@ -274,7 +331,7 @@ namespace EdgeLoop.Classes {
                     }
                 }
 
-                Logger.Info($"[yt-dlp] Successfully extracted {urls.Count} URLs from playlist.");
+                Logger.Debug($"[yt-dlp] Successfully extracted {urls.Count} URLs from playlist.");
                 return urls;
             } catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested) {
                 Logger.Warning($"[yt-dlp] Playlist extraction timed out");
@@ -284,6 +341,198 @@ namespace EdgeLoop.Classes {
                 return urls;
             } finally {
                 CleanupCookieFile(cookieFile);
+            }
+        }
+
+        /// <summary>
+        /// Sites that serve separate video+audio streams, requiring download+mux for best quality.
+        /// Other sites work via streaming.
+        /// </summary>
+        public static bool IsDownloadRequiredSite(string host) {
+            return host.Contains("youtube.com") || host.Contains("youtu.be") ||
+                   host.Contains("vimeo.com") ||
+                   host.Contains("iwara.tv") ||
+                   host.Contains("hypnotube.com") ||
+                   host.Contains("rule34video.com") ||
+                   host.Contains("dailymotion.com") || host.Contains("dai.ly") ||
+                   host.Contains("twitch.tv") ||
+                   host.Contains("twitter.com") || host.Contains("x.com");
+        }
+
+        /// <summary>
+        /// Computes a hash of the URL for cache file naming (matches VideoDownloadService)
+        /// </summary>
+        private static string ComputeUrlHash(string url) {
+            using var sha256 = System.Security.Cryptography.SHA256.Create();
+            var bytes = System.Text.Encoding.UTF8.GetBytes(url);
+            var hash = sha256.ComputeHash(bytes);
+            return BitConverter.ToString(hash, 0, 16).Replace("-", "").ToLowerInvariant();
+        }
+
+        /// <summary>
+        /// Downloads the best quality video and audio streams and muxes them using FFmpeg.
+        /// Returns the local file path to the cached video.
+        /// </summary>
+        public async Task<string> DownloadBestQualityAsync(string url, CancellationToken cancellationToken = default, IProgress<string> downloadProgress = null) {
+            if (!_isAvailable) return null;
+            if (App.Settings?.EnableLocalCaching == false) return null;
+            
+            // Compute cache path using same hash as VideoDownloadService
+            var cacheDir = App.Settings?.LocalCacheDirectory ?? 
+                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EdgeLoop", "VideoCache");
+            Directory.CreateDirectory(cacheDir);
+            
+            var hash = ComputeUrlHash(url);
+            var finalPath = Path.Combine(cacheDir, $"{hash}.mp4");
+            
+            // Already cached?
+            if (File.Exists(finalPath)) {
+                Logger.Debug($"[yt-dlp] Cache hit: {Path.GetFileName(finalPath)}");
+                return finalPath;
+            }
+            
+            var tempPath = finalPath + ".ytdl_downloading";
+            
+            var args = new List<string> {
+                "--format", "bestvideo+bestaudio/best",
+                "--format-sort", "res,br,fps,quality",
+                "--merge-output-format", "mp4",
+                "--output", tempPath,
+                "--no-part",
+                "--no-playlist",
+                "--newline",
+                "--impersonate", "chrome",
+                "--no-check-certificates",
+                "--js-runtimes", "node",
+                "--remote-components", "ejs:github"
+            };
+
+            if (url.Contains("iwara.tv")) {
+                // Ensure Source is at the very front for Iwara
+                args[1] = "Source/bestvideo+bestaudio/best";
+            }
+
+            // Add ffmpeg location if available
+            var ffmpegPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Dependencies", "ffmpeg.exe");
+            if (!File.Exists(ffmpegPath)) {
+                try {
+                    // Try to find project root from bin\Debug\net10.0-windows
+                    var dir = AppDomain.CurrentDomain.BaseDirectory;
+                    for (int i = 0; i < 4; i++) {
+                        dir = Path.GetDirectoryName(dir);
+                        if (dir == null) break;
+                        var check = Path.Combine(dir, "Dependencies", "ffmpeg.exe");
+                        if (File.Exists(check)) {
+                            ffmpegPath = check;
+                            break;
+                        }
+                    }
+                } catch { }
+            }
+            if (File.Exists(ffmpegPath)) {
+                args.Add("--ffmpeg-location");
+                args.Add(ffmpegPath);
+                Logger.Debug($"[yt-dlp] Using FFmpeg at: {ffmpegPath}");
+            } else {
+                Logger.Warning("[yt-dlp] ffmpeg.exe not found. Muxing of high-quality streams may fail.");
+            }
+
+            // Add cookies if configured
+            OptionSet options = BuildOptionsForUrl(url, out string cookieFile);
+            if (!string.IsNullOrEmpty(options.Cookies)) {
+                args.Add("--cookies");
+                args.Add(options.Cookies);
+            } else if (url.Contains("youtube.com") || url.Contains("youtu.be") || url.Contains("iwara.tv")) {
+                // Simplified: Just always add it for major sites if no explicit cookie file
+                var browser = App.Settings?.BrowserForCookies ?? "chrome";
+                args.Add("--cookies-from-browser");
+                args.Add(browser);
+                Logger.Debug($"[yt-dlp] Using --cookies-from-browser {browser} for high-quality download");
+            }
+
+            args.Add(url);
+            
+            try {
+                var psi = new ProcessStartInfo {
+                    FileName = _ytDlpPath,
+                    CreateNoWindow = true,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    WindowStyle = ProcessWindowStyle.Hidden
+                };
+                foreach (var arg in args) psi.ArgumentList.Add(arg);
+                
+                using var proc = Process.Start(psi);
+                if (proc == null) return null;
+                
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeoutCts.CancelAfter(TimeSpan.FromMinutes(30));  // 30-minute download timeout
+                
+                using (timeoutCts.Token.Register(() => {
+                    try { if (!proc.HasExited) proc.Kill(); } catch { }
+                })) {
+                    // Log stdout for download progress
+                    var stdoutTask = Task.Run(async () => {
+                        string line;
+                        while ((line = await proc.StandardOutput.ReadLineAsync()) != null) {
+                            if (line.Contains("[download]")) {
+                                var cleanLine = line.Replace("[download]", "").Trim();
+                                if (cleanLine.Contains("%")) {
+                                    downloadProgress?.Report(cleanLine);
+                                    // Logger.Debug($"[yt-dlp] Progress: {cleanLine}"); // Muted to prevent log spam
+                                }
+                            }
+                        }
+                    });
+
+                    // Log stderr for errors
+                    var stderrTask = Task.Run(async () => {
+                        string line;
+                        while ((line = await proc.StandardError.ReadLineAsync()) != null) {
+                            if (line.Contains("ERROR")) Logger.Warning($"[yt-dlp] {line.Trim()}");
+                        }
+                    });
+                    
+                    await proc.WaitForExitAsync(timeoutCts.Token);
+                    await Task.WhenAll(stdoutTask, stderrTask);
+                }
+                
+                if (proc.ExitCode != 0) {
+                    Logger.Warning($"[yt-dlp] Download failed with exit code {proc.ExitCode}");
+                    return null;
+                }
+                
+                // yt-dlp may append format extension — find the actual output file
+                if (File.Exists(tempPath)) {
+                    File.Move(tempPath, finalPath, overwrite: true);
+                    Logger.Debug($"[yt-dlp] Downloaded and muxed: {Path.GetFileName(finalPath)}");
+                    return finalPath;
+                }
+                
+                // yt-dlp sometimes appends extension even with --output
+                var possibleFiles = Directory.GetFiles(cacheDir, $"{hash}.*")
+                    .Where(f => !f.EndsWith(".ytdl_downloading"))
+                    .FirstOrDefault();
+                if (possibleFiles != null) {
+                    File.Move(possibleFiles, finalPath, overwrite: true);
+                    Logger.Debug($"[yt-dlp] Downloaded and muxed (resolved extension): {Path.GetFileName(finalPath)}");
+                    return finalPath;
+                }
+                
+                Logger.Warning("[yt-dlp] Download completed but output file not found");
+                return null;
+                
+            } catch (OperationCanceledException) {
+                Logger.Debug("[yt-dlp] Download cancelled");
+                return null;
+            } catch (Exception ex) {
+                Logger.Warning($"[yt-dlp] Download error: {ex.Message}");
+                return null;
+            } finally {
+                CleanupCookieFile(cookieFile);
+                // Clean up temp file on failure
+                try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
             }
         }
 
@@ -414,7 +663,7 @@ namespace EdgeLoop.Classes {
                 
                 if (completed && proc.ExitCode == 0 && !string.IsNullOrEmpty(version)) {
                     _detectedVersion = version;
-                    Logger.Info($"[yt-dlp] Detected version: {version}");
+                    Logger.Debug($"[yt-dlp] Detected version: {version}");
                 } else {
                     Logger.Warning($"[yt-dlp] Version detection failed (exit code: {(completed ? proc.ExitCode.ToString() : "timeout")})");
                 }
@@ -431,7 +680,7 @@ namespace EdgeLoop.Classes {
             if (string.IsNullOrEmpty(_ytDlpPath) || !File.Exists(_ytDlpPath)) return false;
             
             try {
-                Logger.Info("[yt-dlp] Attempting self-update...");
+                Logger.Debug("[yt-dlp] Attempting self-update...");
                 
                 var psi = new ProcessStartInfo {
                     FileName = _ytDlpPath,
@@ -455,7 +704,7 @@ namespace EdgeLoop.Classes {
                 var completed = proc.WaitForExit(30000); // 30s timeout for update
                 
                 if (completed && proc.ExitCode == 0) {
-                    Logger.Info($"[yt-dlp] Update output: {output.Trim()}");
+                    Logger.Debug($"[yt-dlp] Update output: {output.Trim()}");
                     // Re-detect version after update
                     await DetectVersionAsync();
                     return true;
@@ -502,7 +751,7 @@ namespace EdgeLoop.Classes {
                 var h = SafeGetProperty<object>(data, "Height", null);
                 var f = SafeGetProperty<string>(data, "Format", null);
                 if (w != null || h != null || f != null) {
-                    Logger.Info($"[yt-dlp] Quality Info: {w}x{h}, Format: {f}");
+                    Logger.Debug($"[yt-dlp] Quality Info: {w}x{h}, Format: {f}");
                 }
             } catch { /* ignore quality logging errors — non-critical */ }
         }

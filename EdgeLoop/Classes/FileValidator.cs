@@ -226,12 +226,6 @@ namespace EdgeLoop.Classes {
                 var uri = new Uri(url);
                 var host = uri.Host.ToLowerInvariant();
                 
-                // Check if URL is from a supported domain
-                bool isSupportedDomain = Constants.SupportedVideoDomains.Any(domain => 
-                    host == domain || host.EndsWith("." + domain));
-                
-                if (!isSupportedDomain) return false;
-                
                 // Check if URL has a video file extension (direct video URL)
                 var path = uri.AbsolutePath.ToLowerInvariant().TrimEnd('/');
                 
@@ -245,9 +239,13 @@ namespace EdgeLoop.Classes {
 
                 // Exclude common web assets from being treated as page URLs
                 var assetExtensions = new[] { 
-                    ".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".woff", ".woff2", ".ttf", ".eot", ".json", ".xml" 
+                    ".js", ".css", ".png", ".jpg", ".jpeg", ".gif", ".ico", ".svg", ".woff", ".woff2", ".ttf", ".eot", ".json", ".xml", ".ts"
                 };
                 if (assetExtensions.Any(ext => path.EndsWith(ext, StringComparison.OrdinalIgnoreCase))) return false;
+                
+                // Exclude common CDN/asset path patterns
+                var assetPatterns = new[] { "/static/", "/assets/", "/js/", "/css/", "/images/", "/img/", "/s/_/", "/ytmainappweb/", "rs=" };
+                if (assetPatterns.Any(pattern => url.Contains(pattern))) return false;
                 
                 return true;
             } catch {

@@ -62,7 +62,7 @@ namespace EdgeLoop.Classes {
                     if (player.ViewModel != null && player.ViewModel.SyncGroupId == syncGroupId && !player.ViewModel.IsSyncMaster) {
                         // FIX: Force jump if it's a manual skip OR if the follower is at the end of its current video, even if index is the same
                         if (force || player.ViewModel.CurrentIndex != index || (player.ViewModel.Player.Status == FlyleafLib.MediaPlayer.Status.Ended && !player.ViewModel.IsLoading)) {
-                            Logger.Info($"[Sync] Broadcasting index {index} to group '{syncGroupId}' follower at {player.ScreenDeviceName} (Force: {force}, EndReached: {player.ViewModel.Player.Status == FlyleafLib.MediaPlayer.Status.Ended})");
+                            Logger.Debug($"[Sync] Broadcasting index {index} to group '{syncGroupId}' follower at {player.ScreenDeviceName} (Force: {force}, EndReached: {player.ViewModel.Player.Status == FlyleafLib.MediaPlayer.Status.Ended})");
                             player.ViewModel.JumpToIndex(index, force);
                         }
                     }
@@ -118,7 +118,7 @@ namespace EdgeLoop.Classes {
                 if (masterIndex >= 0) {
                     foreach (var follower in playerList.Skip(1)) {
                         if (follower.ViewModel.CurrentIndex != masterIndex || (follower.ViewModel.Player.Status == FlyleafLib.MediaPlayer.Status.Ended && !follower.ViewModel.IsLoading)) {
-                            Logger.Info($"[Sync] Coordinated player at {follower.ScreenDeviceName} diverged in group '{coordinatedGroup.Key}' (Index {follower.ViewModel.CurrentIndex} vs Master {masterIndex}, Status {follower.ViewModel.Player.Status}). Correcting.");
+                            Logger.Debug($"[Sync] Coordinated player at {follower.ScreenDeviceName} diverged in group '{coordinatedGroup.Key}' (Index {follower.ViewModel.CurrentIndex} vs Master {masterIndex}, Status {follower.ViewModel.Player.Status}). Correcting.");
                             follower.ViewModel.JumpToIndex(masterIndex, true);
                         }
                     }
@@ -177,7 +177,7 @@ namespace EdgeLoop.Classes {
                         bool needsReset = clock.IsRunning || (clock.Ticks > 0 && !masterReady);
                         
                         if (needsReset) {
-                            Logger.Info($"[Sync] Group '{group.Key}' is transitioning/loading (Master Index: {masterIndex}). Resetting SharedClock to 0/Hold.");
+                            Logger.Debug($"[Sync] Group '{group.Key}' is transitioning/loading (Master Index: {masterIndex}). Resetting SharedClock to 0/Hold.");
                             clock.Reset();
                         } else if (clock.Ticks == 0 && !clock.IsRunning) {
                              // Already held at 0, no action needed
@@ -190,7 +190,7 @@ namespace EdgeLoop.Classes {
                                 .Where(p => p.ViewModel.IsLoading || p.ViewModel.Player.IsBuffering || p.ViewModel.Player.Status == FlyleafLib.MediaPlayer.Status.Opening)
                                 .Select(p => $"{p.ScreenDeviceName} ({(p.ViewModel.IsLoading ? "Loading" : (p.ViewModel.Player.Status == FlyleafLib.MediaPlayer.Status.Opening ? "Opening" : "Buffering"))} @ {p.ViewModel.Player.CurTime/10000}ms)");
                             
-                            Logger.Info($"[Sync] Stalled! Pausing SharedClock at {clock.Ticks/10000}ms. Waiting for: [{string.Join(", ", stalledPlayers)}]");
+                            Logger.Debug($"[Sync] Stalled! Pausing SharedClock at {clock.Ticks/10000}ms. Waiting for: [{string.Join(", ", stalledPlayers)}]");
                             clock.Pause();
                         } else {
                             // Note: Auto-resume was removed here to allow individual monitors to remain paused 
@@ -200,13 +200,13 @@ namespace EdgeLoop.Classes {
                         // If everyone is ready/buffered and the clock is stopped AND user didn't pause, START IT.
                         // This handles the "Auto-play after skip" requirement.
                         // CRITICAL: Skip this if user manually paused - respect their intent!
-                        Logger.Info($"[Sync] All players ready/buffered. Starting/Resuming SharedClock. (Ticks: {clock.Ticks})");
+                        Logger.Debug($"[Sync] All players ready/buffered. Starting/Resuming SharedClock. (Ticks: {clock.Ticks})");
                         clock.Start();
                         foreach (var p in playerList) {
                             if (p.ViewModel.MediaState == MediaState.Play && 
                                 p.ViewModel.Player.Status != FlyleafLib.MediaPlayer.Status.Playing &&
                                 p.ViewModel.Player.Status != FlyleafLib.MediaPlayer.Status.Opening) {
-                                Logger.Info($"[Sync] Requesting Play for stalled monitor: {p.ScreenDeviceName}");
+                                Logger.Debug($"[Sync] Requesting Play for stalled monitor: {p.ScreenDeviceName}");
                                 p.ViewModel.Play();
                             }
                         }
@@ -223,7 +223,7 @@ namespace EdgeLoop.Classes {
                     // Sync speed across all players in the group
                     foreach (var p in playerList) {
                         if (Math.Abs(p.ViewModel.SpeedRatio - clock.Speed) > 0.01) {
-                            Logger.Info($"[Sync] Syncing speed for {p.ScreenDeviceName} to {clock.Speed}");
+                            Logger.Debug($"[Sync] Syncing speed for {p.ScreenDeviceName} to {clock.Speed}");
                             p.ViewModel.SpeedRatio = clock.Speed;
                         }
                     }
@@ -231,16 +231,12 @@ namespace EdgeLoop.Classes {
                     var primary = playerList.FirstOrDefault();
                     foreach (var p in playerList) {
                         if (p != primary && p.ViewModel.Volume > 0) {
-                            Logger.Info($"[Sync] Muting follower on {p.ScreenDeviceName}");
+                            Logger.Debug($"[Sync] Muting follower on {p.ScreenDeviceName}");
                             p.ViewModel.Volume = 0;
                         }
                     }
                     continue; // Skip legacy drift correction
                 }
-
-                // --- 2b. Legacy Sync (for single/uncoordinated players, if any) ---
-                // ... (rest of legacy sync if needed, but for now we skip)
-                continue;
             }
         }
 
@@ -314,7 +310,7 @@ namespace EdgeLoop.Classes {
         public void PauseSyncClock() {
             _userPaused = true;  // Mark that user intentionally paused
             if (_sharedClock.IsRunning) {
-                Logger.Info("[Sync] User paused. Pausing SharedClock.");
+                Logger.Debug("[Sync] User paused. Pausing SharedClock.");
                 _sharedClock.Pause();
             }
         }
@@ -325,7 +321,7 @@ namespace EdgeLoop.Classes {
         public void ResumeSyncClock() {
             _userPaused = false;  // User wants to play, clear the pause flag
             if (!_sharedClock.IsRunning) {
-                Logger.Info("[Sync] User played. Resuming SharedClock.");
+                Logger.Debug("[Sync] User played. Resuming SharedClock.");
                 _sharedClock.Start();
             }
         }
@@ -404,7 +400,7 @@ namespace EdgeLoop.Classes {
 
             lock (_playersLock) {
                 if (players.Remove(player)) {
-                    Logger.Info($"[VideoPlayerService] Unregistered player for screen: {player.ScreenDeviceName}");
+                    Logger.Debug($"[VideoPlayerService] Unregistered player for screen: {player.ScreenDeviceName}");
                 }
                 
                 // Find and remove from ActivePlayers collection
@@ -418,7 +414,7 @@ namespace EdgeLoop.Classes {
                 if (players.Count == 0) {
                     _masterSyncTimer.Stop();
                     PowerManagement.AllowSleep();
-                    Logger.Info("[VideoPlayerService] Last player removed, stopped sync timer.");
+                    Logger.Debug("[VideoPlayerService] Last player removed, stopped sync timer.");
                 }
             }
         }
@@ -559,7 +555,7 @@ namespace EdgeLoop.Classes {
                     // 3. Coordination Capture
                     if (!string.IsNullOrEmpty(w.ViewModel.SyncGroupId) && sharedCoordinatedIndex == -2) {
                         sharedCoordinatedIndex = w.ViewModel.CurrentIndex;
-                        Logger.Info($"[Sync] Captured master index {sharedCoordinatedIndex} for group coordination.");
+                        Logger.Debug($"[Sync] Captured master index {sharedCoordinatedIndex} for group coordination.");
                         
                         // Force broadcast now that we have followers potentially waiting (though players list is still empty)
                         // The loop below handles actual synchronization for players already in the list
@@ -603,7 +599,7 @@ namespace EdgeLoop.Classes {
                     _masterSyncTimer.Start();
                 }
             } catch (OperationCanceledException) {
-                Logger.Info("PlayPerMonitorAsync was cancelled.");
+                Logger.Debug("PlayPerMonitorAsync was cancelled.");
                 StopAll();
             } catch (Exception ex) {
                 Logger.Error("Error in PlayPerMonitorAsync", ex);

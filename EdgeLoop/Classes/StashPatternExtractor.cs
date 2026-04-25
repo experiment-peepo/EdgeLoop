@@ -20,7 +20,7 @@ namespace EdgeLoop.Classes {
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
                 
-                var node = doc.DocumentNode.SelectSingleNode("//meta[@property='og:video']/@content");
+                var node = doc.DocumentNode.SelectSingleNode("//meta[@property='og:video']");
                 return node?.GetAttributeValue("content", null);
             } catch (Exception ex) {
                 Logger.Warning($"Error extracting og:video: {ex.Message}");
@@ -38,10 +38,30 @@ namespace EdgeLoop.Classes {
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
                 
-                var node = doc.DocumentNode.SelectSingleNode("//meta[@property='og:image']/@content");
+                var node = doc.DocumentNode.SelectSingleNode("//meta[@property='og:image']");
                 return node?.GetAttributeValue("content", null);
             } catch (Exception ex) {
                 Logger.Warning($"Error extracting og:image: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Extracts Open Graph title
+        /// </summary>
+        public static string ExtractOgTitle(string html) {
+            if (string.IsNullOrEmpty(html)) return null;
+
+            try {
+                var doc = new HtmlDocument();
+                doc.LoadHtml(html);
+                
+                // Try both property and name attributes, as some sites use them interchangeably
+                var node = doc.DocumentNode.SelectSingleNode("//meta[@property='og:title']") ?? 
+                           doc.DocumentNode.SelectSingleNode("//meta[@name='og:title']");
+                return node?.GetAttributeValue("content", null);
+            } catch (Exception ex) {
+                Logger.Warning($"Error extracting og:title: {ex.Message}");
                 return null;
             }
         }
@@ -56,8 +76,16 @@ namespace EdgeLoop.Classes {
                 var doc = new HtmlDocument();
                 doc.LoadHtml(html);
                 
-                // Stash pattern: //div[@class='item-tr-inner-col inner-col']/h1/text()
-                var node = doc.DocumentNode.SelectSingleNode("//div[@class='item-tr-inner-col inner-col']/h1");
+                // Modern pattern: The H1 inside the item-tr-inner-col container
+                var node = doc.DocumentNode.SelectSingleNode("//div[contains(@class, 'item-tr-inner-col')]//h1");
+                if (node == null) {
+                    // Fallback: any H1 inside the main item column
+                    node = doc.DocumentNode.SelectSingleNode("//div[contains(@class, 'item-tr-col')]//h1");
+                }
+                if (node == null) {
+                    // Last resort: the first H1 on the page (usually the video title)
+                    node = doc.DocumentNode.SelectSingleNode("//h1");
+                }
                 return node?.InnerText?.Trim();
             } catch (Exception ex) {
                 Logger.Warning($"Error extracting Hypnotube title: {ex.Message}");
@@ -107,7 +135,7 @@ namespace EdgeLoop.Classes {
                         
                          // Include everything
                         var detectedQuality = quality > 0 ? quality : 1;
-                        Logger.Info($"[Extractor] Found <source> tag: {detectedQuality}p -> {url}");
+                        Logger.Debug($"[Extractor] Found <source> tag: {detectedQuality}p -> {url}");
                         qualities.Add(new VideoQuality(detectedQuality, url));
                     }
                 }
@@ -116,7 +144,7 @@ namespace EdgeLoop.Classes {
                 var jsonSources = ExtractSourcesFromJson(html, baseUrl);
                 foreach (var jsSource in jsonSources) {
                     if (!qualities.Any(q => q.Url == jsSource.Url)) {
-                        Logger.Info($"[Extractor] Found JSON source: {jsSource.Height}p -> {jsSource.Url}");
+                        Logger.Debug($"[Extractor] Found JSON source: {jsSource.Height}p -> {jsSource.Url}");
                         qualities.Add(jsSource);
                     }
                 }
@@ -130,7 +158,7 @@ namespace EdgeLoop.Classes {
                         if (!qualities.Any(q => q.Url == url)) {
                             var quality = QualitySelector.DetectQualityFromUrl(url);
                             var detectedQuality = quality > 0 ? quality : 720;
-                            Logger.Info($"[Extractor] Found fallback <video src>: {detectedQuality}p -> {url}");
+                            Logger.Debug($"[Extractor] Found fallback <video src>: {detectedQuality}p -> {url}");
                             qualities.Add(new VideoQuality(detectedQuality, url));
                         }
                     }

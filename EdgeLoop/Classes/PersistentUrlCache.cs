@@ -53,7 +53,7 @@ namespace EdgeLoop.Classes {
                         // Filter out already expired entries during load
                         var validEntries = dictionary.Where(kvp => !kvp.Value.IsExpired);
                         _cache = new ConcurrentDictionary<string, UrlCacheEntry>(validEntries);
-                        Logger.Info($"[PersistentUrlCache] Loaded {_cache.Count} valid entries");
+                        Logger.Debug($"[PersistentUrlCache] Loaded {_cache.Count} valid entries");
                     }
                 }
             } catch (Exception ex) {

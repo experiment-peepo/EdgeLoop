@@ -16,7 +16,19 @@ namespace EdgeLoop.Classes {
             Timeout = TimeSpan.FromMinutes(10) // Allow long downloads for 4K content
         };
         
-        private readonly string _cacheDirectory;
+        private string CacheDirectory {
+            get {
+                var dir = EdgeLoop.App.Settings?.LocalCacheDirectory;
+                if (string.IsNullOrEmpty(dir)) {
+                    dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EdgeLoop", "VideoCache");
+                }
+                if (!Directory.Exists(dir)) {
+                    Directory.CreateDirectory(dir);
+                }
+                return dir;
+            }
+        }
+        
         private const int CLEANUP_DAYS = 10;
         
         static VideoDownloadService() {
@@ -28,15 +40,7 @@ namespace EdgeLoop.Classes {
         }
         
         public VideoDownloadService() {
-            _cacheDirectory = Path.Combine(
-                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
-                "EdgeLoop", "VideoCache"
-            );
-            
-            // Ensure cache directory exists
-            if (!Directory.Exists(_cacheDirectory)) {
-                Directory.CreateDirectory(_cacheDirectory);
-            }
+            // Initialization is now dynamic via the CacheDirectory property
         }
         
         /// <summary>
@@ -44,8 +48,9 @@ namespace EdgeLoop.Classes {
         /// </summary>
         public string GetCachePath(string url) {
             if (string.IsNullOrEmpty(url)) return null;
+            if (EdgeLoop.App.Settings?.EnableLocalCaching == false) return null;
             var hash = ComputeUrlHash(url);
-            return Path.Combine(_cacheDirectory, $"{hash}.mp4");
+            return Path.Combine(CacheDirectory, $"{hash}.mp4");
         }
         
         /// <summary>
@@ -60,7 +65,10 @@ namespace EdgeLoop.Classes {
         /// Gets the cached file path if it exists (full or partial), otherwise null
         /// </summary>
         public string GetCachedFilePath(string url) {
+            if (EdgeLoop.App.Settings?.EnableLocalCaching == false) return null;
             var path = GetCachePath(url);
+            if (path == null) return null;
+            
             if (File.Exists(path)) {
                 // Validate that the cached file isn't actually a manifest (common error)
                 if (FileValidator.IsCorruptedCacheFile(path)) {
@@ -88,19 +96,21 @@ namespace EdgeLoop.Classes {
         /// </summary>
         public async Task<string> DownloadVideoAsync(string url, System.Collections.Generic.Dictionary<string, string> headers = null, CancellationToken cancellationToken = default) {
             if (string.IsNullOrEmpty(url)) return null;
+            if (EdgeLoop.App.Settings?.EnableLocalCaching == false) return null;
             
             try {
                 var cachePath = GetCachePath(url);
+                if (cachePath == null) return null;
                 
                 // Already cached
                 if (File.Exists(cachePath)) {
-                    Logger.Info($"[VideoCache] Cache hit: {Path.GetFileName(cachePath)}");
+                    Logger.Debug($"[VideoCache] Cache hit: {Path.GetFileName(cachePath)}");
                     // Update last access time for cleanup tracking
                     File.SetLastAccessTime(cachePath, DateTime.Now);
                     return cachePath;
                 }
                 
-                Logger.Info($"[VideoCache] Downloading to cache: {url.Substring(0, Math.Min(100, url.Length))}...");
+                Logger.Debug($"[VideoCache] Downloading to cache: {url.Substring(0, Math.Min(100, url.Length))}...");
                 
                 // Download to temp file first
                 var tempPath = cachePath + ".downloading";
@@ -124,7 +134,7 @@ namespace EdgeLoop.Classes {
                                 return null;
                             }
                             
-                            Logger.Info($"[VideoCache] Starting download: {totalBytes / (1024 * 1024):F1} MB");
+                            Logger.Debug($"[VideoCache] Starting download: {totalBytes / (1024 * 1024):F1} MB");
                             
                             using (var contentStream = await response.Content.ReadAsStreamAsync())
                             using (var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.Read, 81920, true)) {
@@ -145,7 +155,7 @@ namespace EdgeLoop.Classes {
                                     totalRead += bytesRead;
                                 }
                                 
-                                Logger.Info($"[VideoCache] Download complete: {totalRead / (1024 * 1024):F1} MB");
+                                Logger.Debug($"[VideoCache] Download complete: {totalRead / (1024 * 1024):F1} MB");
                             }
                         }
                     }
@@ -156,7 +166,7 @@ namespace EdgeLoop.Classes {
                     }
                     File.Move(tempPath, cachePath);
                     
-                    Logger.Info($"[VideoCache] Cached: {Path.GetFileName(cachePath)}");
+                    Logger.Debug($"[VideoCache] Cached: {Path.GetFileName(cachePath)}");
                     return cachePath;
                     
                 } finally {
@@ -167,7 +177,7 @@ namespace EdgeLoop.Classes {
                 }
                 
             } catch (OperationCanceledException) {
-                Logger.Info($"[VideoCache] Download cancelled");
+                Logger.Debug($"[VideoCache] Download cancelled");
                 return null;
             } catch (Exception ex) {
                 Logger.Warning($"[VideoCache] Download failed: {ex.Message}");
@@ -187,14 +197,16 @@ namespace EdgeLoop.Classes {
         /// <returns>Path to the partial cache file, or null on failure</returns>
         public async Task<string> DownloadPartialAsync(string url, long maxBytes = 150 * 1024 * 1024, System.Collections.Generic.Dictionary<string, string> headers = null, CancellationToken cancellationToken = default) {
             if (string.IsNullOrEmpty(url)) return null;
+            if (EdgeLoop.App.Settings?.EnableLocalCaching == false) return null;
             
             try {
                 var cachePath = GetCachePath(url);
+                if (cachePath == null) return null;
                 var partialPath = cachePath + ".partial";
                 
                 // If full file exists, use it
                 if (File.Exists(cachePath)) {
-                    Logger.Info($"[VideoCache] Full cache hit: {Path.GetFileName(cachePath)}");
+                    Logger.Debug($"[VideoCache] Full cache hit: {Path.GetFileName(cachePath)}");
                     File.SetLastAccessTime(cachePath, DateTime.Now);
                     return cachePath;
                 }
@@ -203,13 +215,13 @@ namespace EdgeLoop.Classes {
                 if (File.Exists(partialPath)) {
                     var existingInfo = new FileInfo(partialPath);
                     if (existingInfo.Length >= maxBytes * 0.9) { // Allow 10% tolerance
-                        Logger.Info($"[VideoCache] Partial cache hit: {existingInfo.Length / (1024 * 1024):F1} MB");
+                        Logger.Debug($"[VideoCache] Partial cache hit: {existingInfo.Length / (1024 * 1024):F1} MB");
                         File.SetLastAccessTime(partialPath, DateTime.Now);
                         return partialPath;
                     }
                 }
                 
-                Logger.Info($"[VideoCache] Starting partial download (max {maxBytes / (1024 * 1024)}MB): {url.Substring(0, Math.Min(80, url.Length))}...");
+                Logger.Debug($"[VideoCache] Starting partial download (max {maxBytes / (1024 * 1024)}MB): {url.Substring(0, Math.Min(80, url.Length))}...");
                 
                 var tempPath = partialPath + ".downloading";
                 
@@ -239,7 +251,7 @@ namespace EdgeLoop.Classes {
 
                             var isFullDownload = response.StatusCode == System.Net.HttpStatusCode.OK;
                             
-                            Logger.Info($"[VideoCache] Partial download started: {totalBytes / (1024 * 1024):F1} MB (full: {isFullDownload})");
+                            Logger.Debug($"[VideoCache] Partial download started: {totalBytes / (1024 * 1024):F1} MB (full: {isFullDownload})");
                             
                             using (var contentStream = await response.Content.ReadAsStreamAsync())
                             using (var fileStream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.Read, 81920, true)) {
@@ -261,12 +273,12 @@ namespace EdgeLoop.Classes {
                                     
                                     // Stop if we've reached our limit (server might ignore Range header)
                                     if (totalRead >= maxBytes) {
-                                        Logger.Info($"[VideoCache] Partial download limit reached: {totalRead / (1024 * 1024):F1} MB");
+                                        Logger.Debug($"[VideoCache] Partial download limit reached: {totalRead / (1024 * 1024):F1} MB");
                                         break;
                                     }
                                 }
                                 
-                                Logger.Info($"[VideoCache] Partial download complete: {totalRead / (1024 * 1024):F1} MB");
+                                Logger.Debug($"[VideoCache] Partial download complete: {totalRead / (1024 * 1024):F1} MB");
                             }
                         }
                     }
@@ -278,7 +290,7 @@ namespace EdgeLoop.Classes {
                     }
                     File.Move(tempPath, targetPath);
                     
-                    Logger.Info($"[VideoCache] Partial cached: {Path.GetFileName(targetPath)}");
+                    Logger.Debug($"[VideoCache] Partial cached: {Path.GetFileName(targetPath)}");
                     return targetPath;
                     
                 } finally {
@@ -288,7 +300,7 @@ namespace EdgeLoop.Classes {
                 }
                 
             } catch (OperationCanceledException) {
-                Logger.Info($"[VideoCache] Partial download cancelled");
+                Logger.Debug($"[VideoCache] Partial download cancelled");
                 return null;
             } catch (Exception ex) {
                 Logger.Warning($"[VideoCache] Partial download failed: {ex.Message}");
@@ -301,13 +313,14 @@ namespace EdgeLoop.Classes {
         /// </summary>
         public void CleanupOldFiles(int daysOld = CLEANUP_DAYS) {
             try {
-                if (!Directory.Exists(_cacheDirectory)) return;
+                var dir = CacheDirectory;
+                if (!Directory.Exists(dir)) return;
                 
                 var cutoffDate = DateTime.Now.AddDays(-daysOld);
                 var deletedCount = 0;
                 long freedBytes = 0;
                 
-                foreach (var file in Directory.GetFiles(_cacheDirectory, "*.mp4")) {
+                foreach (var file in Directory.GetFiles(dir, "*.mp4")) {
                     try {
                         var fileInfo = new FileInfo(file);
                         // Use last access time for cleanup (gets updated on cache hits)
@@ -322,7 +335,7 @@ namespace EdgeLoop.Classes {
                 }
                 
                 // Also clean up old .partial files
-                foreach (var file in Directory.GetFiles(_cacheDirectory, "*.partial")) {
+                foreach (var file in Directory.GetFiles(dir, "*.partial")) {
                     try {
                         var fileInfo = new FileInfo(file);
                         if (fileInfo.LastAccessTime < cutoffDate) {
@@ -336,7 +349,7 @@ namespace EdgeLoop.Classes {
                 }
                 
                 // Also clean up any orphaned .downloading files
-                foreach (var file in Directory.GetFiles(_cacheDirectory, "*.downloading")) {
+                foreach (var file in Directory.GetFiles(dir, "*.downloading")) {
                     try {
                         var fileInfo = new FileInfo(file);
                         // Delete downloading files older than 1 hour (likely abandoned)
@@ -347,7 +360,7 @@ namespace EdgeLoop.Classes {
                 }
                 
                 if (deletedCount > 0) {
-                    Logger.Info($"[VideoCache] Cleanup: deleted {deletedCount} files, freed {freedBytes / (1024 * 1024):F1} MB");
+                    Logger.Debug($"[VideoCache] Cleanup: deleted {deletedCount} files, freed {freedBytes / (1024 * 1024):F1} MB");
                 }
                 
             } catch (Exception ex) {
@@ -360,10 +373,11 @@ namespace EdgeLoop.Classes {
         /// </summary>
         public long GetCacheSize() {
             try {
-                if (!Directory.Exists(_cacheDirectory)) return 0;
+                var dir = CacheDirectory;
+                if (!Directory.Exists(dir)) return 0;
                 
                 long totalSize = 0;
-                foreach (var file in Directory.GetFiles(_cacheDirectory, "*.mp4")) {
+                foreach (var file in Directory.GetFiles(dir, "*.mp4")) {
                     try {
                         totalSize += new FileInfo(file).Length;
                     } catch { }

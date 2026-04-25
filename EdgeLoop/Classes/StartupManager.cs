@@ -25,8 +25,11 @@ namespace EdgeLoop.Classes {
                     if (key == null) return;
 
                     if (enable) {
-                        string exePath = Assembly.GetExecutingAssembly().Location;
-                        key.SetValue(AppName, exePath);
+                        string exePath = Environment.ProcessPath;
+                        if (string.IsNullOrEmpty(exePath)) {
+                            throw new Exception("Could not determine application process path.");
+                        }
+                        key.SetValue(AppName, $"\"{exePath}\"");
                     } else {
                         key.DeleteValue(AppName, false);
                     }

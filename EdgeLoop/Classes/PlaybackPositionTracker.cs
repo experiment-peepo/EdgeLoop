@@ -60,11 +60,11 @@ namespace EdgeLoop.Classes {
                     try {
                         var tracker = JsonSerializer.Deserialize<PlaybackPositionTracker>(json);
                         if (tracker != null && tracker.Positions != null) {
-                            Logger.Info($"[PositionTracker] Loaded {tracker.Positions.Count} positions from data directory");
+                            Logger.Debug($"[PositionTracker] Loaded {tracker.Positions.Count} positions from data directory");
                             return tracker;
                         }
                     } catch (JsonException) {
-                        Logger.Info("[PositionTracker] Detected legacy format in data directory, attempting conversion...");
+                        Logger.Debug("[PositionTracker] Detected legacy format in data directory, attempting conversion...");
                         var legacy = JsonSerializer.Deserialize<LegacyTracker>(json);
                         if (legacy?.Positions != null) {
                             var tracker = new PlaybackPositionTracker();
@@ -84,7 +84,7 @@ namespace EdgeLoop.Classes {
                 // Legacy migration from base directory
                 var legacyPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, PositionsFileName);
                 if (File.Exists(legacyPath)) {
-                    Logger.Info("[PositionTracker] Migrating legacy positions from base directory...");
+                    Logger.Debug("[PositionTracker] Migrating legacy positions from base directory...");
                     var json = SafeFileReader.ReadAllTextSafe(legacyPath);
                     if (string.IsNullOrEmpty(json)) return new PlaybackPositionTracker();
                     try {
@@ -160,7 +160,7 @@ namespace EdgeLoop.Classes {
             if (string.IsNullOrWhiteSpace(filePath)) return null;
             
             if (App.Settings?.RememberFilePosition != true) {
-                Logger.Info($"[PositionTracker] RememberFilePosition setting is OFF. Skipping position lookup for {Path.GetFileName(filePath)}.");
+                Logger.Debug($"[PositionTracker] RememberFilePosition setting is OFF. Skipping position lookup for {Path.GetFileName(filePath)}.");
                 return null;
             }
 
@@ -168,11 +168,11 @@ namespace EdgeLoop.Classes {
             lock (Positions) {
                 if (Positions.TryGetValue(key, out var data)) {
                     var pos = TimeSpan.FromTicks(data.Position);
-                    Logger.Info($"[PositionTracker] Found saved position for {Path.GetFileName(filePath)}: {pos:mm\\:ss}");
+                    Logger.Debug($"[PositionTracker] Found saved position for {Path.GetFileName(filePath)}: {pos:mm\\:ss}");
                     return pos;
                 }
             }
-            Logger.Info($"[PositionTracker] No saved position for {Path.GetFileName(filePath)}");
+            Logger.Debug($"[PositionTracker] No saved position for {Path.GetFileName(filePath)}");
             return null;
         }
         
@@ -180,7 +180,7 @@ namespace EdgeLoop.Classes {
              var key = GetFileKey(filePath);
              lock (Positions) {
                  if (Positions.Remove(key)) {
-                     Logger.Info($"[PositionTracker] Cleared position for {Path.GetFileName(filePath)} (video finished)");
+                     Logger.Debug($"[PositionTracker] Cleared position for {Path.GetFileName(filePath)} (video finished)");
                      _ = SaveAsync();
                  }
              }
@@ -190,7 +190,7 @@ namespace EdgeLoop.Classes {
             lock (Positions) {
                 Positions.Clear();
             }
-            Logger.Info("[PositionTracker] Cleared all saved positions");
+            Logger.Debug("[PositionTracker] Cleared all saved positions");
             _ = SaveAsync();
         }
 
@@ -212,23 +212,21 @@ namespace EdgeLoop.Classes {
                     // We just lower it and trim query parameters that look like tokens
                     var normalized = filePath.Trim();
                     
-                    // Improved normalization: Remove common expiring token parameters
-                    // This acts as a fallback if OriginalPageUrl wasn't correctly preserved
+                    // Improved normalization: Remove common expiring token and tracking parameters
                     try {
                         if (normalized.Contains('?')) {
-                            // Regex to remove common token parameters (token, expires, sig, expire, key, etc.)
-                            // Matches ?param=value or &param=value
+                            // Regex to remove common token and tracking parameters
+                            // token, expires, sig, expire, key, st, e (tokens)
+                            // from, source, ref, utm_* (tracking)
                             normalized = System.Text.RegularExpressions.Regex.Replace(normalized, 
-                                @"([?&])(token|expires|sig|expire|key|st|e)=[^&]*", 
+                                @"([?&])(token|expires|sig|expire|key|st|e|from|source|ref|utm_[^=&]*)=[^&]*", 
                                 "", 
                                 System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Compiled);
                             
                             // Cleanup any dangling ? or & at the end, or double &&
+                            normalized = normalized.Replace("&&", "&").Replace("?&", "?");
                             normalized = normalized.TrimEnd('?', '&');
-                            normalized = normalized.Replace("&&", "&");
                             
-                            // If the query string is now empty or just '?', remove it?
-                            // For now, let's just ensure we don't have a trailing ?
                             if (normalized.EndsWith("?")) normalized = normalized.Substring(0, normalized.Length - 1);
                         }
                     } catch (Exception ex) {
@@ -271,7 +269,7 @@ namespace EdgeLoop.Classes {
             }
 
             if (removedCount > 0) {
-                Logger.Info($"[PositionTracker] Cleaned up {removedCount} old sessions (older than {daysToKeep} days)");
+                Logger.Debug($"[PositionTracker] Cleaned up {removedCount} old sessions (older than {daysToKeep} days)");
                 _ = SaveAsync();
             }
         }
@@ -320,7 +318,7 @@ namespace EdgeLoop.Classes {
                     Directory.CreateDirectory(directory);
                 }
                 File.WriteAllText(_settingsPath, json);
-                Logger.Info($"[PositionTracker] Successfully saved {count} positions to data directory");
+                Logger.Debug($"[PositionTracker] Successfully saved {count} positions to data directory");
             } catch (Exception ex) {
                 Logger.Error("[PositionTracker] Critical error during file write", ex);
             }

@@ -57,8 +57,9 @@ namespace EdgeLoop {
                 } catch { }
             };
 
-            // 1.5. Rotate logs if too large (20MB)
+            // 1.5. Rotate logs if too large (20MB main, 10MB diagnostics)
             Classes.Logger.CheckAndRotateLogFile(20 * 1024 * 1024);
+            Classes.Logger.CheckAndRotateDiagnosticsLogFile(10 * 1024 * 1024);
 
             // 2. Resolve Log Level (Command Line > Env Var > Settings)
             var resolvedLogLevel = ResolveLogLevel(e.Args);
@@ -70,15 +71,17 @@ namespace EdgeLoop {
                 string ffmpegPath = System.IO.Path.Combine(baseDir, "FFmpeg");
                 string pluginsPath = System.IO.Path.Combine(baseDir, "Plugins");
 
-                // Redirect Flyleaf logs to our application logger
+                // Redirect Flyleaf logs to diagnostic log only (Debug level)
                 FlyleafLib.Logger.CustomOutput = (msg) => {
-                    Classes.Logger.Info(msg);
+                    Classes.Logger.Debug(msg);
                 };
 
                 FlyleafLib.Engine.Start(new FlyleafLib.EngineConfig() {
                     FFmpegPath = ffmpegPath,
                     PluginsPath = pluginsPath,
                     UIRefresh = true,
+                    // Flyleaf always generates messages at Info level;
+                    // our Logger.Debug() routes them to diagnostics.log only (not the main log)
                     LogLevel = resolvedLogLevel == Classes.LogLevel.Debug ? FlyleafLib.LogLevel.Debug : FlyleafLib.LogLevel.Info,
                     LogOutput = ":custom",
                     FFmpegLogLevel = resolvedLogLevel == Classes.LogLevel.Debug ? Flyleaf.FFmpeg.LogLevel.Info : Flyleaf.FFmpeg.LogLevel.Warn
@@ -93,8 +96,10 @@ namespace EdgeLoop {
             
             // Register Services
             var settings = UserSettings.Load();
+            // Apply diagnostic mode from settings
+            Classes.Logger.DiagnosticMode = settings.EnableDiagnosticMode;
             // Apply settings log level only if not overridden by CLI/Env
-            if (resolvedLogLevel == Classes.LogLevel.Info && settings.LogLevel != Classes.LogLevel.Info) {
+            if (resolvedLogLevel == Classes.LogLevel.Warning && settings.LogLevel != Classes.LogLevel.Warning) {
                 Classes.Logger.MinimumLevel = settings.LogLevel;
             }
             ServiceContainer.Register(settings);
@@ -120,7 +125,6 @@ namespace EdgeLoop {
             ServiceContainer.Register(new TelemetryService());
             var historyService = new PlayHistoryService();
             ServiceContainer.Register(historyService);
-            ServiceContainer.Register(new ShuffleScoringEngine(historyService));
             
             // Prune old history records in background
             System.Threading.Tasks.Task.Run(() => historyService.PruneOldRecords());
@@ -151,7 +155,7 @@ namespace EdgeLoop {
 
             // Security: Migrate legacy plaintext cookies to encrypted form
             if (settings.HypnotubeCookiesEncrypted != null && !CookieProtector.IsEncrypted(settings.HypnotubeCookiesEncrypted)) {
-                Logger.Info("Migrating plaintext cookies to encrypted storage...");
+                Logger.Debug("Migrating plaintext cookies to encrypted storage...");
                 settings.HypnotubeCookies = settings.HypnotubeCookiesEncrypted; // Re-set triggers encryption
                 settings.Save();
             }
@@ -165,7 +169,7 @@ namespace EdgeLoop {
         }
 
         protected override void OnExit(ExitEventArgs e) {
-            Logger.Info("Application exiting - starting shutdown sequence...");
+            Logger.Debug("Application exiting - starting shutdown sequence...");
 
             // Start a watchdog timer to force exit if shutdown hangs (e.g., due to lingering FFmpeg or Flyleaf threads)
             System.Threading.Tasks.Task.Run(async () => {
@@ -185,18 +189,18 @@ namespace EdgeLoop {
             try {
                 // 1. Stop all video players and close windows (this also saves per-item positions)
                 if (VideoService != null) {
-                    Logger.Info("Stopping all video players...");
+                    Logger.Debug("Stopping all video players...");
                     VideoService.StopAll();
                 }
 
                 // 2. Explicitly save play history on exit (synchronous to avoid deadlocks)
                 if (ServiceContainer.TryGet<PlayHistoryService>(out var historyService)) {
-                    Logger.Info("Saving play history...");
+                    Logger.Debug("Saving play history...");
                     historyService.SaveHistorySync();
                 }
 
                 // SESSION RESUME: Final save of positions
-                Logger.Info("Saving playback positions...");
+                Logger.Debug("Saving playback positions...");
                 PlaybackPositionTracker.Instance.SaveSync();
 
                 // Ensure hotkeys are unregistered
@@ -207,14 +211,14 @@ namespace EdgeLoop {
                 // Final save of settings (ensure window bounds etc are preserved)
                 Settings?.Save();
 
-                Logger.Info("Shutdown sequence complete.");
+                Logger.Debug("Shutdown sequence complete.");
             } catch (Exception ex) {
                 Logger.Error("Error during shutdown sequence", ex);
             } finally {
                 base.OnExit(e);
                 
                 // Final failsafe: force exit if we reached here but process is still alive
-                Logger.Info("Application exiting normally via Environment.Exit.");
+                Logger.Debug("Application exiting normally via Environment.Exit.");
                 Environment.Exit(0);
             }
         }
@@ -243,8 +247,8 @@ namespace EdgeLoop {
                 return Classes.LogLevel.Debug;
             }
 
-            // Default to Info (will be overridden by settings if found)
-            return Classes.LogLevel.Info;
+            // Default to Warning — only errors and warnings in the main log
+            return Classes.LogLevel.Warning;
         }
     }
 }

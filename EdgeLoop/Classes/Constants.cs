@@ -23,7 +23,9 @@ namespace EdgeLoop.Classes {
             "rule34video.com",
             "pmvhaven.com",
             "hypnotube.com",
-            "iwara.tv"
+            "iwara.tv",
+            "youtube.com",
+            "youtu.be"
         };
 
         /// <summary>

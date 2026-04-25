@@ -25,7 +25,7 @@ namespace EdgeLoop.Classes {
                     Logger.Debug(context, ex.Message);
                     break;
                 case ErrorSeverity.Info:
-                    Logger.Info(context, ex.Message);
+                    Logger.Debug(context, ex.Message);
                     break;
                 case ErrorSeverity.Warning:
                     Logger.Warning(context, ex.Message);

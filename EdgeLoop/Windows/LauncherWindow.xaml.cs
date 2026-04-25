@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
@@ -132,7 +133,7 @@ namespace EdgeLoop.Windows {
             _lastOpaquePanicTime = now;
 
             if (_opaquePanicPressCount >= 3) {
-                Logger.Info("Emergency stop triggered by triple-press hotkey!");
+                Logger.Debug("Emergency stop triggered by triple-press hotkey!");
                 App.VideoService.StopAll();
                 _opaquePanicPressCount = 0;
             }
@@ -439,9 +440,20 @@ namespace EdgeLoop.Windows {
                 // Check if text is a valid URL
                 var text = e.Data.GetData(DataFormats.UnicodeText) as string 
                         ?? e.Data.GetData(DataFormats.Text) as string;
-                if (!string.IsNullOrEmpty(text) && Uri.TryCreate(text.Trim(), UriKind.Absolute, out var uri) 
-                    && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)) {
-                    e.Effects = DragDropEffects.Link;
+                if (!string.IsNullOrEmpty(text)) {
+                    var potentialUrl = text.Trim();
+                    if (!potentialUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) && 
+                        !potentialUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+                        !Path.IsPathRooted(potentialUrl) && potentialUrl.Contains(".")) {
+                        potentialUrl = "https://" + potentialUrl;
+                    }
+
+                    if (Uri.TryCreate(potentialUrl, UriKind.Absolute, out var uri) 
+                        && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)) {
+                        e.Effects = DragDropEffects.Link;
+                    } else {
+                        e.Effects = DragDropEffects.None;
+                    }
                 } else {
                     e.Effects = DragDropEffects.None;
                 }

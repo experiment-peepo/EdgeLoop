@@ -40,6 +40,7 @@ namespace EdgeLoop.Classes {
 
         public static string SettingsFile => Path.Combine(DataDirectory, "settings.json");
         public static string LogFile => Path.Combine(DataDirectory, "EdgeLoop.log");
+        public static string DiagnosticsLogFile => Path.Combine(DataDirectory, "diagnostics.log");
         public static string SessionFile => Path.Combine(DataDirectory, "session.json");
         public static string CacheFile => Path.Combine(DataDirectory, "urlcache.json");
         public static string TelemetryFile => Path.Combine(DataDirectory, "telemetry.json");

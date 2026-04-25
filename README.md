@@ -23,6 +23,13 @@
 *   **Zero-Install**: Fully portable architecture. All data is kept in the `Data/` folder.
 *   **Panic Mode**: Instant shortcut to wipe all active players from the screen.
 
+### 💾 Local Caching Architecture
+EdgeLoop features a robust background pre-buffering system designed to eliminate stuttering and provide instant seeking capabilities.
+*   **MP4/Static Video Sites** (e.g., Iwara, Rule34Video, Hypnotube): EdgeLoop automatically downloads these videos to the local cache (`%LOCALAPPDATA%\EdgeLoop\VideoCache` by default) in the background. When playback starts, it seamlessly switches to the local file for zero-stutter performance.
+*   **HLS Streaming Sites** (e.g., PMVHaven): These videos are delivered in live segments and cannot be easily cached as a single file. EdgeLoop streams these directly and bypasses the disk cache.
+*   **Auto-Cleanup**: Cached files are automatically cleaned up 10 days after their last access to prevent disk space exhaustion.
+*   **Toggle**: You can disable local caching in the Settings if you prefer to stream everything (Note: This may cause slower start times and stuttering when seeking for MP4 sites).
+
 ## 🛠️ Technical Stack
 *   **Engine**: Custom Flyleaf Fork (C# / WPF / DirectX 11)
 *   **Media**: Internal FFmpeg shared libraries

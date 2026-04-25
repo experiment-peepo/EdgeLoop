@@ -38,7 +38,7 @@ namespace EdgeLoop.Classes {
             if (_isSuppressingSleep) return;
 
             try {
-                Logger.Info("[PowerManagement] Suppressing sleep and display-off to maintain playback.");
+                Logger.Debug("[PowerManagement] Suppressing sleep and display-off to maintain playback.");
                 SetThreadExecutionState(EXECUTION_STATE.ES_CONTINUOUS | EXECUTION_STATE.ES_DISPLAY_REQUIRED | EXECUTION_STATE.ES_SYSTEM_REQUIRED);
                 _isSuppressingSleep = true;
             } catch (Exception ex) {
@@ -53,7 +53,7 @@ namespace EdgeLoop.Classes {
             if (!_isSuppressingSleep) return;
 
             try {
-                Logger.Info("[PowerManagement] Releasing sleep suppression.");
+                Logger.Debug("[PowerManagement] Releasing sleep suppression.");
                 SetThreadExecutionState(EXECUTION_STATE.ES_CONTINUOUS);
                 _isSuppressingSleep = false;
             } catch (Exception ex) {

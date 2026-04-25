@@ -127,6 +127,38 @@ namespace EdgeLoop.ViewModels {
         }
 
         /// <summary>
+        /// Gets the domain/source name for URLs, or "Local" for files
+        /// </summary>
+        public string SourceName {
+            get {
+                if (IsUrl) {
+                    try {
+                        var uri = new Uri(!string.IsNullOrEmpty(OriginalPageUrl) ? OriginalPageUrl : FilePath);
+                        var host = uri.Host.ToLowerInvariant();
+                        if (host.StartsWith("www.")) host = host.Substring(4);
+                        
+                        // Capitalize first letter of domain for better display
+                        if (host.Contains(".")) {
+                            var parts = host.Split('.');
+                            if (parts.Length >= 2) {
+                                var mainPart = parts[parts.Length - 2];
+                                if (!string.IsNullOrEmpty(mainPart)) {
+                                    if (mainPart.Equals("pmvhaven", StringComparison.OrdinalIgnoreCase)) return "PMVHaven";
+                                    if (mainPart.Equals("rule34video", StringComparison.OrdinalIgnoreCase)) return "RULE34Video";
+                                    return char.ToUpper(mainPart[0]) + mainPart.Substring(1);
+                                }
+                            }
+                        }
+                        return char.ToUpper(host[0]) + host.Substring(1);
+                    } catch {
+                        return "Web";
+                    }
+                }
+                return "Local File";
+            }
+        }
+
+        /// <summary>
         /// Gets whether the file is valid and exists
         /// </summary>
         public bool IsValid => ValidationStatus == FileValidationStatus.Valid;

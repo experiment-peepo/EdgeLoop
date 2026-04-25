@@ -24,6 +24,17 @@ namespace EdgeLoop.ViewModels {
         private ConcurrentDictionary<string, int> _fileFailureCounts = new ConcurrentDictionary<string, int>(); // Track failures per file (thread-safe)
         private const int MaxFailuresPerFile = 3; // Skip a file after 3 failures
         private bool _isLoading = false; // Prevent concurrent LoadCurrentVideo() calls
+        
+        private string _loadingProgressText = string.Empty;
+        public string LoadingProgressText {
+            get => _loadingProgressText;
+            set => SetProperty(ref _loadingProgressText, value);
+        }
+
+        public bool IsLoadingStatus {
+            get => _isLoading;
+            set => SetProperty(ref _isLoading, value);
+        }
         private bool _manualPauseRequested = false; // Track if user requested pause while Opening
         private readonly object _loadLock = new object(); // Lock for loading operations
         private Uri _expectedSource = null; // Track the source we're expecting MediaOpened for
@@ -31,12 +42,15 @@ namespace EdgeLoop.ViewModels {
         private const int MaxRecursionDepth = 50; // Maximum recursion depth before aborting
         private CancellationTokenSource _loadCts; // Added to cancel ongoing URL extraction on Skip
         private static readonly Random _shuffleRandom = new Random(); // Shared Random for better randomness
+        private int[] _shuffledIndices;
+        private int _shuffledIndexPointer = -1;
         
         // Pre-buffering for instant playback
         private readonly IVideoDownloadService _downloadService;
         private CancellationTokenSource _preBufferCts = null;
         private string _preBufferedUrl = null; // The URL that was pre-buffered
         private string _preBufferedPath = null; // The local cache path for pre-buffered video
+        private static bool _hasShownCachingWarning = false; // Track if we've warned the user about disabled caching
         
         public Config Config { get; private set; }
         public Player Player { get; private set; }
@@ -173,12 +187,68 @@ namespace EdgeLoop.ViewModels {
             }
         }
 
+        private DateTime _lastSeekTime = DateTime.MinValue;
         private VideoPlayRecord _currentPlayRecord;
         private string _playlistHash;
         private Guid _sessionId = Guid.NewGuid();
         
         public int ClockDriftMs => Player?.Video.ClockDriftMs ?? 0;
         public double D3DImageLatencyMs => Player?.Video.D3DImageLatencyMs ?? 0;
+        
+        private string _resolution = "Unknown";
+        public string Resolution {
+            get => _resolution;
+            private set => SetProperty(ref _resolution, value);
+        }
+
+        private System.Windows.Threading.DispatcherTimer _resolutionTimer;
+
+        private void UpdateResolution() {
+            if (_disposed || Player == null) return;
+            try {
+                if (Player.Video != null) {
+                    var w = Player.Video.Width;
+                    var h = Player.Video.Height;
+                    
+                    if (w > 0 && h > 0) {
+                        var newRes = $"{w}x{h}";
+                        if (Resolution != newRes) {
+                            Resolution = newRes;
+                            Logger.Debug($"[HypnoViewModel] Resolution updated on {MonitorName}: {newRes}");
+                            
+                            // Once found, we can slow down or stop the timer if not needed
+                            if (_resolutionTimer != null && _resolutionTimer.IsEnabled) {
+                                _resolutionTimer.Stop();
+                            }
+                        }
+                    } else {
+                        // Log why it's failing if we're in a polling state
+                        if (Resolution == "Unknown") {
+                             // Logger.Debug($"[HypnoViewModel] Resolution poll: Video object exists but dimensions are {w}x{h}");
+                        }
+                    }
+                } else {
+                     if (Resolution == "Unknown") {
+                         // Logger.Debug($"[HypnoViewModel] Resolution poll: Video object is null");
+                     }
+                }
+            } catch (Exception ex) {
+                Logger.Error($"[HypnoViewModel] Error in UpdateResolution: {ex.Message}");
+            }
+        }
+
+        private void StartResolutionPolling() {
+            if (_resolutionTimer == null) {
+                _resolutionTimer = new System.Windows.Threading.DispatcherTimer();
+                _resolutionTimer.Interval = TimeSpan.FromMilliseconds(500);
+                _resolutionTimer.Tick += (s, e) => UpdateResolution();
+            }
+            
+            if (!_resolutionTimer.IsEnabled) {
+                Logger.Debug($"[HypnoViewModel] Starting resolution polling on {MonitorName}");
+                _resolutionTimer.Start();
+            }
+        }
         
         public bool IsShuffle {
             get => App.Settings?.VideoShuffle ?? true;
@@ -225,6 +295,7 @@ namespace EdgeLoop.ViewModels {
             Config.Player.AutoPlay = false;
             Config.Player.MasterClock = MasterClock.Video; 
             Config.Player.Stats = true; // Enable telemetry stats
+            Config.Player.SeekAccurate = true; // Ensure precise resumption to the exact tick
 
             // Increase buffering to prevent stutters on high-resolution/high-bitrate videos
             // 1 second = 10,000,000 ticks (100ns units)
@@ -247,7 +318,7 @@ namespace EdgeLoop.ViewModels {
             Config.Demuxer.FormatOpt["reconnect_streamed"] = "1";
             Config.Demuxer.FormatOpt["reconnect_delay_max"] = "5";
             Config.Demuxer.FormatOpt["seg_max_retry"] = "10";
-            Config.Demuxer.FormatOpt["http_persistent"] = "1";
+            Config.Demuxer.FormatOpt["http_persistent"] = "0"; // Disabled for HLS stability (PMVHaven CDN rotates endpoints between segments)
 
             // Re-enabling Video Acceleration as requested
             Config.Video.VideoAcceleration = true;
@@ -283,11 +354,11 @@ namespace EdgeLoop.ViewModels {
             var status = Player.Status;
             bool canPlay = Player.CanPlay;
 
-            Logger.Info($"[TogglePlayPause #{clickId}] Status: {status}, CanPlay: {canPlay}, Loading: {_isLoading}, ManualPause: {_manualPauseRequested}, UI: {MediaState}");
+            Logger.Debug($"[TogglePlayPause #{clickId}] Status: {status}, CanPlay: {canPlay}, Loading: {_isLoading}, ManualPause: {_manualPauseRequested}, UI: {MediaState}");
 
             // CASE 1: Engine is not ready yet (still initializing streams)
             if (!canPlay) {
-                Logger.Info($"[TogglePlayPause #{clickId}] CanPlay=false. Deferring pause request.");
+                Logger.Debug($"[TogglePlayPause #{clickId}] CanPlay=false. Deferring pause request.");
                 _manualPauseRequested = true;
                 _mediaState = System.Windows.Controls.MediaState.Pause;
                 OnPropertyChanged(nameof(MediaState));
@@ -296,7 +367,7 @@ namespace EdgeLoop.ViewModels {
 
             // CASE 2: Video has ended. Pressing play should restart.
             if (status == FlyleafLib.MediaPlayer.Status.Ended) {
-                Logger.Info($"[TogglePlayPause #{clickId}] Status=Ended. Seeking to start.");
+                Logger.Debug($"[TogglePlayPause #{clickId}] Status=Ended. Seeking to start.");
                 Player.Seek(0);
                 Play();
                 _manualPauseRequested = false;
@@ -309,7 +380,7 @@ namespace EdgeLoop.ViewModels {
             Player.TogglePlayPause();
             var statusAfter = Player.Status;
             
-            Logger.Info($"[TogglePlayPause #{clickId}] Native toggle: {statusBefore} -> {statusAfter}");
+            Logger.Debug($"[TogglePlayPause #{clickId}] Native toggle: {statusBefore} -> {statusAfter}");
             
             // Update our UI state to match what the engine did
             if (statusAfter == FlyleafLib.MediaPlayer.Status.Playing) {
@@ -338,7 +409,7 @@ namespace EdgeLoop.ViewModels {
                 // Reset current item (event handler unsubscription handled by property setter)
                 CurrentItem = null;
                 // Reset loading state when queue changes
-                _isLoading = false;
+                IsLoadingStatus = false;
                 // Reset recursion depth when queue changes
                 _recursionDepth = 0;
             }
@@ -349,14 +420,17 @@ namespace EdgeLoop.ViewModels {
             
             UpdatePlaylistHash();
             
-            Logger.Info($"Queue updated with {_files.Length} videos");
+            Logger.Debug($"Queue updated with {_files.Length} videos");
             foreach (var f in _files) {
-                Logger.Info($"  - {f.FileName} ({(f.IsUrl ? "URL" : "Local")})");
+                Logger.Debug($"  - {f.FileName} ({(f.IsUrl ? "URL" : "Local")})");
             }
             
-            // Clear failure track when starting a new queue
             _fileFailureCounts.Clear();
             _consecutiveFailures = 0;
+            
+            // Reset shuffle when queue changes
+            _shuffledIndices = null;
+            _shuffledIndexPointer = -1;
             
             // Cancel any pending pre-buffer when queue changes
             _preBufferCts?.Cancel();
@@ -365,6 +439,10 @@ namespace EdgeLoop.ViewModels {
             
             // Start playing the new queue
             if (startIndex >= 0 && startIndex < _files.Length) {
+                if (IsShuffle) {
+                    InitializeShuffle(startIndex);
+                    _shuffledIndexPointer = 0; // The first index is already being played by JumpToIndex
+                }
                 JumpToIndex(startIndex);
             } else {
                 PlayNext();
@@ -404,6 +482,10 @@ namespace EdgeLoop.ViewModels {
                 _files = newFilesList.ToArray();
                 _currentPos = newCurrentPos;
                 UpdatePlaylistHash();
+                
+                // Invalidate shuffle bag as indices have changed
+                _shuffledIndices = null;
+                _shuffledIndexPointer = -1;
             }
 
             if (_files.Length == 0) {
@@ -414,7 +496,7 @@ namespace EdgeLoop.ViewModels {
             }
 
             if (currentItemRemoved) {
-                Logger.Info($"Current video removed from queue on {MonitorName}. Skipping to next.");
+                Logger.Debug($"Current video removed from queue on {MonitorName}. Skipping to next.");
                 CurrentItem = null; // Clear highlight/current item immediately
                 PlayNext(true);
             }
@@ -437,6 +519,53 @@ namespace EdgeLoop.ViewModels {
                 _playlistHash = "ERROR";
             }
         }
+ 
+        private void InitializeShuffle(int firstIndex = -1) {
+            if (_files == null || _files.Length == 0) return;
+            
+            Logger.Debug($"[Shuffle] Initializing new shuffle bag for {_files.Length} videos on {MonitorName} (FirstIndex={firstIndex})");
+            
+            int lastIndex = -1;
+            if (firstIndex != -1) {
+                lastIndex = firstIndex;
+            } else if (_shuffledIndices != null && _shuffledIndexPointer >= 0 && _shuffledIndexPointer < _shuffledIndices.Length) {
+                lastIndex = _shuffledIndices[_shuffledIndexPointer];
+            }
+
+            _shuffledIndices = Enumerable.Range(0, _files.Length).ToArray();
+            
+            // Fisher-Yates shuffle
+            for (int i = _shuffledIndices.Length - 1; i > 0; i--) {
+                int j = _shuffleRandom.Next(i + 1);
+                int temp = _shuffledIndices[i];
+                _shuffledIndices[i] = _shuffledIndices[j];
+                _shuffledIndices[j] = temp;
+            }
+
+            // Ensure the requested firstIndex (or lastIndex from previous bag) is handled
+            if (lastIndex != -1 && _shuffledIndices.Length > 0) {
+                // Find where lastIndex ended up
+                int idx = Array.IndexOf(_shuffledIndices, lastIndex);
+                if (idx != -1) {
+                    if (firstIndex != -1) {
+                        // Move firstIndex to the front
+                        int temp = _shuffledIndices[0];
+                        _shuffledIndices[0] = _shuffledIndices[idx];
+                        _shuffledIndices[idx] = temp;
+                    } else {
+                        // We are starting a new bag, ensure the first item isn't the same as the last bag's last item
+                        if (_shuffledIndices[0] == lastIndex && _shuffledIndices.Length > 1) {
+                            int swapIdx = _shuffleRandom.Next(1, _shuffledIndices.Length);
+                            int temp = _shuffledIndices[0];
+                            _shuffledIndices[0] = _shuffledIndices[swapIdx];
+                            _shuffledIndices[swapIdx] = temp;
+                        }
+                    }
+                }
+            }
+
+            _shuffledIndexPointer = -1;
+        }
 
 
 
@@ -450,18 +579,32 @@ namespace EdgeLoop.ViewModels {
             bool shouldJump = force || _currentPos != index || (Player != null && Player.Status == FlyleafLib.MediaPlayer.Status.Ended);
             if (!shouldJump) return;
 
-            Logger.Info($"Jumping to index {index} (requested for sync, force={force}, sameIndex={_currentPos == index})");
+            Logger.Debug($"Jumping to index {index} (requested for sync, force={force}, sameIndex={_currentPos == index})");
             
             lock (_loadLock) {
                 if (_isLoading) {
                     _loadCts?.Cancel();
                 }
-                _isLoading = true; // Mark as loading immediately to prevent sync timer from starting the clock
+                IsLoadingStatus = true; // Mark as loading immediately to prevent sync timer from starting the clock
                 _recursionDepth = 0;
             }
 
             _manualPauseRequested = false; // Explicit user jump resets pause intent
             _currentPos = index;
+            
+            // Align shuffle pointer if enabled
+            if (IsShuffle && _shuffledIndices != null) {
+                int idx = Array.IndexOf(_shuffledIndices, index);
+                if (idx != -1) {
+                    _shuffledIndexPointer = idx;
+                    Logger.Debug($"[Shuffle] Manually jumped to index {index}, aligning shuffle pointer to position {idx + 1}/{_shuffledIndices.Length}");
+                } else {
+                    // This shouldn't happen unless the queue changed without re-initializing shuffle
+                    InitializeShuffle(index);
+                    _shuffledIndexPointer = 0;
+                }
+            }
+            
             _ = LoadCurrentVideo();
         }
 
@@ -492,16 +635,16 @@ namespace EdgeLoop.ViewModels {
                     }
                     
                     if (force && _isLoading) {
-                        Logger.Info("PlayNext forced: Interrupting current load to skip.");
+                        Logger.Debug("PlayNext forced: Interrupting current load to skip.");
                         _loadCts?.Cancel();
-                        _isLoading = false;
+                        IsLoadingStatus = false;
                         _recursionDepth = 0; // Reset recursion depth on force skip
                         Stop(); // Interrupt current player if it was trying to open
                     }
                     
                     _loadCts?.Cancel();
                     _loadCts = new CancellationTokenSource();
-                    _isLoading = true; // Set loading flag early to prevent other PlayNext calls
+                    IsLoadingStatus = true; // Set loading flag early to prevent other PlayNext calls
                 }
 
                 // Find the next valid video that hasn't failed too many times
@@ -510,7 +653,7 @@ namespace EdgeLoop.ViewModels {
                 // We forward the request to the master or wait for the broadcast.
                 if (!string.IsNullOrEmpty(SyncGroupId) && !IsSyncMaster) {
                     if (force) {
-                        Logger.Info($"[PlayNext] {this.MonitorName} (Follower) received manual skip. Requesting group skip via master.");
+                        Logger.Debug($"[PlayNext] {this.MonitorName} (Follower) received manual skip. Requesting group skip via master.");
                         if (ServiceContainer.TryGet<VideoPlayerService>(out var vps)) {
                             // Find the master for this group and trigger skip
                             var master = vps.ActiveViewModels.FirstOrDefault(vm => vm.SyncGroupId == this.SyncGroupId && vm.IsSyncMaster);
@@ -519,48 +662,20 @@ namespace EdgeLoop.ViewModels {
                     } else {
                         Logger.Debug($"[PlayNext] {this.MonitorName} (Follower) ignoring auto-skip, waiting for master sync.");
                     }
-                    _isLoading = false; 
+                    IsLoadingStatus = false; 
                     return;
                 }
 
                 int attempts = 0;
                 do {
                     if (IsShuffle && _files.Length > 1) {
-                        Logger.Debug($"[PlayNext] {this.MonitorName} (Master) shuffling...");
-                        
-                        if (App.Settings.CurrentShuffleMode == ShuffleMode.Smart && ServiceContainer.TryGet<ShuffleScoringEngine>(out var engine)) {
-                            _currentPos = engine.SelectBestVideo(_files, _playlistHash, App.Settings, _currentPos);
-                        } else {
-                             // Simple Shuffle Logic (Legacy fallback)
-                            var candidates = new System.Collections.Generic.List<int>();
-                            var allIndices = Enumerable.Range(0, _files.Length).ToList();
-                            var history = new HashSet<string>(App.Settings.PlayedHistory ?? new List<string>());
-                            
-                            foreach (var i in allIndices) {
-                                if (_files[i] == null) continue;
-                                if (i == _currentPos) continue; 
-                                if (!history.Contains(_files[i].FilePath)) candidates.Add(i);
-                            }
-
-                            if (candidates.Count == 0) {
-                                App.Settings.PlayedHistory?.Clear();
-                                App.Settings.Save();
-                                candidates = allIndices.Where(i => i != _currentPos && _files[i] != null).ToList();
-                            }
-
-                            if (candidates.Count > 0) {
-                                _currentPos = candidates[_shuffleRandom.Next(candidates.Count)];
-                                
-                                var pickedPath = _files[_currentPos]?.FilePath;
-                                if (pickedPath != null && App.Settings.PlayedHistory != null) {
-                                    App.Settings.PlayedHistory.Add(pickedPath);
-                                    if (App.Settings.PlayedHistory.Count > 10000) App.Settings.PlayedHistory.RemoveRange(0, 1000);
-                                    App.Settings.Save();
-                                }
-                            } else {
-                                _currentPos = (_currentPos + 1) % _files.Length;
-                            }
+                        if (_shuffledIndices == null || _shuffledIndices.Length != _files.Length || _shuffledIndexPointer >= _shuffledIndices.Length - 1) {
+                            InitializeShuffle();
                         }
+                        
+                        _shuffledIndexPointer++;
+                        _currentPos = _shuffledIndices[_shuffledIndexPointer];
+                        Logger.Debug($"[Shuffle] Picked index {_currentPos} (Bag Position: {_shuffledIndexPointer + 1}/{_shuffledIndices.Length})");
                     } else {
                         // Sequential Logic
                         _currentPos = (_currentPos + 1) % _files.Length;
@@ -581,18 +696,18 @@ namespace EdgeLoop.ViewModels {
                             Stop();
                             TerminalFailure?.Invoke(this, EventArgs.Empty);
                         });
-                        _isLoading = false;
+                        IsLoadingStatus = false;
                         return;
                     }
                 } while (_files[_currentPos] == null || (_fileFailureCounts.TryGetValue(_files[_currentPos].FilePath, out int fails) && fails >= 3));
 
-                Logger.Info($"[PlayNext] {this.MonitorName} selected next video: #{_currentPos} - {_files[_currentPos].FileName}");
+                Logger.Debug($"[PlayNext] {this.MonitorName} selected next video: #{_currentPos} - {_files[_currentPos].FileName}");
                 
                 StartNewPlayRecord(_files[_currentPos].FilePath);
                 _ = LoadCurrentVideo();
             } catch (Exception ex) {
                 Logger.Error($"[PlayNext] Unhandled exception on {MonitorName}", ex);
-                _isLoading = false;
+                IsLoadingStatus = false;
             }
         }
 
@@ -615,25 +730,25 @@ namespace EdgeLoop.ViewModels {
                     
                     if (force && _isLoading) {
                         _loadCts?.Cancel();
-                        _isLoading = false;
+                        IsLoadingStatus = false;
                         _recursionDepth = 0;
                         Stop();
                     }
                     
                     _loadCts?.Cancel();
                     _loadCts = new CancellationTokenSource();
-                    _isLoading = true;
+                    IsLoadingStatus = true;
                 }
 
                 if (!string.IsNullOrEmpty(SyncGroupId) && !IsSyncMaster) {
                     if (force) {
-                        Logger.Info($"[PlayPrevious] {this.MonitorName} (Follower) received manual skip. Requesting group skip via master.");
+                        Logger.Debug($"[PlayPrevious] {this.MonitorName} (Follower) received manual skip. Requesting group skip via master.");
                         if (ServiceContainer.TryGet<VideoPlayerService>(out var vps)) {
                             var master = vps.ActiveViewModels.FirstOrDefault(vm => vm.SyncGroupId == this.SyncGroupId && vm.IsSyncMaster);
                             master?.PlayPrevious(true);
                         }
                     }
-                    _isLoading = false; 
+                    IsLoadingStatus = false; 
                     return;
                 }
 
@@ -656,18 +771,18 @@ namespace EdgeLoop.ViewModels {
                             Stop();
                             TerminalFailure?.Invoke(this, EventArgs.Empty);
                         });
-                        _isLoading = false;
+                        IsLoadingStatus = false;
                         return;
                     }
                 } while (_files[_currentPos] == null || (_fileFailureCounts.TryGetValue(_files[_currentPos].FilePath, out int fails) && fails >= 3));
 
-                Logger.Info($"[PlayPrevious] {this.MonitorName} selected previous video: #{_currentPos} - {_files[_currentPos].FileName}");
+                Logger.Debug($"[PlayPrevious] {this.MonitorName} selected previous video: #{_currentPos} - {_files[_currentPos].FileName}");
                 
                 StartNewPlayRecord(_files[_currentPos].FilePath);
                 _ = LoadCurrentVideo();
             } catch (Exception ex) {
                 Logger.Error($"[PlayPrevious] Unhandled exception on {MonitorName}", ex);
-                _isLoading = false;
+                IsLoadingStatus = false;
             }
         }
 
@@ -713,7 +828,7 @@ namespace EdgeLoop.ViewModels {
                 if (_loadCts == null) _loadCts = new CancellationTokenSource();
                 token = _loadCts.Token;
                 
-                _isLoading = true; // Set flag inside lock to prevent race condition
+                IsLoadingStatus = true; // Set flag inside lock to prevent race condition
                 // DO NOT RESET _manualPauseRequested HERE. It must persist through internal retries and async ops.
                 // It is only reset by explicit user actions (Play, Skip, Jump, SetQueue).
                 
@@ -729,7 +844,7 @@ namespace EdgeLoop.ViewModels {
                 _recursionDepth++;
                 if (_recursionDepth > MaxRecursionDepth) {
                     Logger.Error($"Maximum recursion depth ({MaxRecursionDepth}) exceeded in LoadCurrentVideo. Stopping playback.");
-                    _isLoading = false;
+                    IsLoadingStatus = false;
                     _recursionDepth = 0;
                     MediaErrorOccurred?.Invoke(this, new MediaErrorEventArgs("Playback stopped due to excessive errors. Please check your video files.", _currentItem));
                     return;
@@ -741,7 +856,7 @@ namespace EdgeLoop.ViewModels {
 
                 if (_files == null || _files.Length == 0 || _currentPos < 0 || _currentPos >= _files.Length) {
                     lock (_loadLock) {
-                        _isLoading = false;
+                        IsLoadingStatus = false;
                     }
                     return;
                 }
@@ -752,22 +867,35 @@ namespace EdgeLoop.ViewModels {
                 // (Event subscription handled by property setter)
                 
                 var path = _currentItem.FilePath;
-                Logger.Info($"LoadCurrentVideo: Processing item '{_currentItem.FileName}' with path: {path}");
+                Logger.Debug($"LoadCurrentVideo: Processing item '{_currentItem.FileName}' with path: {path}");
                 
+                // NEW: If we have an original page URL that requires download (like YouTube), 
+                // and we don't have a local cache file yet, prioritize the page URL for JIT resolution.
+                // This ensures we trigger the download+mux path instead of trying to play a low-quality streaming URL.
+                if (!string.IsNullOrEmpty(_currentItem.OriginalPageUrl) && _currentItem.IsUrl) {
+                    try {
+                        var pageUri = new Uri(_currentItem.OriginalPageUrl);
+                        if (YtDlpService.IsDownloadRequiredSite(pageUri.Host)) {
+                            Logger.Debug($"LoadCurrentVideo: Prioritizing OriginalPageUrl for resolution: {_currentItem.OriginalPageUrl}");
+                            path = _currentItem.OriginalPageUrl;
+                        }
+                    } catch { }
+                }
+
                 // CRITICAL FIX: Detect and clean malformed Rule34Video URLs
                 if (path.Contains("rule34video.com/video/") && path.Contains("/function/0/https://")) {
                     Logger.Warning($"LoadCurrentVideo: Detected malformed Rule34Video URL with page prefix. Attempting to clean...");
                     int httpIndex = path.IndexOf("https://", path.IndexOf("/function/0/"));
                     if (httpIndex > 0) {
                         var cleanedUrl = path.Substring(httpIndex);
-                        Logger.Info($"LoadCurrentVideo: Cleaned URL from '{path}' to '{cleanedUrl}'");
+                        Logger.Debug($"LoadCurrentVideo: Cleaned URL from '{path}' to '{cleanedUrl}'");
                         path = cleanedUrl;
                     }
                 }
                 
                 // Validate based on whether it's a URL or local file
                 if (_currentItem.IsUrl) {
-                    Logger.Info($"LoadCurrentVideo: Item is a URL, validating...");
+                    Logger.Debug($"LoadCurrentVideo: Item is a URL, validating...");
                     // For URLs, validate URL format
                     if (!FileValidator.ValidateVideoUrl(path, out string urlValidationError)) {
                         Logger.Warning($"URL validation failed for '{_currentItem.FileName}': {urlValidationError}. Reporting failure.");
@@ -779,37 +907,68 @@ namespace EdgeLoop.ViewModels {
                         OnMediaFailed(new ArgumentException($"URL validation failed: {urlValidationError}"), token);
                         return;
                     }
-                    Logger.Info($"LoadCurrentVideo: URL validation passed for: {path}");
+                    Logger.Debug($"LoadCurrentVideo: URL validation passed for: {path}");
                     
                     // RESOLVE PAGE URLS: If it's a page URL and not already cached, resolve it now
                     if (FileValidator.IsPageUrl(path)) {
                         var cached = _downloadService.GetCachedFilePath(path);
                         if (string.IsNullOrEmpty(cached) || cached.EndsWith(".partial")) {
                             if (token.IsCancellationRequested) return;
-                            Logger.Info($"LoadCurrentVideo: Page URL detected, resolving: {path}");
+                            Logger.Debug($"LoadCurrentVideo: Page URL detected, resolving: {path}");
                             
-                            // Add a timeout for resolution (30s) to prevent hanging the player
-                            var resolutionTask = _urlExtractor.ExtractVideoUrlAsync(path, token);
-                            var timeoutTask = Task.Delay(30000, token);
+                            // Use longer timeout for sites that require download+mux (30 minutes vs 30 seconds)
+                            var host = new Uri(path).Host.ToLowerInvariant();
+                            bool isDownloadRequired = YtDlpService.IsDownloadRequiredSite(host);
+                            int resolutionTimeoutMs = isDownloadRequired ? 1800000 : 30000;
+                            
+                            // Warn the user once per session if they are streaming a site that relies on caching for 4K
+                            if (isDownloadRequired && App.Settings?.EnableLocalCaching == false && !_hasShownCachingWarning) {
+                                _hasShownCachingWarning = true;
+                                Logger.Warning($"LoadCurrentVideo: Local caching is disabled. Displaying warning to user for {host}.");
+                                Application.Current?.Dispatcher?.InvokeAsync(() => {
+                                    System.Windows.MessageBox.Show(
+                                        "Local Caching is currently disabled in your Settings.\n\n" +
+                                        "Sites like YouTube and Iwara require Local Caching to construct 4K videos and prevent severe buffering.\n\n" +
+                                        "While disabled, these videos will be capped at 1080p and may buffer heavily due to aggressive network throttling by the host. To fix this, enable 'Local Caching' in the EdgeLoop Settings.",
+                                        "Performance & Quality Warning",
+                                        System.Windows.MessageBoxButton.OK,
+                                        System.Windows.MessageBoxImage.Warning
+                                    );
+                                });
+                            }
+                            
+                            // Reset progress text before starting extraction
+                            Application.Current?.Dispatcher?.InvokeAsync(() => {
+                                LoadingProgressText = "";
+                            });
+                            
+                            var progress = new Progress<string>(status => {
+                                Application.Current?.Dispatcher?.InvokeAsync(() => {
+                                    LoadingProgressText = status;
+                                });
+                            });
+                            
+                            var resolutionTask = _urlExtractor.ExtractVideoUrlAsync(path, token, progress);
+                            var timeoutTask = Task.Delay(resolutionTimeoutMs, token);
                             var completedTask = await Task.WhenAny(resolutionTask, timeoutTask);
 
                             string resolved = null;
                             if (completedTask == resolutionTask) {
                                 resolved = await resolutionTask;
                             } else {
-                                Logger.Warning($"LoadCurrentVideo: Resolution timed out after 30s for: {path}");
+                                Logger.Warning($"LoadCurrentVideo: Resolution timed out after {(resolutionTimeoutMs/1000)}s for: {path}");
                             }
 
                             if (!string.IsNullOrEmpty(resolved)) {
-                                Logger.Info($"LoadCurrentVideo: Successfully resolved page URL to: {resolved}");
+                                Logger.Debug($"LoadCurrentVideo: Successfully resolved page URL to: {resolved}");
                                 path = resolved;
                             } else {
                                 if (token.IsCancellationRequested) {
-                                    Logger.Info("LoadCurrentVideo: Resolution cancelled.");
+                                    Logger.Debug("LoadCurrentVideo: Resolution cancelled.");
                                     return;
                                 }
                                 
-                                string errorDetail = completedTask == timeoutTask ? "Resolution timed out (30s)" : "Extraction failed";
+                                string errorDetail = completedTask == timeoutTask ? $"Resolution timed out ({(resolutionTimeoutMs/1000)}s)" : "Extraction failed";
                                 Logger.Warning($"LoadCurrentVideo: {errorDetail} for page URL: {path}. Reporting failure.");
                                 
                                 // Increment failure count for this URL
@@ -834,7 +993,7 @@ namespace EdgeLoop.ViewModels {
                              // Peeking at the tracking path for the CURRENT item (which is still the URL/PageURL)
                              var savedPos = PlaybackPositionTracker.Instance.GetPosition(_currentItem.TrackingPath);
                              if (savedPos.HasValue && savedPos.Value.TotalSeconds > 10) { // arbitrary buffer
-                                 Logger.Info($"[ConcurrentPlayback] Active download detected but found saved position ({savedPos.Value:mm\\:ss}). Forcing stream for safe seeking.");
+                                 Logger.Debug($"[ConcurrentPlayback] Active download detected but found saved position ({savedPos.Value:mm\\:ss}). Forcing stream for safe seeking.");
                                  forceStream = true;
                              }
                         }
@@ -845,7 +1004,7 @@ namespace EdgeLoop.ViewModels {
                                 Logger.Warning($"[PreBuffer] Cached file is corrupted or a manifest: {cachedPath}. Deleting and falling back to streaming.");
                                 try { File.Delete(cachedPath); } catch { }
                             } else {
-                                Logger.Info($"[PreBuffer] Using cached file: {Path.GetFileName(cachedPath)}");
+                                Logger.Debug($"[PreBuffer] Using cached file: {Path.GetFileName(cachedPath)}");
                                 path = cachedPath;
                                 
                                 // Update existing item instead of replacing it to maintain UI highlighting
@@ -870,7 +1029,7 @@ namespace EdgeLoop.ViewModels {
                         
                         // Cleanup corrupted cache files immediately (e.g. HLS manifests saved as MP4)
                         if (path.Contains("VideoCache") && File.Exists(path)) {
-                            try { File.Delete(path); Logger.Info($"Deleted corrupted cache file: {path}"); } catch { }
+                            try { File.Delete(path); Logger.Debug($"Deleted corrupted cache file: {path}"); } catch { }
                         }
                         
                         // Increment failure count for this path
@@ -878,7 +1037,7 @@ namespace EdgeLoop.ViewModels {
                         _consecutiveFailures++;
 
                         lock (_loadLock) {
-                            _isLoading = false;
+                            IsLoadingStatus = false;
                         }
                         PlayNext(true);
                         return;
@@ -903,12 +1062,12 @@ namespace EdgeLoop.ViewModels {
                        OnMediaFailed(new FileNotFoundException("File not found", path), token);
                        return;
                    } else {
-                       Logger.Info($"LoadCurrentVideo: File verified to exist: {path}");
+                       Logger.Debug($"LoadCurrentVideo: File verified to exist: {path}");
                        
                        if (path.Contains('[') || path.Contains(']') || path.Contains('#') || path.Contains('%') || path.Contains(' ') || path.Any(c => c > 127)) {
                            string shortPath = GetShortPath(path);
                            if (!string.Equals(shortPath, path, StringComparison.OrdinalIgnoreCase)) {
-                               Logger.Info($"LoadCurrentVideo: Converted problematic path '{path}' to short path '{shortPath}'");
+                               Logger.Debug($"LoadCurrentVideo: Converted problematic path '{path}' to short path '{shortPath}'");
                                path = shortPath;
                            }
                        }
@@ -931,7 +1090,7 @@ namespace EdgeLoop.ViewModels {
                     newSource = new Uri(Path.GetFullPath(path));
                 }
                 
-                Logger.Info($"LoadCurrentVideo: Generated URI: {newSource.AbsoluteUri}");
+                Logger.Debug($"LoadCurrentVideo: Generated URI: {newSource.AbsoluteUri}");
                 } // End if(!IsUrl)
                 
                 lock (_loadLock) {
@@ -940,7 +1099,7 @@ namespace EdgeLoop.ViewModels {
                     if (App.Settings?.RememberFilePosition == true) {
                         var savedPos = PlaybackPositionTracker.Instance.GetPosition(_currentItem.TrackingPath);
                         if (savedPos.HasValue) {
-                            Logger.Info($"[Resume] Found saved position for '{_currentItem.FileName}': {savedPos.Value:mm\\:ss}. Setting pending seek.");
+                            Logger.Debug($"[Resume] Found saved position for '{_currentItem.FileName}': {savedPos.Value:mm\\:ss}. Setting pending seek.");
                             _pendingSeekPosition = savedPos.Value;
                         }
                     }
@@ -986,7 +1145,7 @@ namespace EdgeLoop.ViewModels {
                     }
 
                     if (!string.IsNullOrEmpty(referer)) {
-                        Logger.Info($"LoadCurrentVideo: Injecting Referer header: {referer}");
+                        Logger.Debug($"LoadCurrentVideo: Injecting Referer header: {referer}");
                         Config.Demuxer.FormatOpt["referer"] = referer;
                         if (referer == "https://iwara.tv/") {
                             Config.Demuxer.FormatOpt["headers"] = $"Referer: {referer}\r\nOrigin: https://iwara.tv\r\n";
@@ -1019,17 +1178,17 @@ namespace EdgeLoop.ViewModels {
                     }, TaskContinuationOptions.ExecuteSynchronously);
 
                     if (token.IsCancellationRequested) {
-                        Logger.Info("LoadCurrentVideo: Aborting Player.Open because task was cancelled.");
+                        Logger.Debug("LoadCurrentVideo: Aborting Player.Open because task was cancelled.");
                         return;
                     }
 
-                    Logger.Info($"LoadCurrentVideo: Opening path in Flyleaf: {path}");
+                    Logger.Debug($"LoadCurrentVideo: Opening path in Flyleaf: {path}");
                     CurrentSource = newSource;
                     
                     // Call Open in a separate task to ensure zero risk of blocking the UI thread
                     // during heavy probing or network initialization.
                     await Task.Run(() => Player.Open(path), token);
-                    Logger.Info("LoadCurrentVideo: Player.Open call returned.");
+                    Logger.Debug("LoadCurrentVideo: Player.Open call returned.");
                 } catch (Exception ex) {
                     Logger.Error("Error in LoadCurrentVideo()", ex);
                     OnMediaFailed(ex, token);
@@ -1063,6 +1222,8 @@ namespace EdgeLoop.ViewModels {
                         _mediaState = System.Windows.Controls.MediaState.Play;
                         OnPropertyChanged(nameof(MediaState));
                     }
+                    
+                    StartResolutionPolling();
                 } else if (Player.Status == FlyleafLib.MediaPlayer.Status.Paused || Player.Status == FlyleafLib.MediaPlayer.Status.Stopped) {
                     // Ignore Stopped/Paused status updates if we are in the middle of loading a video
                     // This prevents the UI from flipping to "Play" icon momentarily while the player initializes
@@ -1083,6 +1244,11 @@ namespace EdgeLoop.ViewModels {
                     OnMediaEnded();
                 }
             } 
+            else if (e.PropertyName == nameof(Player.Video)) {
+                OnPropertyChanged(nameof(ClockDriftMs));
+                OnPropertyChanged(nameof(D3DImageLatencyMs));
+                UpdateResolution();
+            }
             else if (e.PropertyName == nameof(Player.CurTime)) {
                 // Update internal state record
                 var position = TimeSpan.FromTicks(Player.CurTime);
@@ -1096,7 +1262,9 @@ namespace EdgeLoop.ViewModels {
         }
 
         private void SaveCurrentPosition() {
-            if (_currentItem != null && Player != null) {
+            // Prevent overwriting saved position during initial load or while seeking
+            // Added 5s cooldown after seek to allow HLS streams to stabilize and reach the target timestamp
+            if (_currentItem != null && Player != null && !_isLoading && !_pendingSeekPosition.HasValue && (DateTime.Now - _lastSeekTime).TotalSeconds > 5) {
                 var position = TimeSpan.FromTicks(Player.CurTime);
                 PlaybackPositionTracker.Instance.UpdatePosition(_currentItem.TrackingPath, position);
                 _lastSaveTime = DateTime.Now;
@@ -1108,7 +1276,7 @@ namespace EdgeLoop.ViewModels {
         public void OnMediaEnded() {
             if (_disposed) return;
             IsReady = false; 
-            Logger.Info($"[HypnoViewModel] Media ended: {CurrentSource} (Pos: #{_currentPos})");
+            Logger.Debug($"[HypnoViewModel] Media ended: {CurrentSource} (Pos: #{_currentPos})");
             
             _consecutiveFailures = 0; // Reset failure counter on successful playback
             
@@ -1153,7 +1321,7 @@ namespace EdgeLoop.ViewModels {
                 
                 // Reset loading flag when media successfully opens
                 // This must be done in a lock to ensure thread safety
-                _isLoading = false;
+                IsLoadingStatus = false;
                 // Reset recursion depth on successful load
                 _recursionDepth = 0;
             }
@@ -1169,12 +1337,12 @@ namespace EdgeLoop.ViewModels {
             // Set initial parameters
             if (Player.Audio != null) {
                 Player.Audio.Volume = (int)(_volume * 100);
-                Logger.Info($"[HypnoViewModel] Applied volume {Player.Audio.Volume} to new media.");
+                Logger.Debug($"[HypnoViewModel] Applied volume {Player.Audio.Volume} to new media.");
             }
             Player.Speed = _speedRatio;
             
             if (_manualPauseRequested) {
-                 Logger.Info("[HypnoViewModel] Manual pause requested during load. Preventing auto-play.");
+                 Logger.Debug("[HypnoViewModel] Manual pause requested during load. Preventing auto-play.");
                  Pause();
             } else if (UseCoordinatedStart) {
                 // Coordinated start: Request PLAY to allow buffering to complete, 
@@ -1192,17 +1360,17 @@ namespace EdgeLoop.ViewModels {
             // Handle pending seek (e.g., from RestoreState) - SEEK AFTER PLAY to ensure it applies
             if (_pendingSeekPosition.HasValue) {
                 var pos = _pendingSeekPosition.Value;
-                int seekMs = (int)pos.TotalMilliseconds;
-                Logger.Info($"[Resume] Seeking to saved position: {pos:mm\\:ss} ({seekMs}ms)");
+                Logger.Debug($"[Resume] Seeking to saved position: {pos:mm\\:ss} (Ticks: {pos.Ticks})");
                 
                 // For coordinated groups, the master's resume position drives the shared clock
                 if (UseCoordinatedStart && IsSyncMaster && ExternalClock is Classes.SharedClock sharedClock) {
-                    Logger.Info($"[Resume] Sync master updating SharedClock to resumed position: {pos}");
+                    Logger.Debug($"[Resume] Sync master updating SharedClock to resumed position: {pos}");
                     sharedClock.Seek(pos.Ticks);
                 }
 
-                Player.Seek(seekMs);
+                Player.SeekAccurate((int)(pos.Ticks / 10000));
                 _pendingSeekPosition = null;
+                _lastSeekTime = DateTime.Now;
             }
 
             // Start pre-buffering the next video for instant playback
@@ -1210,6 +1378,9 @@ namespace EdgeLoop.ViewModels {
 
             // Notify listeners that media has opened successfully
             MediaOpened?.Invoke(this, EventArgs.Empty);
+            
+            // Capture initial resolution
+            StartResolutionPolling();
         }
         
         /// <summary>
@@ -1259,12 +1430,12 @@ namespace EdgeLoop.ViewModels {
             if (highRes.item != null) {
                 nextItem = highRes.item;
                 detectedQuality = highRes.quality;
-                Logger.Info($"[PreBuffer] Prioritizing high-res video: {detectedQuality}p - {nextItem.FileName}");
+                Logger.Debug($"[PreBuffer] Prioritizing high-res video: {detectedQuality}p - {nextItem.FileName}");
             } else {
                 var first = candidates.First();
                 nextItem = first.item;
                 detectedQuality = first.quality;
-                Logger.Info($"[PreBuffer] No high-res found, buffering next: {(detectedQuality > 0 ? $"{detectedQuality}p" : "unknown")} - {nextItem.FileName}");
+                Logger.Debug($"[PreBuffer] No high-res found, buffering next: {(detectedQuality > 0 ? $"{detectedQuality}p" : "unknown")} - {nextItem.FileName}");
             }
             
             var videoUrl = nextItem.FilePath;
@@ -1275,12 +1446,12 @@ namespace EdgeLoop.ViewModels {
             if (!string.IsNullOrEmpty(cachedPath) && !cachedPath.EndsWith(".partial")) {
                 _preBufferedUrl = videoUrl;
                 _preBufferedPath = cachedPath;
-                Logger.Info($"[PreBuffer] Already cached: {Path.GetFileName(cachedPath)}");
+                Logger.Debug($"[PreBuffer] Already cached: {Path.GetFileName(cachedPath)}");
                 return;
             }
             
             // Start background partial download for faster startup
-            Logger.Info($"[PreBuffer] Starting partial download for: {nextItem.FileName}");
+            Logger.Debug($"[PreBuffer] Starting partial download for: {nextItem.FileName}");
             _ = Task.Run(async () => {
                 try {
                     if (_disposed) return;
@@ -1288,11 +1459,11 @@ namespace EdgeLoop.ViewModels {
                     
                     // If it's a page URL, resolve it first to avoid "Opening" stalls later
                     if (FileValidator.IsPageUrl(videoUrl)) {
-                        Logger.Info($"[PreBuffer] Resolving site URL: {nextItem.FileName}");
+                        Logger.Debug($"[PreBuffer] Resolving site URL: {nextItem.FileName}");
                         var resolved = await _urlExtractor.ExtractVideoUrlAsync(videoUrl, cancellationToken);
                         if (!string.IsNullOrEmpty(resolved) && !cancellationToken.IsCancellationRequested) {
                             if (resolved.Contains(".m3u8") || resolved.Contains(".mpd")) {
-                                Logger.Info($"[PreBuffer] Resolved to stream ({Path.GetExtension(resolved)}), skipping caching: {nextItem.FileName}");
+                                Logger.Debug($"[PreBuffer] Resolved to stream ({Path.GetExtension(resolved)}), skipping caching: {nextItem.FileName}");
                                 nextItem.FilePath = resolved; // Still update path so it loads immediately later
                                 return;
                             }
@@ -1300,7 +1471,7 @@ namespace EdgeLoop.ViewModels {
                             finalUrl = resolved;
                             // Update the item so LoadCurrentVideo picks it up immediately
                             nextItem.FilePath = resolved; 
-                            Logger.Info($"[PreBuffer] Successfully resolved {nextItem.FileName}");
+                            Logger.Debug($"[PreBuffer] Successfully resolved {nextItem.FileName}");
                         } else if (!cancellationToken.IsCancellationRequested) {
                             Logger.Warning($"[PreBuffer] Failed to resolve site URL: {nextItem.FileName}. Aborting pre-buffer for this item.");
                             return; // DO NOT proceed with downloading the page URL!
@@ -1323,10 +1494,10 @@ namespace EdgeLoop.ViewModels {
                     if (!string.IsNullOrEmpty(localPath) && !cancellationToken.IsCancellationRequested) {
                         _preBufferedUrl = finalUrl;
                         _preBufferedPath = localPath;
-                        Logger.Info($"[PreBuffer] Completed disk cache: {Path.GetFileName(localPath)}");
+                        Logger.Debug($"[PreBuffer] Completed disk cache: {Path.GetFileName(localPath)}");
                     }
                 } catch (OperationCanceledException) {
-                    Logger.Info("[PreBuffer] Cancelled");
+                    Logger.Debug("[PreBuffer] Cancelled");
                 } catch (Exception ex) {
                     Logger.Warning($"[PreBuffer] Failed: {ex.Message}");
                 }
@@ -1345,7 +1516,7 @@ namespace EdgeLoop.ViewModels {
             // Reset loading flag on failure
             // This must be done in a lock to ensure thread safety
             lock (_loadLock) {
-                _isLoading = false;
+                IsLoadingStatus = false;
                 // Capture current load token if none provided
                 if (token == default && _loadCts != null) token = _loadCts.Token;
             }
@@ -1385,7 +1556,7 @@ namespace EdgeLoop.ViewModels {
                         
                         // Clear cache for this page URL so it can be re-extracted on next attempt
                         if (!string.IsNullOrEmpty(_currentItem?.OriginalPageUrl)) {
-                            Logger.Info($"[HypnoViewModel] Clearing cached URL for '{_currentItem.OriginalPageUrl}' due to playback failure.");
+                            Logger.Debug($"[HypnoViewModel] Clearing cached URL for '{_currentItem.OriginalPageUrl}' due to playback failure.");
                             PersistentUrlCache.Instance.Remove(_currentItem.OriginalPageUrl);
                         }
                     } else {
@@ -1440,7 +1611,7 @@ namespace EdgeLoop.ViewModels {
                 
                 // Revert to original URL so we can try streaming/re-extraction
                 if (!string.IsNullOrEmpty(_currentItem?.OriginalPageUrl)) {
-                    Logger.Info($"[HypnoViewModel] Reverting path to OriginalPageUrl: {_currentItem.OriginalPageUrl}");
+                    Logger.Debug($"[HypnoViewModel] Reverting path to OriginalPageUrl: {_currentItem.OriginalPageUrl}");
                     _currentItem.FilePath = _currentItem.OriginalPageUrl;
                 }
             }
@@ -1524,7 +1695,7 @@ namespace EdgeLoop.ViewModels {
         }
 
         public virtual void SyncPosition(TimeSpan position) {
-            Player.Seek((int)position.TotalMilliseconds);
+            Player.SeekAccurate((int)(position.Ticks / 10000));
             RequestSyncPosition?.Invoke(this, position);
         }
 
@@ -1589,7 +1760,7 @@ namespace EdgeLoop.ViewModels {
             if (_disposed) return;
             _disposed = true;
             
-            Logger.Info($"[HypnoViewModel] Disposing (Current: {CurrentSource})");
+            Logger.Debug($"[HypnoViewModel] Disposing (Current: {CurrentSource})");
             
             // Force save position and record play record before disposing
             SaveCurrentPosition();
@@ -1605,7 +1776,7 @@ namespace EdgeLoop.ViewModels {
                     Player.PropertyChanged -= Player_PropertyChanged;
                     
                     Player.Dispose();
-                    Logger.Info("[HypnoViewModel] Player disposed successfully");
+                    Logger.Debug("[HypnoViewModel] Player disposed successfully");
                 }
             } catch (Exception ex) {
                 Logger.Error("Error disposing Player in HypnoViewModel", ex);
@@ -1615,6 +1786,11 @@ namespace EdgeLoop.ViewModels {
             _preBufferCts?.Dispose();
             _loadCts?.Cancel();
             _loadCts?.Dispose();
+
+            if (_resolutionTimer != null) {
+                _resolutionTimer.Stop();
+                _resolutionTimer = null;
+            }
         }
     }
 

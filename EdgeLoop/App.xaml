@@ -292,11 +292,16 @@
                 <Setter Property="BorderBrush" Value="{StaticResource AccentPrimary}"/>
                 <Setter Property="BorderThickness" Value="1.5"/>
                 <Setter Property="Foreground" Value="{StaticResource AccentPrimary}"/>
+                <Style.Resources>
+                    <Style TargetType="Path">
+                        <Setter Property="Fill" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
+                    </Style>
+                </Style.Resources>
                 <Style.Triggers>
                     <Trigger Property="IsMouseOver" Value="True">
                         <Setter Property="Background" Value="#4D0A1F"/>
                         <Setter Property="BorderBrush" Value="{StaticResource AccentSecondary}"/>
-                        <Setter Property="Foreground" Value="{StaticResource AccentSecondary}"/>
+                        <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
                         <Setter Property="Effect">
                             <Setter.Value>
                                 <DropShadowEffect Color="#FF69B4" BlurRadius="8" ShadowDepth="0" Opacity="0.4"/>
@@ -436,6 +441,9 @@
             </Style>
 
             <!-- Global TextBox Style -->
+            <!-- Fallback for FlatTextBoxStyle to prevent crashes if referenced in third-party or legacy code -->
+            <Style x:Key="FlatTextBoxStyle" TargetType="TextBox" BasedOn="{StaticResource PinkTextBoxStyle}"/>
+
             <Style x:Key="PinkTextBoxStyle" TargetType="TextBox">
                 <Setter Property="Background" Value="{StaticResource BackgroundSecondary}"/>
                 <Setter Property="Foreground" Value="White"/>

@@ -13,15 +13,26 @@ namespace EdgeLoop.Classes {
     }
 
     /// <summary>
-    /// Simple file-based logger with different log levels
+    /// Simple file-based logger with different log levels.
+    /// Supports a separate diagnostic log file that captures all log levels
+    /// when DiagnosticMode is enabled, independent of the main log's MinimumLevel.
     /// </summary>
     public static class Logger {
-        public static LogLevel MinimumLevel { get; set; } = LogLevel.Info;
+        public static LogLevel MinimumLevel { get; set; } = LogLevel.Warning;
+
+        /// <summary>
+        /// When true, all log entries (including Debug/Info) are also written
+        /// to the diagnostics.log file regardless of MinimumLevel.
+        /// </summary>
+        public static bool DiagnosticMode { get; set; } = false;
+
         internal static readonly object _lock = new object();
         internal static string _logFilePath;
         internal static int _consecutiveFailures = 0;
         internal const int MaxConsecutiveFailures = 10; // Stop trying file logging after this many failures
-        private static readonly System.Collections.Concurrent.BlockingCollection<string> _logQueue = new System.Collections.Concurrent.BlockingCollection<string>();
+
+        private static readonly System.Collections.Concurrent.BlockingCollection<(string entry, bool writeToMain, bool writeToDiag)> _logQueue
+            = new System.Collections.Concurrent.BlockingCollection<(string, bool, bool)>();
 
         static Logger() {
             _logFilePath = AppPaths.LogFile;
@@ -36,17 +47,30 @@ namespace EdgeLoop.Classes {
         }
 
         private static void ProcessLogQueue() {
-            foreach (var logEntry in _logQueue.GetConsumingEnumerable()) {
-                if (_consecutiveFailures >= MaxConsecutiveFailures) continue;
-
-                try {
-                    lock (_lock) {
-                        File.AppendAllText(_logFilePath, logEntry);
-                        _consecutiveFailures = 0;
+            foreach (var (logEntry, writeToMain, writeToDiag) in _logQueue.GetConsumingEnumerable()) {
+                // Write to main log file (only if this entry meets MinimumLevel)
+                if (writeToMain && _consecutiveFailures < MaxConsecutiveFailures) {
+                    try {
+                        lock (_lock) {
+                            File.AppendAllText(_logFilePath, logEntry);
+                            _consecutiveFailures = 0;
+                        }
+                    } catch (Exception fileEx) {
+                        _consecutiveFailures++;
+                        System.Diagnostics.Debug.WriteLine($"[LOGGER FILE ERROR] Failed to write to log file ({_consecutiveFailures}/{MaxConsecutiveFailures}): {fileEx.Message}");
                     }
-                } catch (Exception fileEx) {
-                    _consecutiveFailures++;
-                    System.Diagnostics.Debug.WriteLine($"[LOGGER FILE ERROR] Failed to write to log file ({_consecutiveFailures}/{MaxConsecutiveFailures}): {fileEx.Message}");
+                }
+
+                // Write to diagnostic log file (captures everything when enabled)
+                if (writeToDiag) {
+                    try {
+                        var diagPath = AppPaths.DiagnosticsLogFile;
+                        lock (_lock) {
+                            File.AppendAllText(diagPath, logEntry);
+                        }
+                    } catch (Exception diagEx) {
+                        System.Diagnostics.Debug.WriteLine($"[LOGGER DIAG ERROR] Failed to write to diagnostics log: {diagEx.Message}");
+                    }
                 }
             }
         }
@@ -76,7 +100,11 @@ namespace EdgeLoop.Classes {
         public static void Debug(string context, string message) => Log(LogLevel.Debug, context, message, null);
 
         private static void Log(LogLevel level, string context, string message, Exception exception) {
-            if (level < MinimumLevel) return;
+            bool writeToMainLog = level >= MinimumLevel;
+            bool writeToDiag = DiagnosticMode;
+
+            // Skip entirely if neither destination wants this entry
+            if (!writeToMainLog && !writeToDiag) return;
 
             try {
                 var levelStr = level.ToString().ToUpper();
@@ -94,8 +122,8 @@ namespace EdgeLoop.Classes {
                 
                 logEntry += Environment.NewLine;
                 
-                // Add to background queue instead of writing synchronously
-                _logQueue.Add(logEntry);
+                // Add to background queue with both routing flags
+                _logQueue.Add((logEntry, writeToMain: writeToMainLog, writeToDiag));
                 
                 // Also output to Debug for immediate inspection in IDE
                 System.Diagnostics.Debug.WriteLine(logEntry.TrimEnd());
@@ -108,18 +136,32 @@ namespace EdgeLoop.Classes {
                 }
             }
         }
+
         /// <summary>
         /// Checks if the log file exceeds the maximum size and rotates it if necessary.
         /// Should be called at application startup.
         /// </summary>
         /// <param name="maxSizeBytes">The maximum size in bytes before rotation occurs</param>
         public static void CheckAndRotateLogFile(long maxSizeBytes) {
+            RotateFileIfNeeded(_logFilePath, maxSizeBytes);
+        }
+
+        /// <summary>
+        /// Checks if the diagnostic log file exceeds the maximum size and rotates it if necessary.
+        /// Should be called at application startup when diagnostic mode is enabled.
+        /// </summary>
+        /// <param name="maxSizeBytes">The maximum size in bytes before rotation occurs</param>
+        public static void CheckAndRotateDiagnosticsLogFile(long maxSizeBytes) {
+            RotateFileIfNeeded(AppPaths.DiagnosticsLogFile, maxSizeBytes);
+        }
+
+        private static void RotateFileIfNeeded(string filePath, long maxSizeBytes) {
             try {
                 lock (_lock) {
-                    var logFile = new FileInfo(_logFilePath);
+                    var logFile = new FileInfo(filePath);
                     if (logFile.Exists && logFile.Length > maxSizeBytes) {
                         try {
-                            var oldLogPath = _logFilePath + ".old";
+                            var oldLogPath = filePath + ".old";
                             
                             // Delete existing backup if it exists
                             if (File.Exists(oldLogPath)) {

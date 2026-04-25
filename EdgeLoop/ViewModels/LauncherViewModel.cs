@@ -105,7 +105,7 @@ namespace EdgeLoop.ViewModels {
         /// </summary>
         public void SetStatusMessage(string message, StatusMessageType type = StatusMessageType.Info) {
             if (!string.IsNullOrEmpty(message)) {
-                Logger.Info($"[Launcher] Status: {message} ({type})");
+                Logger.Debug($"[Launcher] Status: {message} ({type})");
             }
             StatusMessage = message;
             StatusMessageType = type;
@@ -398,7 +398,7 @@ namespace EdgeLoop.ViewModels {
                 }
 
                 int totalItems = assignments.Values.Sum(v => v.Count());
-                Logger.Info($"Hypnotize called. Queuing {totalItems} items across {assignments.Count} screens.");
+                Logger.Debug($"Hypnotize called. Queuing {totalItems} items across {assignments.Count} screens.");
                 
                 if (assignments.Count == 0) {
                     SetStatusMessage("No screen assigned for the selected video(s)", StatusMessageType.Error);
@@ -561,6 +561,12 @@ namespace EdgeLoop.ViewModels {
             SetStatusMessage("Processing URL...", StatusMessageType.Info);
 
             try {
+                // Automatically prepend https:// if missing
+                if (!inputUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) && 
+                    !inputUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+                    !Path.IsPathRooted(inputUrl)) {
+                    inputUrl = "https://" + inputUrl;
+                }
                 // Check if it's a page URL that needs extraction
                 string finalUrl = inputUrl;
                 if (FileValidator.IsPageUrl(inputUrl)) {
@@ -573,9 +579,20 @@ namespace EdgeLoop.ViewModels {
                     }
                 }
 
-                // Validate the URL
-                if (!FileValidator.ValidateVideoUrl(finalUrl, out string errorMessage)) {
-                    SetStatusMessage($"Invalid video URL: {errorMessage}", StatusMessageType.Error);
+                // Validate the result (could be a streaming URL or a local file path from extraction)
+                bool isValid;
+                string errorMessage;
+                if (Path.IsPathRooted(finalUrl) || finalUrl.StartsWith("file://")) {
+                    // It's a local file (e.g. from yt-dlp download+mux)
+                    string localPath = finalUrl.StartsWith("file://") ? finalUrl.Substring(7) : finalUrl;
+                    isValid = FileValidator.ValidateVideoFile(localPath, out errorMessage);
+                } else {
+                    // It's a streaming URL
+                    isValid = FileValidator.ValidateVideoUrl(finalUrl, out errorMessage);
+                }
+
+                if (!isValid) {
+                    SetStatusMessage($"Invalid video: {errorMessage}", StatusMessageType.Error);
                     return;
                 }
 
@@ -796,6 +813,13 @@ namespace EdgeLoop.ViewModels {
                     return;
                 }
 
+                // Handle Ambiguous URLs (e.g. YouTube v= and list=)
+                ImportMode importMode = PromptForAmbiguityIfRequired(trimmedUrl);
+                if (importMode == (ImportMode)(-1)) {
+                    IsLoading = false;
+                    return;
+                }
+
                 SetStatusMessage("Importing playlist...", StatusMessageType.Info);
 
                 // Import playlist with progress updates
@@ -810,7 +834,8 @@ namespace EdgeLoop.ViewModels {
                             SetStatusMessage($"Importing playlist... {current} of {total} videos", StatusMessageType.Info);
                         });
                     },
-                    _importCts.Token
+                    _importCts.Token,
+                    importMode
                 );
 
                 if (videoItems == null || videoItems.Count == 0) {
@@ -910,6 +935,13 @@ namespace EdgeLoop.ViewModels {
                     return;
                 }
 
+                // Handle Ambiguous URLs
+                ImportMode importMode = PromptForAmbiguityIfRequired(trimmedUrl);
+                if (importMode == (ImportMode)(-1)) {
+                    IsLoading = false;
+                    return;
+                }
+
                 // First, try to import as a playlist
                 SetStatusMessage("Checking if URL is a playlist...", StatusMessageType.Info);
 
@@ -924,7 +956,8 @@ namespace EdgeLoop.ViewModels {
                             SetStatusMessage($"Importing playlist... {c} of {t} videos", StatusMessageType.Info);
                         });
                     },
-                    _importCts.Token
+                    _importCts.Token,
+                    importMode
                 );
 
                 // If playlist import returned videos, add them all
@@ -1013,7 +1046,7 @@ namespace EdgeLoop.ViewModels {
                 // Check file size and warn if large (no limit enforced)
                 if (FileValidator.ValidateFileSize(filePath, out long size, out bool warning)) {
                     if (warning) {
-                        Logger.Info($"Large file detected: {System.IO.Path.GetFileName(filePath)} ({size / (1024.0 * 1024 * 1024):F2} GB)");
+                        Logger.Debug($"Large file detected: {System.IO.Path.GetFileName(filePath)} ({size / (1024.0 * 1024 * 1024):F2} GB)");
                     }
                 }
                 return (filePath, isValid: true, errorMessage: (string)null);
@@ -1077,7 +1110,7 @@ namespace EdgeLoop.ViewModels {
                 SaveSession();
             } catch (OperationCanceledException) {
                 SetStatusMessage("Operation cancelled", StatusMessageType.Warning);
-                Logger.Info("Add files operation was cancelled");
+                Logger.Debug("Add files operation was cancelled");
             } catch (Exception ex) {
                 Logger.Error("Error adding files", ex);
                 SetStatusMessage($"Error adding files: {ex.Message}", StatusMessageType.Error);
@@ -1204,14 +1237,21 @@ namespace EdgeLoop.ViewModels {
         public void AddDroppedUrl(string url) {
             if (string.IsNullOrWhiteSpace(url)) return;
             
+            var potentialUrl = url.Trim();
+            if (!potentialUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) && 
+                !potentialUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase) &&
+                !Path.IsPathRooted(potentialUrl) && potentialUrl.Contains(".")) {
+                potentialUrl = "https://" + potentialUrl;
+            }
+
             // Validate URL
-            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) ||
+            if (!Uri.TryCreate(potentialUrl, UriKind.Absolute, out var uri) ||
                 (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps)) {
                 SetStatusMessage("Invalid URL dropped", StatusMessageType.Warning);
                 return;
             }
             
-            _ = ProcessUrlAsync(url, _cancellationTokenSource.Token);
+            _ = ProcessUrlAsync(potentialUrl, _cancellationTokenSource.Token);
         }
 
 
@@ -1236,7 +1276,7 @@ namespace EdgeLoop.ViewModels {
 
                 Action saveAction = () => {
                     if (!_saveSemaphore.Wait(0)) {
-                        Logger.Info("SaveSession: Another save in progress, skipping");
+                        Logger.Debug("SaveSession: Another save in progress, skipping");
                         return;
                     }
 
@@ -1316,7 +1356,7 @@ namespace EdgeLoop.ViewModels {
                                         var cachedUrl = PersistentUrlCache.Instance.Get(pageUrl);
                                         
                                         if (!string.IsNullOrEmpty(cachedUrl)) {
-                                            Logger.Info($"LoadSession: Found valid cached URL for '{videoItem.FileName}'");
+                                            Logger.Debug($"LoadSession: Found valid cached URL for '{videoItem.FileName}'");
                                             videoItem = new VideoItem(cachedUrl, screen);
                                             videoItem.Opacity = item.Opacity;
                                             videoItem.Volume = item.Volume;
@@ -1326,7 +1366,7 @@ namespace EdgeLoop.ViewModels {
                                         else {
                                             // JIT Strategy: Set FilePath to the Page URL.
                                             // HypnoViewModel.LoadCurrentVideo will detect it's a Page URL and resolve it when played.
-                                            Logger.Info($"LoadSession: Deferring resolution for '{videoItem.FileName}' to Playback (JIT)");
+                                            Logger.Debug($"LoadSession: Deferring resolution for '{videoItem.FileName}' to Playback (JIT)");
                                             videoItem = new VideoItem(pageUrl, screen);
                                             videoItem.Opacity = item.Opacity;
                                             videoItem.Volume = item.Volume;
@@ -1349,7 +1389,7 @@ namespace EdgeLoop.ViewModels {
                     }, System.Windows.Threading.DispatcherPriority.Normal, cancellationToken);
                 }
             } catch (OperationCanceledException) {
-                Logger.Info("Load session operation was cancelled");
+                Logger.Debug("Load session operation was cancelled");
             } catch (Exception ex) {
                 Logger.Warning("Failed to load session", ex);
             }
@@ -1412,7 +1452,7 @@ namespace EdgeLoop.ViewModels {
 
         private void VideoService_MediaErrorOccurred(object sender, MediaErrorEventArgs e) {
             Application.Current?.Dispatcher.InvokeAsync(() => {
-                Logger.Info($"[Launcher] Media error received: {e.ErrorMessage} (Item: {e.Item?.FileName ?? "null"})");
+                Logger.Debug($"[Launcher] Media error received: {e.ErrorMessage} (Item: {e.Item?.FileName ?? "null"})");
                 SetStatusMessage(e.ErrorMessage, StatusMessageType.Error);
                 
                 // Automatically remove failing items from the playlist
@@ -1428,7 +1468,7 @@ namespace EdgeLoop.ViewModels {
                     ).ToList();
 
                     if (itemsToRemove.Any()) {
-                        Logger.Info($"[Launcher] Automatically removing {itemsToRemove.Count} dead link(s) from playlist.");
+                        Logger.Debug($"[Launcher] Automatically removing {itemsToRemove.Count} dead link(s) from playlist.");
                         foreach (var item in itemsToRemove) {
                             AddedFiles.Remove(item);
                         }
@@ -1472,6 +1512,23 @@ namespace EdgeLoop.ViewModels {
                 _saveTimer?.Stop();
                 _disposed = true;
             }
+        }
+        private ImportMode PromptForAmbiguityIfRequired(string url) {
+            var ambiguity = PlaylistImporter.DetectUrlAmbiguity(url);
+            if (ambiguity.IsAmbiguous) {
+                var choice = ChoiceDialogWindow.ShowDialog(
+                    Application.Current.MainWindow,
+                    $"Crawl video {ambiguity.VideoId} or playlist {ambiguity.PlaylistId}",
+                    $"This {ambiguity.SiteName} link contains both a video and a playlist. What do you want to import?",
+                    "Only video",
+                    "Playlist"
+                );
+                
+                if (choice == 1) return ImportMode.SingleVideo;
+                if (choice == 2) return ImportMode.Collection;
+                return (ImportMode)(-1); // Cancelled
+            }
+            return ImportMode.Auto;
         }
     }
 }

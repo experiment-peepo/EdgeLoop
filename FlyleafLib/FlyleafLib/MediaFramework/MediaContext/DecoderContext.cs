@@ -1,4 +1,4 @@
-﻿using FlyleafLib.MediaFramework.MediaDecoder;
+using FlyleafLib.MediaFramework.MediaDecoder;
 using FlyleafLib.MediaFramework.MediaDemuxer;
 using FlyleafLib.MediaFramework.MediaPlaylist;
 using FlyleafLib.MediaFramework.MediaRemuxer;
@@ -490,6 +490,10 @@ public unsafe partial class DecoderContext : PluginHandler
     {
         // TBR: Between seek and GetVideoFrame lockCodecCtx is lost and if VideoDecoder is running will already have decoded some frames (Currently ensure you pause VideDecoder before seek)
 
+        // HLS-aware start time: for HLS streams, raw PTS contains absolute timestamps
+        // while StartTime is 0. We must use first_timestamp to normalize correctly.
+        long hlsAwareStartTime = VideoDemuxer.hlsCtx == null ? VideoDemuxer.StartTime : VideoDemuxer.hlsCtx->first_timestamp * 10;
+
         int ret;
         int allowedErrors = Config.Decoder.MaxErrors;
         AVPacket* packet;
@@ -530,7 +534,7 @@ public unsafe partial class DecoderContext : PluginHandler
             switch (codecType)
             {
                 case AVMediaType.Audio:
-                    if (timestamp == -1 || (long)(packet->pts * AudioStream.Timebase) - VideoDemuxer.StartTime + (VideoStream.FrameDuration / 2) > timestamp)
+                    if (timestamp == -1 || (long)(packet->pts * AudioStream.Timebase) - hlsAwareStartTime + (VideoStream.FrameDuration / 2) > timestamp)
                         VideoDemuxer.AudioPackets.Enqueue(packet);
                     else
                         av_packet_free(&packet);
@@ -538,7 +542,7 @@ public unsafe partial class DecoderContext : PluginHandler
                     continue;
 
                 case AVMediaType.Subtitle:
-                    if (timestamp == -1 || (long)(packet->pts * SubtitlesStream.Timebase) - VideoDemuxer.StartTime + (VideoStream.FrameDuration / 2) > timestamp)
+                    if (timestamp == -1 || (long)(packet->pts * SubtitlesStream.Timebase) - hlsAwareStartTime + (VideoStream.FrameDuration / 2) > timestamp)
                         VideoDemuxer.SubtitlesPackets.Enqueue(packet);
                     else
                         av_packet_free(&packet);
@@ -546,7 +550,7 @@ public unsafe partial class DecoderContext : PluginHandler
                     continue;
 
                 case AVMediaType.Data: // this should catch the data stream packets until we have a valid vidoe keyframe (it should fill the pts if NOPTS with lastVideoPacketPts similarly to the demuxer)
-                    if ((timestamp == -1 && VideoDecoder.StartTime != NoTs) || (long)(packet->pts * DataStream.Timebase) - VideoDemuxer.StartTime + (VideoStream.FrameDuration / 2) > timestamp)
+                    if ((timestamp == -1 && VideoDecoder.StartTime != NoTs) || (long)(packet->pts * DataStream.Timebase) - hlsAwareStartTime + (VideoStream.FrameDuration / 2) > timestamp)
                         VideoDemuxer.DataPackets.Enqueue(packet);
 
                     packet = av_packet_alloc();
@@ -577,7 +581,7 @@ public unsafe partial class DecoderContext : PluginHandler
 
                         // Accurate seek with +- half frame distance
                         // TBR: Live streams should never been seeked at first place (maybe allow HLSLive?) * can cause infinite loop
-                        if (timestamp != -1 && !VideoDemuxer.IsLive && (long)(VideoDecoder.frame->pts * VideoStream.Timebase) - VideoDemuxer.StartTime + (VideoStream.FrameDuration / 2) < timestamp)
+                        if (timestamp != -1 && !VideoDemuxer.IsLive && (long)(VideoDecoder.frame->pts * VideoStream.Timebase) - hlsAwareStartTime + (VideoStream.FrameDuration / 2) < timestamp)
                         {
                             av_frame_unref(VideoDecoder.frame);
                             continue;

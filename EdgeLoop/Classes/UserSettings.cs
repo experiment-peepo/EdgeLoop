@@ -4,12 +4,6 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace EdgeLoop.Classes {
-    public enum ShuffleMode {
-        Sequential,
-        Simple,
-        Smart,
-        Random
-    }
 
 
     public class UserSettings {
@@ -33,6 +27,7 @@ namespace EdgeLoop.Classes {
         public virtual string CookiesEncrypted { get; set; } = null;
 
         public virtual string UserAgent { get; set; } = null;
+        public virtual string BrowserForCookies { get; set; } = "chrome";
 
         /// <summary>
         /// Gets the decrypted Hypnotube cookies for runtime use.
@@ -81,28 +76,36 @@ namespace EdgeLoop.Classes {
         public virtual bool RememberFilePosition { get; set; } = true;
         public System.Collections.Generic.List<string> PlayedHistory { get; set; } = new System.Collections.Generic.List<string>();
         public virtual bool VideoShuffle { get; set; } = false;
-        public virtual ShuffleMode CurrentShuffleMode { get; set; } = ShuffleMode.Smart;
-        public virtual double ShuffleRecencyWeight { get; set; } = 0.3;
-        public virtual double ShufflePreferenceWeight { get; set; } = 0.3;
-        public virtual double ShuffleVarietyWeight { get; set; } = 0.2;
-        public virtual double ShuffleLengthWeight { get; set; } = 0.2;
-        public virtual bool EnableShuffleDebugLog { get; set; } = false;
         
         // Logging Settings
-        public LogLevel LogLevel { get; set; } = LogLevel.Info;
+        public LogLevel LogLevel { get; set; } = LogLevel.Warning;
+
+        /// <summary>
+        /// When enabled, a separate diagnostics.log is generated with full debug detail.
+        /// The main EdgeLoop.log continues to log warnings/errors only.
+        /// </summary>
+        /// <remarks>
+        /// The JSON property name is kept as "EnableVerboseLogging" for backward
+        /// compatibility — existing settings.json files are migrated transparently.
+        /// </remarks>
+        [JsonPropertyName("EnableVerboseLogging")]
+        public virtual bool EnableDiagnosticMode { get; set; } = false;
 
         // Playlist Import Settings
         public int MaxPlaylistPages { get; set; } = 100; // Maximum pages to fetch for paginated playlists
 
         // UI State
         public string LastExpandedSection { get; set; } = "IsPlaybackExpanded";
-        public bool CompactMode { get; set; } = false;
+
 
         public double LauncherWindowWidth { get; set; } = 700;
         public double LauncherWindowHeight { get; set; } = 750;
         public double LauncherWindowTop { get; set; } = -1;
         public double LauncherWindowLeft { get; set; } = -1;
 
+        // Caching Settings
+        public virtual bool EnableLocalCaching { get; set; } = true;
+        public virtual string LocalCacheDirectory { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EdgeLoop", "VideoCache");
 
         public static string SettingsFilePath {
             get => AppPaths.SettingsFile;
@@ -116,7 +119,7 @@ namespace EdgeLoop.Classes {
                 var newDataDir = AppPaths.DataDirectory;
                 if (Directory.Exists(oldAppData) && !File.Exists(SettingsFilePath)) {
                     try {
-                        Logger.Info("Migrating TrainMeX settings to EdgeLoop...");
+                        Logger.Debug("Migrating TrainMeX settings to EdgeLoop...");
                         foreach (var file in Directory.GetFiles(oldAppData)) {
                             var destFile = Path.Combine(newDataDir, Path.GetFileName(file));
                             if (!File.Exists(destFile)) {
@@ -132,7 +135,7 @@ namespace EdgeLoop.Classes {
                 var localPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "settings.json");
                 if (File.Exists(localPath) && !File.Exists(SettingsFilePath)) {
                     try {
-                        Logger.Info("Migrating legacy local settings to AppData...");
+                        Logger.Debug("Migrating legacy local settings to AppData...");
                         File.Copy(localPath, SettingsFilePath);
                         // Optional: File.Delete(localPath); // Keep for safety for now
                     } catch (Exception ex) {
@@ -150,13 +153,13 @@ namespace EdgeLoop.Classes {
                         if (settings.SettingsVersion < 1) {
                             settings.SettingsVersion = 1;
                             settings.Save();
-                            Logger.Info("Settings migrated to version 1");
+                            Logger.Debug("Settings migrated to version 1");
                         }
 
                         // Validate and clamp loaded values
                         settings.ValidateAndClampValues();
                         Logger.MinimumLevel = settings.LogLevel;
-                        Logger.Info($"Loaded settings from {SettingsFilePath}");
+                        Logger.Debug($"Loaded settings from {SettingsFilePath}");
                         return settings;
                     } catch (JsonException jex) {
                         Logger.Warning($"Settings file at {SettingsFilePath} is corrupted. Renaming to .bak and using defaults.", jex);
@@ -210,11 +213,6 @@ namespace EdgeLoop.Classes {
                 valuesCorrected = true;
             }
 
-            // Ensure weights are valid numbers
-            if (double.IsNaN(ShuffleRecencyWeight) || double.IsInfinity(ShuffleRecencyWeight)) { ShuffleRecencyWeight = 0.3; valuesCorrected = true; }
-            if (double.IsNaN(ShufflePreferenceWeight) || double.IsInfinity(ShufflePreferenceWeight)) { ShufflePreferenceWeight = 0.3; valuesCorrected = true; }
-            if (double.IsNaN(ShuffleVarietyWeight) || double.IsInfinity(ShuffleVarietyWeight)) { ShuffleVarietyWeight = 0.2; valuesCorrected = true; }
-            if (double.IsNaN(ShuffleLengthWeight) || double.IsInfinity(ShuffleLengthWeight)) { ShuffleLengthWeight = 0.2; valuesCorrected = true; }
 
             // Ensure window dimensions are valid and finite
             if (!double.IsFinite(LauncherWindowWidth) || LauncherWindowWidth <= 100) { LauncherWindowWidth = 700; valuesCorrected = true; }
@@ -340,10 +338,10 @@ namespace EdgeLoop.Classes {
                     if (CurrentSessionPlaylist.Version < 1) {
                         CurrentSessionPlaylist.Version = 1;
                         SaveSession();
-                        Logger.Info("Session playlist migrated to version 1");
+                        Logger.Debug("Session playlist migrated to version 1");
                     }
 
-                    Logger.Info("Loaded previous session playlist");
+                    Logger.Debug("Loaded previous session playlist");
                 }
             } catch (Exception ex) {
                 Logger.Warning("Failed to load session playlist", ex);

@@ -69,7 +69,7 @@ namespace EdgeLoop.Classes {
                 var reg = new HotkeyRegistration { Id = id, Callback = callback };
                 _registrations[name] = reg;
                 _idToNameMap[id] = name;
-                Logger.Info($"Registered hotkey '{name}': {modifiers}+{keyName} (ID: {id})");
+                Logger.Debug($"Registered hotkey '{name}': {modifiers}+{keyName} (ID: {id})");
             } else {
                 Logger.Warning($"Failed to register hotkey '{name}': {modifiers}+{keyName} (ErrorCode: {Marshal.GetLastWin32Error()})");
             }

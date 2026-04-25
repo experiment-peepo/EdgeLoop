@@ -34,7 +34,7 @@ namespace EdgeLoop.Windows {
             this.DataContext = _viewModel;
             
             if (screen != null) {
-                Logger.Info($"[HypnoWindow] Created for screen {screen.DeviceName} | Bounds: {screen.Bounds}");
+                Logger.Debug($"[HypnoWindow] Created for screen {screen.DeviceName} | Bounds: {screen.Bounds}");
                 
                 // Set window position and size to cover the target screen
                 this.Left = screen.Bounds.Left;
@@ -42,7 +42,7 @@ namespace EdgeLoop.Windows {
                 this.Width = screen.Bounds.Width;
                 this.Height = screen.Bounds.Height;
             } else {
-                Logger.Info("[HypnoWindow] Created with default screen");
+                Logger.Debug("[HypnoWindow] Created with default screen");
             }
             // ... (keep event subscriptions)
             _viewModel.MediaErrorOccurred += ViewModel_MediaErrorOccurred;
@@ -98,11 +98,11 @@ namespace EdgeLoop.Windows {
                     if (FirstVideo != null) {
                          // Flyleaf Player disposal is handled by ViewModel
                          FirstVideo = null;
-                         Logger.Info("[HypnoWindow] Flyleaf control reference cleared");
+                         Logger.Debug("[HypnoWindow] Flyleaf control reference cleared");
                     }
                 }
                 _disposed = true;
-                Logger.Info("[HypnoWindow] Disposed");
+                Logger.Debug("[HypnoWindow] Disposed");
             }
         }
 
@@ -137,7 +137,7 @@ namespace EdgeLoop.Windows {
             // Dispatch to UI thread just in case it's called from a background task
             Dispatcher.InvokeAsync(() => {
                 if (!_disposed) {
-                    Logger.Info("[HypnoWindow] Terminal failure occurred. Closing window.");
+                    Logger.Debug("[HypnoWindow] Terminal failure occurred. Closing window.");
                     this.Close();
                 }
             });
@@ -192,7 +192,7 @@ namespace EdgeLoop.Windows {
                 
                 // --- HARDWARE DIAGNOSTICS ---
                 int renderingTier = (RenderCapability.Tier >> 16);
-                Logger.Info($"[Hardware] Rendering Tier: {renderingTier} (Tier 2 = Full Hardware Acceleration)");
+                Logger.Debug($"[Hardware] Rendering Tier: {renderingTier} (Tier 2 = Full Hardware Acceleration)");
                 if (renderingTier < 2) {
                     Logger.Warning("[Hardware] WPF is in software rendering mode. This will cause 4K stutter.");
                 }
@@ -210,7 +210,7 @@ namespace EdgeLoop.Windows {
 
                 // 2. Physical Placement
                 var b = _targetScreen.Bounds;
-                Logger.Info($"[HypnoWindow] Positioning: {b.Left},{b.Top} {b.Width}x{b.Height}");
+                Logger.Debug($"[HypnoWindow] Positioning: {b.Left},{b.Top} {b.Width}x{b.Height}");
                 SetWindowPos(hwnd, new IntPtr(-1), b.Left, b.Top, b.Width, b.Height, 
                     SWP_NOZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
 

@@ -48,7 +48,7 @@ namespace EdgeLoop.Classes {
                 .FirstOrDefault();
 
             if (best != null) {
-                Logger.Info($"[QualitySelector] Selected best: {best.Height}p (from {qualities.Count} options)");
+                Logger.Debug($"[QualitySelector] Selected best: {best.Height}p (from {qualities.Count} options)");
             }
 
             return best;

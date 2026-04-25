@@ -42,19 +42,32 @@ namespace EdgeLoop.ViewModels {
         private bool _rememberLastPlaylist;
         private bool _rememberFilePosition;
         private bool _isPlaybackExpanded;
-        private bool _isApplicationExpanded;
+        private bool _isGeneralExpanded;
         private bool _isHotkeysExpanded;
-        private bool _isHistoryExpanded;
+        private bool _isPrivacyExpanded;
+        private bool _isDiagnosticsExpanded;
+        private bool _enableLocalCaching;
+        private string _localCacheDirectory;
 
-        private bool _isCookiesExpanded;
+        private bool _enableDiagnosticMode;
         private string _hypnotubeCookies;
+        private string _browserForCookies;
 
-        public bool IsCookiesExpanded {
-            get => _isCookiesExpanded;
+        public ObservableCollection<string> AvailableBrowsers { get; } = new ObservableCollection<string> { 
+            "chrome", "firefox", "edge", "opera", "vivaldi", "brave"
+        };
+
+        public string BrowserForCookies {
+            get => _browserForCookies;
+            set => SetProperty(ref _browserForCookies, value);
+        }
+
+        public bool IsPrivacyExpanded {
+            get => _isPrivacyExpanded;
             set {
-                if (SetProperty(ref _isCookiesExpanded, value) && value) {
-                    CollapseOthers(nameof(IsCookiesExpanded));
-                    App.Settings.LastExpandedSection = nameof(IsCookiesExpanded);
+                if (SetProperty(ref _isPrivacyExpanded, value) && value) {
+                    CollapseOthers(nameof(IsPrivacyExpanded));
+                    App.Settings.LastExpandedSection = nameof(IsPrivacyExpanded);
                 }
             }
         }
@@ -87,12 +100,12 @@ namespace EdgeLoop.ViewModels {
             }
         }
 
-        public bool IsApplicationExpanded {
-            get => _isApplicationExpanded;
+        public bool IsGeneralExpanded {
+            get => _isGeneralExpanded;
             set {
-                if (SetProperty(ref _isApplicationExpanded, value) && value) {
-                    CollapseOthers(nameof(IsApplicationExpanded));
-                    App.Settings.LastExpandedSection = nameof(IsApplicationExpanded);
+                if (SetProperty(ref _isGeneralExpanded, value) && value) {
+                    CollapseOthers(nameof(IsGeneralExpanded));
+                    App.Settings.LastExpandedSection = nameof(IsGeneralExpanded);
                 }
             }
         }
@@ -107,22 +120,24 @@ namespace EdgeLoop.ViewModels {
             }
         }
 
-        public bool IsHistoryExpanded {
-            get => _isHistoryExpanded;
+        // Removed IsHistoryExpanded - now part of IsPrivacyExpanded
+
+        public bool IsDiagnosticsExpanded {
+            get => _isDiagnosticsExpanded;
             set {
-                if (SetProperty(ref _isHistoryExpanded, value) && value) {
-                    CollapseOthers(nameof(IsHistoryExpanded));
-                    App.Settings.LastExpandedSection = nameof(IsHistoryExpanded);
+                if (SetProperty(ref _isDiagnosticsExpanded, value) && value) {
+                    CollapseOthers(nameof(IsDiagnosticsExpanded));
+                    App.Settings.LastExpandedSection = nameof(IsDiagnosticsExpanded);
                 }
             }
         }
 
         private void CollapseOthers(string current) {
             if (current != nameof(IsPlaybackExpanded)) IsPlaybackExpanded = false;
-            if (current != nameof(IsApplicationExpanded)) IsApplicationExpanded = false;
+            if (current != nameof(IsGeneralExpanded)) IsGeneralExpanded = false;
             if (current != nameof(IsHotkeysExpanded)) IsHotkeysExpanded = false;
-            if (current != nameof(IsHistoryExpanded)) IsHistoryExpanded = false;
-            if (current != nameof(IsCookiesExpanded)) IsCookiesExpanded = false;
+            if (current != nameof(IsPrivacyExpanded)) IsPrivacyExpanded = false;
+            if (current != nameof(IsDiagnosticsExpanded)) IsDiagnosticsExpanded = false;
         }
 
         // Taboo Settings
@@ -170,19 +185,27 @@ namespace EdgeLoop.ViewModels {
             _rememberLastPlaylist = settings.RememberLastPlaylist;
             _rememberFilePosition = settings.RememberFilePosition;
             _enableSuperResolution = settings.EnableSuperResolution;
+            _enableDiagnosticMode = settings.EnableDiagnosticMode;
             _hypnotubeCookies = settings.HypnotubeCookies;
+            _browserForCookies = settings.BrowserForCookies ?? "chrome";
             
+
             // Load and set the last expanded section
             var lastSection = settings.LastExpandedSection ?? nameof(IsPlaybackExpanded);
-            _isPlaybackExpanded = lastSection == nameof(IsPlaybackExpanded);
-            _isApplicationExpanded = lastSection == nameof(IsApplicationExpanded);
-            _isHotkeysExpanded = lastSection == nameof(IsHotkeysExpanded);
-            _isHistoryExpanded = lastSection == nameof(IsHistoryExpanded);
-            _isCookiesExpanded = lastSection == nameof(IsCookiesExpanded);
+            
+            // Map legacy section names
+            if (lastSection == "IsApplicationExpanded") lastSection = nameof(IsGeneralExpanded);
+            if (lastSection == "IsHistoryExpanded" || lastSection == "IsCookiesExpanded") lastSection = nameof(IsPrivacyExpanded);
 
-            // Ensure at least one is expanded if the loaded value was invalid or it's the new Cookies section
-            if (!_isPlaybackExpanded && !_isApplicationExpanded && !_isHotkeysExpanded && !_isHistoryExpanded && !_isCookiesExpanded) {
-                _isCookiesExpanded = true;
+            _isPlaybackExpanded = lastSection == nameof(IsPlaybackExpanded);
+            _isGeneralExpanded = lastSection == nameof(IsGeneralExpanded);
+            _isHotkeysExpanded = lastSection == nameof(IsHotkeysExpanded);
+            _isPrivacyExpanded = lastSection == nameof(IsPrivacyExpanded);
+            _isDiagnosticsExpanded = lastSection == nameof(IsDiagnosticsExpanded);
+
+            // Ensure at least one is expanded
+            if (!_isPlaybackExpanded && !_isGeneralExpanded && !_isHotkeysExpanded && !_isPrivacyExpanded && !_isDiagnosticsExpanded) {
+                _isPlaybackExpanded = true;
             }
 
 
@@ -202,6 +225,8 @@ namespace EdgeLoop.ViewModels {
             ResetPositionsCommand = new RelayCommand(ResetPositions);
             CopyCookieScriptCommand = new RelayCommand(CopyCookieScript);
             PasteHypnoCookiesCommand = new RelayCommand(o => HypnotubeCookies = System.Windows.Clipboard.GetText());
+            OpenDiagnosticsFolderCommand = new RelayCommand(OpenDiagnosticsFolder);
+            BrowseCacheDirectoryCommand = new RelayCommand(ExecuteBrowseCacheDirectory);
         }
 
         private void CopyCookieScript(object obj) {
@@ -229,6 +254,32 @@ namespace EdgeLoop.ViewModels {
                 });
             } catch (System.Exception ex) {
                 Logger.Error("Failed to open Ko-Fi link", ex);
+            }
+        }
+
+        private void OpenDiagnosticsFolder(object obj) {
+            try {
+                var dataDir = AppPaths.DataDirectory;
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo {
+                    FileName = dataDir,
+                    UseShellExecute = true
+                });
+            } catch (System.Exception ex) {
+                Logger.Error("Failed to open diagnostics folder", ex);
+            }
+        }
+
+        private void ExecuteBrowseCacheDirectory(object obj) {
+            var dialog = new System.Windows.Forms.FolderBrowserDialog {
+                Description = "Select Local Cache Directory",
+                UseDescriptionForTitle = true,
+                SelectedPath = string.IsNullOrEmpty(LocalCacheDirectory) || !System.IO.Directory.Exists(LocalCacheDirectory) 
+                    ? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData) 
+                    : LocalCacheDirectory
+            };
+
+            if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK) {
+                LocalCacheDirectory = dialog.SelectedPath;
             }
         }
 
@@ -272,6 +323,11 @@ namespace EdgeLoop.ViewModels {
             set => SetProperty(ref _enableSuperResolution, value);
         }
         private bool _enableSuperResolution;
+
+        public bool EnableDiagnosticMode {
+            get => _enableDiagnosticMode;
+            set => SetProperty(ref _enableDiagnosticMode, value);
+        }
 
         public bool LauncherAlwaysOnTop {
             get => _launcherAlwaysOnTop;
@@ -403,6 +459,17 @@ namespace EdgeLoop.ViewModels {
             set => SetProperty(ref _rememberFilePosition, value);
         }
 
+        public bool EnableLocalCaching {
+            get => _enableLocalCaching;
+            set => SetProperty(ref _enableLocalCaching, value);
+        }
+
+
+        public string LocalCacheDirectory {
+            get => _localCacheDirectory;
+            set => SetProperty(ref _localCacheDirectory, value);
+        }
+
             
         public ICommand OkCommand { get; }
         public ICommand CancelCommand { get; }
@@ -410,6 +477,8 @@ namespace EdgeLoop.ViewModels {
         public ICommand ResetPositionsCommand { get; }
         public ICommand CopyCookieScriptCommand { get; }
         public ICommand PasteHypnoCookiesCommand { get; }
+        public ICommand OpenDiagnosticsFolderCommand { get; }
+        public ICommand BrowseCacheDirectoryCommand { get; }
 
         public event System.EventHandler RequestClose;
 
@@ -463,14 +532,24 @@ namespace EdgeLoop.ViewModels {
             settings.RememberLastPlaylist = RememberLastPlaylist;
             settings.RememberFilePosition = RememberFilePosition;
             settings.EnableSuperResolution = EnableSuperResolution;
+            settings.EnableLocalCaching = EnableLocalCaching;
+            settings.LocalCacheDirectory = LocalCacheDirectory;
             settings.HypnotubeCookies = HypnotubeCookies;
+            settings.BrowserForCookies = BrowserForCookies;
             
+
             // Save currently expanded section
             if (IsPlaybackExpanded) settings.LastExpandedSection = nameof(IsPlaybackExpanded);
-            else if (IsApplicationExpanded) settings.LastExpandedSection = nameof(IsApplicationExpanded);
+            else if (IsGeneralExpanded) settings.LastExpandedSection = nameof(IsGeneralExpanded);
             else if (IsHotkeysExpanded) settings.LastExpandedSection = nameof(IsHotkeysExpanded);
-            else if (IsHistoryExpanded) settings.LastExpandedSection = nameof(IsHistoryExpanded);
-            else if (IsCookiesExpanded) settings.LastExpandedSection = nameof(IsCookiesExpanded);
+            else if (IsPrivacyExpanded) settings.LastExpandedSection = nameof(IsPrivacyExpanded);
+            else if (IsDiagnosticsExpanded) settings.LastExpandedSection = nameof(IsDiagnosticsExpanded);
+            
+            settings.EnableDiagnosticMode = EnableDiagnosticMode;
+            Logger.DiagnosticMode = EnableDiagnosticMode;
+            // Main log stays at Warning; diagnostic log captures everything separately
+            settings.LogLevel = LogLevel.Warning;
+            Logger.MinimumLevel = LogLevel.Warning;
             
             settings.Save();
 

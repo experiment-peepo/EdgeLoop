@@ -38,11 +38,11 @@ namespace EdgeLoop.Classes {
 
                 // Check cache first
                 if (_htmlCache.TryGetValue(url, out string cachedHtml)) {
-                    Logger.Info($"Using cached HTML for: {url}");
+                    Logger.Debug($"Using cached HTML for: {url}");
                     return cachedHtml;
                 }
 
-                Logger.Info($"Fetching HTML from: {url}");
+                Logger.Debug($"Fetching HTML from: {url}");
                 
                 using (var request = new HttpRequestMessage(HttpMethod.Get, url)) {
                     // Add Hypnotube cookies if applicable
@@ -59,7 +59,7 @@ namespace EdgeLoop.Classes {
                     var response = await _httpClient.SendAsync(request, cancellationToken);
                     response.EnsureSuccessStatusCode();
                     var html = await response.Content.ReadAsStringAsync();
-                    Logger.Info($"Fetched {html.Length} characters from {url}");
+                    Logger.Debug($"Fetched {html.Length} characters from {url}");
                     
                     // Log Hypnotube authentication status
                     if (url.Contains("hypnotube.com") && !string.IsNullOrEmpty(App.Settings?.HypnotubeCookies)) {
@@ -87,7 +87,7 @@ namespace EdgeLoop.Classes {
 
         public async Task<string> ResolveRedirectUrlAsync(string url, string referer = null, CancellationToken cancellationToken = default) {
             try {
-                Logger.Info($"Resolving redirect for: {url}");
+                Logger.Debug($"Resolving redirect for: {url}");
                 
                 // Use GET instead of HEAD - some servers (including Rule34Video) only redirect on GET
                 using (var request = new HttpRequestMessage(HttpMethod.Get, url)) {
@@ -119,7 +119,7 @@ namespace EdgeLoop.Classes {
                     
                     if (response.RequestMessage != null && response.RequestMessage.RequestUri != null) {
                         var finalUrl = response.RequestMessage.RequestUri.ToString();
-                        Logger.Info($"Resolved to: {finalUrl}");
+                        Logger.Debug($"Resolved to: {finalUrl}");
                         return finalUrl;
                     }
                 }
