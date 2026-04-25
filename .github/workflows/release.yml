@@ -101,7 +101,7 @@ jobs:
                     
                     # Binary check: Windows executables and ZIPs should NOT look like HTML
                     $content = Get-Content -Path $OutFile -TotalCount 1
-                    if ($content -match "<!DOCTYPE" -or $content -match "<html") {
+                    if ($content -match "<!DOCTYPE" -or $content -match "<html" -or $content -match "Sorry about that") {
                         throw "Downloaded file appears to be an HTML error page, not a binary!"
                     }
                     
@@ -110,7 +110,7 @@ jobs:
                 } catch {
                     Write-Host "Warning: Attempt $i failed: $($_.Exception.Message)"
                     if ($i -lt $MaxRetries) {
-                        $delay = $i * 10
+                        $delay = $i * 20
                         Write-Host "Retrying in $delay seconds..."
                         Start-Sleep -Seconds $delay
                     } else {

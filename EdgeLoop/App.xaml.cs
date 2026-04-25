@@ -80,10 +80,20 @@ namespace EdgeLoop
             try
             {
                 string baseDir = AppDomain.CurrentDomain.BaseDirectory;
-                string ffmpegPath = System.IO.Path.Combine(baseDir, "Dependencies");
-                if (!System.IO.Directory.Exists(ffmpegPath))
+                string ffmpegPath = System.IO.Path.Combine(baseDir, "FFmpeg");
+
+                // If FFmpeg folder doesn't exist or doesn't contain DLLs, check Dependencies
+                bool hasDlls = System.IO.Directory.Exists(ffmpegPath) &&
+                              System.IO.Directory.GetFiles(ffmpegPath, "avcodec*.dll").Length > 0;
+
+                if (!hasDlls)
                 {
-                    ffmpegPath = System.IO.Path.Combine(baseDir, "FFmpeg");
+                    string altPath = System.IO.Path.Combine(baseDir, "Dependencies");
+                    if (System.IO.Directory.Exists(altPath) &&
+                        System.IO.Directory.GetFiles(altPath, "avcodec*.dll").Length > 0)
+                    {
+                        ffmpegPath = altPath;
+                    }
                 }
                 string pluginsPath = System.IO.Path.Combine(baseDir, "Plugins");
 
