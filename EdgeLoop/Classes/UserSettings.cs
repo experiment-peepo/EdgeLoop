@@ -13,7 +13,6 @@ namespace EdgeLoop.Classes
         public virtual double Opacity { get; set; } = 0.2;
         public virtual double Volume { get; set; } = 0.5;
 
-        public bool LauncherAlwaysOnTop { get; set; } = false;
         public bool StartWithWindows { get; set; } = false;
         public double DefaultOpacity { get; set; } = 0.9;
         public double DefaultVolume { get; set; } = 0.5;
@@ -97,6 +96,8 @@ namespace EdgeLoop.Classes
 
         // Playlist Import Settings
         public int MaxPlaylistPages { get; set; } = 100; // Maximum pages to fetch for paginated playlists
+
+        public DateTime LastYtDlpUpdateCheck { get; set; } = DateTime.MinValue;
 
         // UI State
         public string LastExpandedSection { get; set; } = "IsPlaybackExpanded";

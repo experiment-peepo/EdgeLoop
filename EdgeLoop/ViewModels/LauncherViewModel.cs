@@ -191,7 +191,11 @@ namespace EdgeLoop.ViewModels
             {
                 if (App.Settings != null && App.Settings.RememberLastPlaylist)
                 {
-                    _ = LoadSessionAsync(_cancellationTokenSource.Token);
+                    _ = InitializeAsync(_cancellationTokenSource.Token);
+                }
+                else
+                {
+                    _ = InitializeAsyncWithoutSession(_cancellationTokenSource.Token);
                 }
             }
             catch (Exception ex)
@@ -588,6 +592,9 @@ namespace EdgeLoop.ViewModels
 
         private void Browse(object obj)
         {
+            // Capture dispatcher before starting the background task
+            var dispatcher = Application.Current?.Dispatcher;
+
             // Safely execute async code from void command handler
             // This pattern ensures exceptions are properly caught and handled
             _ = BrowseAsync().ContinueWith(task =>
@@ -596,7 +603,7 @@ namespace EdgeLoop.ViewModels
                 {
                     var ex = task.Exception?.GetBaseException() ?? task.Exception;
                     Logger.Error("Error in Browse operation", ex);
-                    Application.Current?.Dispatcher.InvokeAsync(() =>
+                    dispatcher?.InvokeAsync(() =>
                     {
                         SetStatusMessage($"Error browsing files: {ex?.Message ?? "Unknown error"}", StatusMessageType.Error);
                     });
@@ -642,7 +649,7 @@ namespace EdgeLoop.ViewModels
             {
                 // Show input dialog
                 var inputUrl = InputDialogWindow.ShowDialog(
-                    Application.Current.MainWindow,
+                    Application.Current?.MainWindow,
                     "Add Video URL",
                     "Video URL:"
                 );
@@ -1250,18 +1257,22 @@ namespace EdgeLoop.ViewModels
                 var existingPaths = new HashSet<string>(AddedFiles.Select(x => x.FilePath), StringComparer.OrdinalIgnoreCase);
 
                 // Validate files in parallel
+                int processedCount = 0;
+                int totalCount = filePaths.Length;
                 var validationTasks = filePaths.Select(filePath => Task.Run(() =>
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+                    (string, bool, string) result;
                     if (existingPaths.Contains(filePath))
                     {
-                        return (filePath, isValid: false, errorMessage: "File already in playlist");
+                        result = (filePath, isValid: false, errorMessage: "File already in playlist");
                     }
-
-                    if (!FileValidator.ValidateVideoFile(filePath, out string errorMessage))
+                    else if (!FileValidator.ValidateVideoFile(filePath, out string errorMessage))
                     {
-                        return (filePath, isValid: false, errorMessage);
+                        result = (filePath, isValid: false, errorMessage);
                     }
+                    else
+                    {
 
                     // Check file size and warn if large (no limit enforced)
                     if (FileValidator.ValidateFileSize(filePath, out long size, out bool warning))
@@ -1271,7 +1282,16 @@ namespace EdgeLoop.ViewModels
                             Logger.Debug($"Large file detected: {System.IO.Path.GetFileName(filePath)} ({size / (1024.0 * 1024 * 1024):F2} GB)");
                         }
                     }
-                    return (filePath, isValid: true, errorMessage: (string)null);
+                        result = (filePath, isValid: true, errorMessage: (string)null);
+                    }
+
+                    var current = Interlocked.Increment(ref processedCount);
+                    Application.Current?.Dispatcher.InvokeAsync(() => {
+                        ImportProgressValue = (double)current / totalCount * 100;
+                        ImportProgressText = $"Validating {current} of {totalCount}...";
+                    }, System.Windows.Threading.DispatcherPriority.Background);
+
+                    return result;
                 }, cancellationToken)).ToArray();
 
                 cancellationToken.ThrowIfCancellationRequested();
@@ -1290,7 +1310,6 @@ namespace EdgeLoop.ViewModels
                     var (filePath, isValid, errorMessage) = results[i];
 
                     // Update progress
-                    ImportProgressValue = (double)(i + 1) / total * 100;
                     ImportProgressText = $"Importing {i + 1} of {total}...";
                     cancellationToken.ThrowIfCancellationRequested();
                     if (isValid)
@@ -1410,6 +1429,9 @@ namespace EdgeLoop.ViewModels
         // Method to handle Drag & Drop from View
         public void AddDroppedFiles(string[] files)
         {
+            // Capture dispatcher before starting the background task
+            var dispatcher = Application.Current?.Dispatcher;
+
             // Safely execute async code from void method
             // This pattern ensures exceptions are properly caught and handled
             _ = AddDroppedFilesAsync(files).ContinueWith(task =>
@@ -1418,7 +1440,7 @@ namespace EdgeLoop.ViewModels
                 {
                     var ex = task.Exception?.GetBaseException() ?? task.Exception;
                     Logger.Error("Error in AddDroppedFiles operation", ex);
-                    Application.Current?.Dispatcher.InvokeAsync(() =>
+                    dispatcher?.InvokeAsync(() =>
                     {
                         SetStatusMessage($"Error adding dropped files: {ex?.Message ?? "Unknown error"}", StatusMessageType.Error);
                     });
@@ -1590,6 +1612,55 @@ namespace EdgeLoop.ViewModels
             catch (Exception ex)
             {
                 Logger.Error("Failed to create session snapshot", ex);
+            }
+        }
+
+        private async Task InitializeAsync(CancellationToken ct)
+        {
+            // 1. Run update check for yt-dlp
+            try
+            {
+                if (ServiceContainer.TryGet<YtDlpService>(out var ytDlp))
+                {
+                    if (!ytDlp.IsAvailable)
+                    {
+                        SetStatusMessage("yt-dlp not found. Quality on major sites will be limited. Check Dependencies folder.", StatusMessageType.Warning);
+                    }
+                    else
+                    {
+                        await ytDlp.CheckForUpdateAsync();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning("yt-dlp update check failed", ex);
+            }
+
+            // 2. Load session
+            await LoadSessionAsync(ct);
+        }
+
+        private async Task InitializeAsyncWithoutSession(CancellationToken ct)
+        {
+            // Just run update check
+            try
+            {
+                if (ServiceContainer.TryGet<YtDlpService>(out var ytDlp))
+                {
+                    if (!ytDlp.IsAvailable)
+                    {
+                        SetStatusMessage("yt-dlp not found. Quality on major sites will be limited. Check Dependencies folder.", StatusMessageType.Warning);
+                    }
+                    else
+                    {
+                        await ytDlp.CheckForUpdateAsync();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning("yt-dlp update check failed", ex);
             }
         }
 
@@ -1850,7 +1921,7 @@ namespace EdgeLoop.ViewModels
             if (ambiguity.IsAmbiguous)
             {
                 var choice = ChoiceDialogWindow.ShowDialog(
-                    Application.Current.MainWindow,
+                    Application.Current?.MainWindow,
                     $"Crawl video {ambiguity.VideoId} or playlist {ambiguity.PlaylistId}",
                     $"This {ambiguity.SiteName} link contains both a video and a playlist. What do you want to import?",
                     "Only video",

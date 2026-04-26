@@ -27,7 +27,6 @@ namespace EdgeLoop.Windows
             InitializeComponent();
             DataContext = new LauncherViewModel();
             LoadWindowBounds();
-            ApplyAlwaysOnTopSetting();
         }
 
         private HotkeyService _hotkeys;
@@ -165,11 +164,6 @@ namespace EdgeLoop.Windows
             }
         }
 
-        public void ApplyAlwaysOnTopSetting()
-        {
-            var settings = App.Settings;
-            this.Topmost = settings.LauncherAlwaysOnTop;
-        }
 
         private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
         {

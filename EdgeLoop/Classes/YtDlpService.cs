@@ -509,7 +509,7 @@ namespace EdgeLoop.Classes
         public async Task<string> DownloadBestQualityAsync(string url, CancellationToken cancellationToken = default, IProgress<string> downloadProgress = null)
         {
             if (!_isAvailable) return null;
-            if (App.Settings?.EnableLocalCaching == false) return null;
+            if (App.Settings?.EnableLocalCaching != true) return null;
 
             // Compute cache path using same hash as VideoDownloadService
             var cacheDir = App.Settings?.LocalCacheDirectory ??
@@ -812,7 +812,19 @@ namespace EdgeLoop.Classes
                     }
                 }
 
-                using (var fs = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.Encrypted))
+                FileStream fs = null;
+                try
+                {
+                    // Attempt to use file-system level encryption (EFS) for temp cookie files
+                    fs = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.Encrypted);
+                }
+                catch
+                {
+                    // Fallback to standard stream if EFS is disabled or unsupported
+                    fs = new FileStream(tempFile, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.None);
+                }
+
+                using (fs)
                 using (var writer = new StreamWriter(fs, System.Text.Encoding.UTF8))
                 {
                     foreach (var line in lines) writer.WriteLine(line);
@@ -1000,10 +1012,45 @@ namespace EdgeLoop.Classes
             }
         }
 
+        public async Task CheckForUpdateAsync()
+        {
+            if (!_isAvailable) return;
+            
+            // Only check once per day to avoid spamming update servers
+            var settings = ServiceContainer.TryGet<UserSettings>(out var s) ? s : null;
+            if (settings == null) return;
+
+            if ((DateTime.Now - settings.LastYtDlpUpdateCheck).TotalDays < 1) return;
+            
+            settings.LastYtDlpUpdateCheck = DateTime.Now;
+            Logger.Debug("[yt-dlp] Running scheduled update check...");
+            await TryUpdateAsync();
+        }
+
         public void Dispose()
         {
-            // YoutubeDL doesn't require disposal
             _isAvailable = false;
+            
+            // Clean up any orphaned yt-dlp processes started by this application
+            try
+            {
+                var children = Process.GetProcessesByName("yt-dlp");
+                foreach (var child in children)
+                {
+                    try
+                    {
+                        // Heuristic: If it's the same executable we use, it's likely ours
+                        if (child.MainModule?.FileName == _ytDlpPath)
+                        {
+                            Logger.Debug($"[yt-dlp] Cleaning up orphaned process: {child.Id}");
+                            child.Kill();
+                        }
+                    }
+                    catch { /* ignore */ }
+                    finally { child.Dispose(); }
+                }
+            }
+            catch { }
         }
     }
 }

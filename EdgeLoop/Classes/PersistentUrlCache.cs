@@ -93,7 +93,13 @@ namespace EdgeLoop.Classes
                     var cleanCache = _cache.Where(kvp => !kvp.Value.IsExpired).ToDictionary(k => k.Key, v => v.Value);
 
                     var json = JsonSerializer.Serialize(cleanCache);
-                    File.WriteAllText(_cacheFilePath, json);
+                    
+                    // Atomic write: write to temp file then move to final path
+                    string tempFile = _cacheFilePath + ".tmp";
+                    File.WriteAllText(tempFile, json);
+                    if (File.Exists(_cacheFilePath)) File.Delete(_cacheFilePath);
+                    File.Move(tempFile, _cacheFilePath);
+
                     _isDirty = false;
                     // Update in-memory cache to match cleaned version (optional, but good for memory)
                     _cache = new ConcurrentDictionary<string, UrlCacheEntry>(cleanCache);

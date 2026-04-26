@@ -249,8 +249,9 @@
         </Border>
         
         <!-- Content area with padding (excluding title bar) -->
-        <Border Padding="24" Grid.Row="1" Grid.RowSpan="11">
-            <Grid>
+        <ScrollViewer Grid.Row="1" Grid.RowSpan="11" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <Border Padding="24">
+                <Grid>
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
@@ -814,6 +815,7 @@
             </Grid>
             </Grid>
         </Border>
+        </ScrollViewer>
         </Grid>
     </Border>
 

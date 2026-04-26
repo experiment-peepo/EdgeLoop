@@ -163,6 +163,23 @@ namespace EdgeLoop
                 Logger.Warning($"Failed to create Playlists directory: {ex.Message}");
             }
 
+            // 4. Initialize Core Services
+            ServiceContainer.Register(settings);
+
+            // Startup Repair: If "Start with Windows" is enabled, verify the registry path matches the current executable path
+            // This handles cases where the user moves the EdgeLoop folder.
+            if (settings.StartWithWindows)
+            {
+                try
+                {
+                    StartupManager.SetStartup(true);
+                }
+                catch (Exception ex)
+                {
+                    Logger.Debug($"Startup path repair failed: {ex.Message}");
+                }
+            }
+
             var videoService = new VideoPlayerService();
             ServiceContainer.Register<IVideoPlayerService>(videoService);
             ServiceContainer.Register(videoService);

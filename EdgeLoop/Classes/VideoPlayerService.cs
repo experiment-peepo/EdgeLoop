@@ -86,7 +86,9 @@ namespace EdgeLoop.Classes
 
         private void MasterSyncTimer_Tick(object sender, EventArgs e)
         {
-            // ... (Existing sync logic) ...
+            // Auto-manage sleep suppression based on active playback
+            if (this.IsPlaying) PowerManagement.SuppressSleep();
+            else PowerManagement.AllowSleep();
 
             // Auto-save session state every 30 seconds
             if ((DateTime.Now - _lastSessionSave).TotalSeconds > 30)
@@ -307,7 +309,10 @@ namespace EdgeLoop.Classes
             {
                 lock (_playersLock)
                 {
-                    return players.Count > 0;
+                    return players.Any(p => p.ViewModel != null && 
+                                          (p.ViewModel.Player.Status == FlyleafLib.MediaPlayer.Status.Playing || 
+                                           p.ViewModel.Player.Status == FlyleafLib.MediaPlayer.Status.Opening ||
+                                           p.ViewModel.Player.IsBuffering));
                 }
             }
         }
@@ -422,14 +427,21 @@ namespace EdgeLoop.Classes
             // SESSION RESUME: Immediate save of positions when session ends
             PlaybackPositionTracker.Instance.SaveSync();
 
-            // Unregister all screen hotkeys
-            ActivePlayers.Clear();
-
             List<HypnoWindow> playersCopy;
             lock (_playersLock)
             {
                 playersCopy = players.ToList();
                 players.Clear();
+                
+                // Clear ActivePlayers on UI thread to ensure consistency
+                if (System.Windows.Application.Current?.Dispatcher.CheckAccess() == true)
+                {
+                    ActivePlayers.Clear();
+                }
+                else
+                {
+                    System.Windows.Application.Current?.Dispatcher.Invoke(() => ActivePlayers.Clear());
+                }
             }
 
             UpdateHighlights();
@@ -475,11 +487,23 @@ namespace EdgeLoop.Classes
                     Logger.Debug($"[VideoPlayerService] Unregistered player for screen: {player.ScreenDeviceName}");
                 }
 
-                // Find and remove from ActivePlayers collection
-                var vm = ActivePlayers.FirstOrDefault(ap => ap.Player == player.ViewModel);
-                if (vm != null)
+                // Find and remove from ActivePlayers collection (safely on UI thread)
+                Action removeAction = () =>
                 {
-                    ActivePlayers.Remove(vm);
+                    var vm = ActivePlayers.FirstOrDefault(ap => ap.Player == player.ViewModel);
+                    if (vm != null)
+                    {
+                        ActivePlayers.Remove(vm);
+                    }
+                };
+
+                if (System.Windows.Application.Current?.Dispatcher.CheckAccess() == true)
+                {
+                    removeAction();
+                }
+                else
+                {
+                    System.Windows.Application.Current?.Dispatcher.BeginInvoke(removeAction);
                 }
 
                 UpdateHighlights();
@@ -670,6 +694,17 @@ namespace EdgeLoop.Classes
                         if (resumeState.SpeedRatio != 1.0) w.ViewModel.SpeedRatio = resumeState.SpeedRatio;
                     }
 
+                    // Subscribe to terminal failure to close window if playlist fails completely
+                    w.ViewModel.TerminalFailure += (s, args) =>
+                    {
+                        Logger.Warning($"[VideoPlayerService] Terminal failure on screen {w.ScreenDeviceName}. Closing window.");
+                        System.Windows.Application.Current?.Dispatcher.InvokeAsync(() => 
+                        {
+                            UnregisterPlayer(w);
+                            w.Close();
+                        });
+                    };
+
                     lock (_playersLock)
                     {
                         players.Add(w);
@@ -815,6 +850,9 @@ namespace EdgeLoop.Classes
                 state.LastPlayed = DateTime.Now;
 
                 App.Settings.LastPlaybackState = state;
+
+                // CRITICAL: Also save all file-specific positions to disk during periodic session save
+                PlaybackPositionTracker.Instance.SaveSync();
 
                 // ASYNC SAVE: Fire and forget task to avoid blocking the UI thread
                 // Catch exceptions inside the task to avoid unobserved task exceptions

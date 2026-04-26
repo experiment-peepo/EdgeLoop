@@ -40,11 +40,7 @@ namespace EdgeLoop.Windows
             {
                 Logger.Debug($"[HypnoWindow] Created for screen {screen.DeviceName} | Bounds: {screen.Bounds}");
 
-                // Set window position and size to cover the target screen
-                this.Left = screen.Bounds.Left;
-                this.Top = screen.Bounds.Top;
-                this.Width = screen.Bounds.Width;
-                this.Height = screen.Bounds.Height;
+                // Position will be set in SourceInitialized using SetWindowPos
             }
             else
             {
@@ -251,14 +247,21 @@ namespace EdgeLoop.Windows
                 this.WindowStartupLocation = WindowStartupLocation.Manual;
                 this.WindowState = WindowState.Normal;
 
-                // 4. Delayed WPF logical sync for scaling
+                // 4. WPF logical sync for scaling
+                // We use the DPI of the specific window handle now that it's moved
                 this.Dispatcher.BeginInvoke(new Action(() =>
                 {
+                    if (_disposed) return;
                     var dpi = VisualTreeHelper.GetDpi(this);
+                    
+                    // Update logical properties to match physical placement
+                    // This prevents WPF from trying to "correct" the window position later
                     this.Left = b.Left / dpi.DpiScaleX;
                     this.Top = b.Top / dpi.DpiScaleY;
                     this.Width = b.Width / dpi.DpiScaleX;
                     this.Height = b.Height / dpi.DpiScaleY;
+                    
+                    Logger.Debug($"[HypnoWindow] Logical sync: {this.Left},{this.Top} {this.Width}x{this.Height} (DPI: {dpi.DpiScaleX})");
                 }), System.Windows.Threading.DispatcherPriority.Loaded);
 
 

@@ -313,6 +313,7 @@ namespace EdgeLoop.ViewModels
                 {
                     App.Settings.VideoShuffle = value;
                     OnPropertyChanged(nameof(IsShuffle));
+                    App.Settings.Save(); // Save immediately when toggled
                 }
             }
         }
@@ -683,9 +684,12 @@ namespace EdgeLoop.ViewModels
 
             lock (_loadLock)
             {
-                if (_isLoading)
+                // Cancel any pending load and clear the CTS so LoadCurrentVideo creates a fresh one
+                if (_loadCts != null)
                 {
-                    _loadCts?.Cancel();
+                    _loadCts.Cancel();
+                    _loadCts.Dispose();
+                    _loadCts = null;
                 }
                 IsLoadingStatus = true; // Mark as loading immediately to prevent sync timer from starting the clock
                 _recursionDepth = 0;
@@ -919,6 +923,18 @@ namespace EdgeLoop.ViewModels
 
                 Logger.Debug($"[PlayPrevious] {this.MonitorName} selected previous video: #{_currentPos} - {_files[_currentPos].FileName}");
 
+                lock (_loadLock)
+                {
+                    // Cancel any pending load
+                    if (_loadCts != null)
+                    {
+                        _loadCts.Cancel();
+                        _loadCts.Dispose();
+                        _loadCts = null;
+                    }
+                    IsLoadingStatus = true;
+                }
+
                 StartNewPlayRecord(_files[_currentPos].FilePath);
                 _ = LoadCurrentVideo();
             }
@@ -1086,20 +1102,13 @@ namespace EdgeLoop.ViewModels
                             int resolutionTimeoutMs = isDownloadRequired ? 1800000 : 30000;
 
                             // Warn the user once per session if they are streaming a site that relies on caching for 4K
-                            if (isDownloadRequired && App.Settings?.EnableLocalCaching == false && !_hasShownCachingWarning)
+                            if (isDownloadRequired && App.Settings?.EnableLocalCaching != true && !_hasShownCachingWarning)
                             {
                                 _hasShownCachingWarning = true;
                                 Logger.Warning($"LoadCurrentVideo: Local caching is disabled. Displaying warning to user for {host}.");
                                 Application.Current?.Dispatcher?.InvokeAsync(() =>
                                 {
-                                    System.Windows.MessageBox.Show(
-                                        "Local Caching is currently disabled in your Settings.\n\n" +
-                                        "Sites like YouTube and Iwara require Local Caching to construct 4K videos and prevent severe buffering.\n\n" +
-                                        "While disabled, these videos will be capped at 1080p and may buffer heavily due to aggressive network throttling by the host. To fix this, enable 'Local Caching' in the EdgeLoop Settings.",
-                                        "Performance & Quality Warning",
-                                        System.Windows.MessageBoxButton.OK,
-                                        System.Windows.MessageBoxImage.Warning
-                                    );
+                                    LoadingProgressText = "⚠️ Performance Warning: Local Caching is disabled. Quality will be limited.";
                                 });
                             }
 
@@ -2112,6 +2121,7 @@ namespace EdgeLoop.ViewModels
             if (CurrentItem != null)
             {
                 CurrentItem.IsPlaying = false;
+                CurrentItem.PropertyChanged -= CurrentItem_PropertyChanged;
             }
 
             try

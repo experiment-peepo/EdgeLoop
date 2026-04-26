@@ -33,6 +33,7 @@ namespace EdgeLoop.Classes
         private static extern EXECUTION_STATE SetThreadExecutionState(EXECUTION_STATE esFlags);
 
         private static bool _isSuppressingSleep = false;
+        public static bool IsSuppressingSleep => _isSuppressingSleep;
 
         /// <summary>
         /// Prevents the system from entering sleep mode and keeps the display on

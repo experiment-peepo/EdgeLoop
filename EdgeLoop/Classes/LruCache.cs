@@ -108,6 +108,19 @@ namespace EdgeLoop.Classes
             {
                 _accessOrder.Remove(entry.Node);
                 _cache.Remove(key);
+
+                // If value is disposable, dispose it now that it's leaving the cache
+                if (entry.Value is IDisposable disposable)
+                {
+                    try
+                    {
+                        disposable.Dispose();
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Debug($"Error disposing cached item for {key}: {ex.Message}");
+                    }
+                }
             }
         }
 

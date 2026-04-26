@@ -302,8 +302,15 @@ namespace EdgeLoop.Classes
             try
             {
                 var uri = new Uri(url);
+                var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+
+                // Common tracking/analytics parameters to strip
+                string[] paramsToStrip = { "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content", "ref", "tracking_id", "click_id", "fbclid", "gclid" };
+                foreach (var p in paramsToStrip) query.Remove(p);
+
                 var builder = new UriBuilder(uri)
                 {
+                    Query = query.ToString(),
                     Fragment = string.Empty // Remove fragment
                 };
                 return builder.Uri.ToString();

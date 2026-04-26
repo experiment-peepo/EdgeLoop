@@ -17,7 +17,6 @@ namespace EdgeLoop.ViewModels
         private double _defaultOpacity;
         private double _defaultVolume;
 
-        private bool _launcherAlwaysOnTop;
         private bool _startWithWindows;
         private bool _panicHotkeyCtrl;
         private bool _panicHotkeyShift;
@@ -178,7 +177,6 @@ namespace EdgeLoop.ViewModels
             _defaultOpacity = settings.DefaultOpacity;
             _defaultVolume = settings.DefaultVolume;
 
-            _launcherAlwaysOnTop = settings.LauncherAlwaysOnTop;
             _startWithWindows = StartupManager.IsStartupEnabled();
 
             // Load panic hotkey settings
@@ -209,6 +207,8 @@ namespace EdgeLoop.ViewModels
             _rememberFilePosition = settings.RememberFilePosition;
             _enableSuperResolution = settings.EnableSuperResolution;
             _enableDiagnosticMode = settings.EnableDiagnosticMode;
+            _enableLocalCaching = settings.EnableLocalCaching;
+            _localCacheDirectory = settings.LocalCacheDirectory;
             _hypnotubeCookies = settings.HypnotubeCookies;
             _browserForCookies = settings.BrowserForCookies ?? "Firefox";
 
@@ -383,11 +383,6 @@ namespace EdgeLoop.ViewModels
             set => SetProperty(ref _enableDiagnosticMode, value);
         }
 
-        public bool LauncherAlwaysOnTop
-        {
-            get => _launcherAlwaysOnTop;
-            set => SetProperty(ref _launcherAlwaysOnTop, value);
-        }
 
         public bool StartWithWindows
         {
@@ -573,7 +568,6 @@ namespace EdgeLoop.ViewModels
             settings.DefaultOpacity = DefaultOpacity;
             settings.DefaultVolume = DefaultVolume;
 
-            settings.LauncherAlwaysOnTop = LauncherAlwaysOnTop;
 
             // Apply startup setting to Registry
             StartupManager.SetStartup(StartWithWindows);

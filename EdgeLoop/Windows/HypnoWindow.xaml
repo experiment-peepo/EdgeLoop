@@ -18,7 +18,7 @@
         xmlns:flyleaf="clr-namespace:FlyleafLib.Controls.WPF;assembly=FlyleafLib.Controls.WPF"
         mc:Ignorable="d"
         Title="EDGELOOP" Height="450" Width="800"
-        WindowStyle="None" WindowState="Normal" Topmost="True"
+        WindowStyle="None" WindowState="Normal" Topmost="False"
         ResizeMode="NoResize"
         WindowStartupLocation="Manual"
         Background="Black"
