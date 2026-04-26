@@ -48,3 +48,12 @@
 #*.RTF   diff=astextplain
 *.dll filter=lfs diff=lfs merge=lfs -text
 *.exe filter=lfs diff=lfs merge=lfs -text
+
+# Enforce CRLF for code files to match .editorconfig
+*.cs text eol=crlf
+*.xaml text eol=crlf
+*.csproj text eol=crlf
+*.sln text eol=crlf
+*.md text eol=crlf
+*.yml text eol=crlf
+*.bat text eol=crlf
