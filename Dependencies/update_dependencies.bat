@@ -122,7 +122,7 @@ try {
     if ($needsFfmpegUpdate) {
         Write-Host "Downloading latest FFmpeg from GitHub..." -ForegroundColor Yellow
         try {
-            Invoke-WebRequest -Uri $ffmpegUrl -OutFile $ffmpegZip -UserAgent "Mozilla/5.0" -TimeoutSec 120
+            Invoke-WebRequest -Uri $ffmpegUrl -OutFile $ffmpegZip -UserAgent "Mozilla/5.0" -TimeoutSec 300
             
             if (Test-Path $ffmpegTempDir) { Remove-Item $ffmpegTempDir -Recurse -Force }
             New-Item -ItemType Directory -Path $ffmpegTempDir | Out-Null

@@ -330,6 +330,18 @@ namespace EdgeLoop
             // Default to Warning — only errors and warnings in the main log
             return Classes.LogLevel.Warning;
         }
+
+        protected override void OnExit(ExitEventArgs e)
+        {
+            try
+            {
+                _mutex?.ReleaseMutex();
+                _mutex?.Dispose();
+            }
+            catch { /* Ignore errors on exit */ }
+
+            base.OnExit(e);
+        }
     }
 }
 
