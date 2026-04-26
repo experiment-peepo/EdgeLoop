@@ -93,7 +93,7 @@ namespace EdgeLoop.Classes
                     var cleanCache = _cache.Where(kvp => !kvp.Value.IsExpired).ToDictionary(k => k.Key, v => v.Value);
 
                     var json = JsonSerializer.Serialize(cleanCache);
-                    
+
                     // Atomic write: write to temp file then move to final path
                     string tempFile = _cacheFilePath + ".tmp";
                     File.WriteAllText(tempFile, json);

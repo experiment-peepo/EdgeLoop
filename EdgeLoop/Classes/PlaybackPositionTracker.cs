@@ -394,7 +394,7 @@ namespace EdgeLoop.Classes
                 {
                     Directory.CreateDirectory(directory);
                 }
-                
+
                 // Atomic write: write to temp file then move to final path
                 string tempFile = _settingsPath + ".tmp";
                 File.WriteAllText(tempFile, json);

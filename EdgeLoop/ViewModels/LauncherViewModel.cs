@@ -1274,19 +1274,20 @@ namespace EdgeLoop.ViewModels
                     else
                     {
 
-                    // Check file size and warn if large (no limit enforced)
-                    if (FileValidator.ValidateFileSize(filePath, out long size, out bool warning))
-                    {
-                        if (warning)
+                        // Check file size and warn if large (no limit enforced)
+                        if (FileValidator.ValidateFileSize(filePath, out long size, out bool warning))
                         {
-                            Logger.Debug($"Large file detected: {System.IO.Path.GetFileName(filePath)} ({size / (1024.0 * 1024 * 1024):F2} GB)");
+                            if (warning)
+                            {
+                                Logger.Debug($"Large file detected: {System.IO.Path.GetFileName(filePath)} ({size / (1024.0 * 1024 * 1024):F2} GB)");
+                            }
                         }
-                    }
                         result = (filePath, isValid: true, errorMessage: (string)null);
                     }
 
                     var current = Interlocked.Increment(ref processedCount);
-                    Application.Current?.Dispatcher.InvokeAsync(() => {
+                    Application.Current?.Dispatcher.InvokeAsync(() =>
+                    {
                         ImportProgressValue = (double)current / totalCount * 100;
                         ImportProgressText = $"Validating {current} of {totalCount}...";
                     }, System.Windows.Threading.DispatcherPriority.Background);

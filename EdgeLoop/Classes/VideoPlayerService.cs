@@ -309,8 +309,8 @@ namespace EdgeLoop.Classes
             {
                 lock (_playersLock)
                 {
-                    return players.Any(p => p.ViewModel != null && 
-                                          (p.ViewModel.Player.Status == FlyleafLib.MediaPlayer.Status.Playing || 
+                    return players.Any(p => p.ViewModel != null &&
+                                          (p.ViewModel.Player.Status == FlyleafLib.MediaPlayer.Status.Playing ||
                                            p.ViewModel.Player.Status == FlyleafLib.MediaPlayer.Status.Opening ||
                                            p.ViewModel.Player.IsBuffering));
                 }
@@ -432,7 +432,7 @@ namespace EdgeLoop.Classes
             {
                 playersCopy = players.ToList();
                 players.Clear();
-                
+
                 // Clear ActivePlayers on UI thread to ensure consistency
                 if (System.Windows.Application.Current?.Dispatcher.CheckAccess() == true)
                 {
@@ -698,7 +698,7 @@ namespace EdgeLoop.Classes
                     w.ViewModel.TerminalFailure += (s, args) =>
                     {
                         Logger.Warning($"[VideoPlayerService] Terminal failure on screen {w.ScreenDeviceName}. Closing window.");
-                        System.Windows.Application.Current?.Dispatcher.InvokeAsync(() => 
+                        System.Windows.Application.Current?.Dispatcher.InvokeAsync(() =>
                         {
                             UnregisterPlayer(w);
                             w.Close();

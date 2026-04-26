@@ -253,14 +253,14 @@ namespace EdgeLoop.Windows
                 {
                     if (_disposed) return;
                     var dpi = VisualTreeHelper.GetDpi(this);
-                    
+
                     // Update logical properties to match physical placement
                     // This prevents WPF from trying to "correct" the window position later
                     this.Left = b.Left / dpi.DpiScaleX;
                     this.Top = b.Top / dpi.DpiScaleY;
                     this.Width = b.Width / dpi.DpiScaleX;
                     this.Height = b.Height / dpi.DpiScaleY;
-                    
+
                     Logger.Debug($"[HypnoWindow] Logical sync: {this.Left},{this.Top} {this.Width}x{this.Height} (DPI: {dpi.DpiScaleX})");
                 }), System.Windows.Threading.DispatcherPriority.Loaded);
 

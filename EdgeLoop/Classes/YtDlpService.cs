@@ -1015,13 +1015,13 @@ namespace EdgeLoop.Classes
         public async Task CheckForUpdateAsync()
         {
             if (!_isAvailable) return;
-            
+
             // Only check once per day to avoid spamming update servers
             var settings = ServiceContainer.TryGet<UserSettings>(out var s) ? s : null;
             if (settings == null) return;
 
             if ((DateTime.Now - settings.LastYtDlpUpdateCheck).TotalDays < 1) return;
-            
+
             settings.LastYtDlpUpdateCheck = DateTime.Now;
             Logger.Debug("[yt-dlp] Running scheduled update check...");
             await TryUpdateAsync();
@@ -1030,7 +1030,7 @@ namespace EdgeLoop.Classes
         public void Dispose()
         {
             _isAvailable = false;
-            
+
             // Clean up any orphaned yt-dlp processes started by this application
             try
             {
