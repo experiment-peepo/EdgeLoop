@@ -17,7 +17,7 @@ namespace EdgeLoop.Classes
         public bool StartWithWindows { get; set; } = false;
         public double DefaultOpacity { get; set; } = 0.9;
         public double DefaultVolume { get; set; } = 0.5;
-        public string DefaultMonitorDeviceName { get; set; } = null;
+        public string DefaultMonitorDeviceName { get; set; } = System.Windows.Forms.Screen.PrimaryScreen?.DeviceName;
         // --- Cookie storage: encrypted at rest via DPAPI ---
         // The JSON file stores the DPAPI-encrypted value.
         // Use the Get/Set helpers below for plaintext access at runtime.
@@ -29,7 +29,7 @@ namespace EdgeLoop.Classes
         public virtual string CookiesEncrypted { get; set; } = null;
 
         public virtual string UserAgent { get; set; } = null;
-        public virtual string BrowserForCookies { get; set; } = "chrome";
+        public virtual string BrowserForCookies { get; set; } = "Firefox";
 
         /// <summary>
         /// Gets the decrypted Hypnotube cookies for runtime use.
@@ -179,6 +179,13 @@ namespace EdgeLoop.Classes
                         // Validate and clamp loaded values
                         settings.ValidateAndClampValues();
                         Logger.MinimumLevel = settings.LogLevel;
+
+                        // Migration: Upgrade default browser from 'chrome' to 'Firefox' if it was the default
+                        if (settings.BrowserForCookies == "chrome")
+                        {
+                            settings.BrowserForCookies = "Firefox";
+                        }
+
                         Logger.Debug($"Loaded settings from {SettingsFilePath}");
                         return settings;
                     }
