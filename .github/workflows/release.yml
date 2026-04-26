@@ -52,7 +52,7 @@ jobs:
         echo "numeric_version=$numericVersion" >> $env:GITHUB_OUTPUT
         
         # Detect prerelease
-        $isPrerelease = ($version -match "beta|alpha|rc") ? "true" : "false"
+        $isPrerelease = ($version -match "beta|alpha|rc|prerelease") ? "true" : "false"
         echo "is_prerelease=$isPrerelease" >> $env:GITHUB_OUTPUT
 
         # Extract latest release notes from CHANGELOG.md
