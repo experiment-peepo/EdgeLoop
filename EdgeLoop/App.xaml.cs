@@ -233,6 +233,13 @@ namespace EdgeLoop
         {
             Logger.Debug("Application exiting - starting shutdown sequence...");
 
+            try
+            {
+                _mutex?.ReleaseMutex();
+                _mutex?.Dispose();
+            }
+            catch { /* Ignore errors on exit */ }
+
             // Start a watchdog timer to force exit if shutdown hangs (e.g., due to lingering FFmpeg or Flyleaf threads)
             System.Threading.Tasks.Task.Run(async () =>
             {
@@ -329,18 +336,6 @@ namespace EdgeLoop
 
             // Default to Warning — only errors and warnings in the main log
             return Classes.LogLevel.Warning;
-        }
-
-        protected override void OnExit(ExitEventArgs e)
-        {
-            try
-            {
-                _mutex?.ReleaseMutex();
-                _mutex?.Dispose();
-            }
-            catch { /* Ignore errors on exit */ }
-
-            base.OnExit(e);
         }
     }
 }
