@@ -478,9 +478,7 @@ public unsafe partial class DecoderContext : PluginHandler
 
             if (SubtitlesStream.Demuxer.Type != MediaType.Video)
                 SeekSubtitles(timestamp / 10000);
-            else
-
-            if (VideoDemuxer.IsRunning)
+            else if (VideoDemuxer.IsRunning)
             {
                 SubtitlesDemuxer.Start();
                 SubtitlesDecoder.Start();
