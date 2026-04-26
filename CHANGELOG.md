@@ -1,3 +1,14 @@
+## [1.0.0-prerelease] - 2026-04-26
+
+### Added
+- **Deep Audit Fixes**: Major reliability hardening across core services.
+- **Atomic Saving**: Settings, playback history, and URL caches now use "atomic" save operations to prevent data corruption.
+- **Download Concurrency Limit**: Added a limit of 4 simultaneous downloads to prevent network/system lag.
+- **Startup Path Repair**: Application now automatically fixes its Windows startup registration if the folder is moved.
+- **Power & Sleep Management**: Improved PC sleep prevention during slow video buffering and handled "ghost" windows after terminal failures.
+- **yt-dlp Persistence**: Update checks for yt-dlp now persist across restarts (24-hour throttle).
+- **Resource Cleanup**: Hardened memory management in LRU caches and Flyleaf engine disposal.
+
 ## [1.0.0-beta] - 2026-04-26
 
 ### Added
