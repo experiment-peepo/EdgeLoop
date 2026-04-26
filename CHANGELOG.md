@@ -1,3 +1,15 @@
+## [1.0.1-beta] - 2026-04-26
+
+### Fixed
+- **Startup Engine Initialization**: Resolved a critical startup crash where the app failed to find FFmpeg shared libraries. It now intelligently validates paths and looks for required DLLs before initializing.
+- **YouTube Cookie Lock**: Added a retry mechanism for `yt-dlp` to handle "database locked" errors (common when Chrome is open). It now falls back to public extraction if cookies are inaccessible.
+- **UI Crash**: Fixed a `XamlParseException` in the choice dialog by adding missing warning icon resources.
+
+### Changed
+- **Browser Preferences**: Set **Firefox** as the default browser for cookie extraction.
+- **Browser List**: Removed Vivaldi and capitalized all browser names (Chrome, Firefox, Edge, etc.) in settings.
+- **CI/CD Robustness**: Improved build reliability with download retries and binary validation for external dependencies.
+
 ## [1.0.0-beta] - 2026-04-26
 
 ### Added
