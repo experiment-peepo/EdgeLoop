@@ -91,7 +91,7 @@ jobs:
             param($Uri, $OutFile, $MaxRetries = 3)
             for ($i = 1; $i -le $MaxRetries; $i++) {
                 try {
-                    Write-Host "Attempt $i: Downloading $OutFile from $Uri"
+                    Write-Host "Attempt ${i}: Downloading $OutFile from $Uri"
                     Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UserAgent "Mozilla/5.0"
                     
                     # Basic validation: Check if file exists and has size
