@@ -11,6 +11,8 @@ jobs:
     runs-on: windows-latest
     permissions:
       contents: write
+      id-token: write
+      attestations: write
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     
@@ -194,6 +196,13 @@ jobs:
         Compress-Archive -Path "publish/*" -DestinationPath "EdgeLoop.zip" -CompressionLevel Optimal
       shell: pwsh
 
+    - name: Upload Build Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: EdgeLoop-Build
+        path: EdgeLoop.zip
+        retention-days: 1
+
     - name: Create Release
       if: github.ref_type == 'tag'
       uses: ncipollo/release-action@v1
@@ -218,3 +227,42 @@ jobs:
         allowUpdates: true
         omitBodyDuringUpdate: false
         token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Generate SBOM
+      uses: anchore/sbom-action@v0
+      with:
+        path: ./publish
+        format: 'spdx-json'
+        output-file: 'EdgeLoop-SBOM.json'
+
+    - name: Attest Build Provenance
+      uses: actions/attest-build-provenance@v1
+      with:
+        subject-path: "EdgeLoop.zip"
+
+  publish-itch:
+    needs: build-and-release
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Build
+        uses: actions/download-artifact@v4
+        with:
+          name: EdgeLoop-Build # Note: I need to ensure the previous job uploads the artifact
+
+      - name: Install Butler
+        run: |
+          curl -L -o butler.zip https://broth.itch.ovh/butler/linux-amd64/LATEST/archive/default
+          unzip butler.zip
+          chmod +x butler
+          ./butler -V
+
+      - name: Publish to itch.io
+        env:
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+        run: |
+          CHANNEL=$([[ "${{ github.ref_name }}" == *"beta"* || "${{ github.ref_name }}" == *"prerelease"* ]] && echo "windows-beta" || echo "windows-stable")
+          ./butler push EdgeLoop.zip vexfromdestiny/edgeloop:$CHANNEL --userversion ${{ github.ref_name }}

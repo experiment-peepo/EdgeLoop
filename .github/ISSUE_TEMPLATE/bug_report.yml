@@ -32,16 +32,47 @@ body:
       description: What did you expect to happen?
     validations:
       required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - Windows 11
+        - Windows 10
+        - Windows 11 (Beta/Insider)
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: browser
+    attributes:
+      label: Primary Browser
+      description: Which browser do you use for cookie extraction?
+      options:
+        - Chrome
+        - Firefox
+        - Edge
+        - Opera
+        - Brave
+        - None (Direct URLs)
+    validations:
+      required: true
   - type: input
     id: version
     attributes:
       label: EdgeLoop Version
-      placeholder: v1.1.0
+      placeholder: v1.0.0-prerelease
     validations:
       required: true
   - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics Log
+      description: Please paste the content of your 'diagnostics.log' file here if available.
+      render: shell
+  - type: textarea
     id: logs
     attributes:
-      label: Logs
-      description: Please paste any console logs or error messages from 'EdgeLoop.log'.
+      label: General Logs
+      description: Please paste any error messages from 'EdgeLoop.log'.
       render: shell

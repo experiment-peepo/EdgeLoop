@@ -1,0 +1,43 @@
+name: Weekly yt-dlp Update
+
+on:
+  schedule:
+    - cron: '0 0 * * 0' # Every Sunday at midnight
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  update-ytdlp:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Get latest yt-dlp version
+      id: get_version
+      run: |
+        VERSION=$(curl -s https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest | jq -r .tag_name)
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+    - name: Check if update needed
+      id: check
+      run: |
+        # This is a placeholder for checking the version currently in the repo if we tracked it in a file.
+        # For now, we'll just download it to ensure we always have the latest in the 'release' build process.
+        echo "update_needed=true" >> $GITHUB_OUTPUT
+
+    - name: Create Pull Request
+      if: steps.check.outputs.update_needed == 'true'
+      uses: peter-evans/create-pull-request@v6
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        commit-message: "Deps: Update yt-dlp to ${{ steps.get_version.outputs.version }}"
+        title: "Deps: Update yt-dlp to ${{ steps.get_version.outputs.version }}"
+        body: |
+          Weekly automated update for `yt-dlp`.
+          Version: `${{ steps.get_version.outputs.version }}`
+        branch: auto-update-ytdlp
+        labels: internal, documentation

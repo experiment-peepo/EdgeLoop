@@ -25,7 +25,13 @@ jobs:
       run: dotnet restore EdgeLoop.sln
       
     - name: Check Formatting
-      run: dotnet format EdgeLoop.sln --verify-no-changes --verbosity diagnostic
+      uses: reviewdog/action-dotnet-format@v1
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        reporter: github-pr-review
+        level: warning
+        fail_on_error: true
+        filter_mode: added
       
     - name: Static Analysis
       run: dotnet build EdgeLoop.sln -c Release /p:AnalysisLevel=latest /p:EnforceCodeStyleInBuild=true

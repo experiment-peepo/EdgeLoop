@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EdgeLoop | Advanced Overlay Video Engine</title>
+    <style>
+        :root {
+            --bg: #0a0a0c;
+            --text: #e0e0e6;
+            --accent: #00f2ff;
+            --accent-dim: #0088ff;
+            --card-bg: rgba(255, 255, 255, 0.03);
+        }
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+        .hero {
+            height: 80vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            background: radial-gradient(circle at center, #1a1a2e 0%, #0a0a0c 100%);
+            padding: 20px;
+        }
+        .hero h1 {
+            font-size: 4rem;
+            margin: 0;
+            background: linear-gradient(to right, var(--accent), var(--accent-dim));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: -2px;
+        }
+        .hero p {
+            font-size: 1.5rem;
+            opacity: 0.8;
+            max-width: 600px;
+        }
+        .btn {
+            display: inline-block;
+            padding: 12px 32px;
+            background: var(--accent);
+            color: var(--bg);
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            margin-top: 24px;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 0 20px rgba(0, 242, 255, 0.4);
+        }
+        .features {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 24px;
+            max-width: 1200px;
+            margin: -100px auto 100px;
+            padding: 0 20px;
+        }
+        .feature-card {
+            background: var(--card-bg);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            padding: 32px;
+            border-radius: 16px;
+            backdrop-filter: blur(10px);
+        }
+        .feature-card h3 {
+            color: var(--accent);
+            margin-top: 0;
+        }
+        footer {
+            text-align: center;
+            padding: 40px;
+            opacity: 0.5;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <section class="hero">
+        <h1>EDGELOOP</h1>
+        <p>The ultimate high-performance video overlay engine for Windows.</p>
+        <a href="https://github.com/experiment-peepo/EdgeLoop/releases/latest" class="btn">Download Latest</a>
+    </section>
+
+    <section class="features">
+        <div class="feature-card">
+            <h3>Advanced Overlay</h3>
+            <p>Hardware-accelerated video playback that stays on top of your workspace with zero lag.</p>
+        </div>
+        <div class="feature-card">
+            <h3>Universal Site Support</h3>
+            <p>Seamlessly import playlists from YouTube, PMVHaven, Hypnotube, Rule34Video, and more.</p>
+        </div>
+        <div class="feature-card">
+            <h3>Smart Caching</h3>
+            <p>Intelligent local video caching ensures instant playback and reduced bandwidth usage.</p>
+        </div>
+    </section>
+
+    <footer>
+        &copy; 2026 Llamasoft. Open Source under GPLv3.
+    </footer>
+</body>
+</html>

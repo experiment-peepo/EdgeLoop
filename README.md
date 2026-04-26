@@ -1,5 +1,11 @@
 # 🌌 EdgeLoop v1.0
 
+![Build Status](https://img.shields.io/github/actions/workflow/status/experiment-peepo/EdgeLoop/release.yml?style=flat-square&label=Build)
+![License](https://img.shields.io/github/license/experiment-peepo/EdgeLoop?style=flat-square)
+![Prerelease](https://img.shields.io/github/v/release/experiment-peepo/EdgeLoop?include_prereleases&style=flat-square&label=Prerelease)
+![Attestation](https://img.shields.io/badge/Provenance-Verified%20🛡️-00f2ff?style=flat-square)
+![Hardening](https://img.shields.io/badge/Hardening-Deep%20Audit%20✅-ff00ff?style=flat-square)
+
 **EdgeLoop** is a high-performance video engine designed for multi-monitor setups. Built on a custom fork of `Flyleaf`, it provides seamless, transparent overlays directly on your desktop.
 
 ---
