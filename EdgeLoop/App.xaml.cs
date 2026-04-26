@@ -30,8 +30,23 @@ namespace EdgeLoop
         private System.Threading.CancellationTokenSource _cookieCleanupCts;
         private System.Threading.Tasks.Task _cookieCleanupTask;
 
+        private static System.Threading.Mutex _mutex = null;
+
         protected override void OnStartup(StartupEventArgs e)
         {
+            const string appName = "EdgeLoop-Global-Instance-Mutex-v1";
+            bool createdNew;
+
+            _mutex = new System.Threading.Mutex(true, appName, out createdNew);
+
+            if (!createdNew)
+            {
+                // Single Instance Check: App is already running
+                MessageBox.Show("EdgeLoop is already running.", "EdgeLoop", MessageBoxButton.OK, MessageBoxImage.Information);
+                this.Shutdown();
+                return;
+            }
+
             // 1. Add global exception handlers FIRST so we can catch initialization crashes
             this.DispatcherUnhandledException += (s, args) =>
             {

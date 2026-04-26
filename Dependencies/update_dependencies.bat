@@ -141,3 +141,9 @@ if ($needsFfmpegUpdate) {
 }
 
 Write-Host "`nUpdate process finished." -ForegroundColor Cyan
+
+# Only pause if not running in CI environment (GitHub Actions)
+if ($null -eq $env:GITHUB_ACTIONS -and $null -eq $env:CI) {
+    Write-Host "`nPress any key to exit..." -ForegroundColor Gray
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+}
