@@ -1,5 +1,5 @@
 @echo off
-powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((Get-Content '%~f0') -join \"`n\")"
+powershell -NoProfile -ExecutionPolicy Bypass -Command "iex ((Get-Content '%~f0' | Select-Object -Skip 3) -join \"`n\")"
 exit /b
 
 # yt-dlp Auto-Update Script (Polyglot Edition)
