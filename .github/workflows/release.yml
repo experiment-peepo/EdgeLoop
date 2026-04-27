@@ -2,7 +2,7 @@ name: Build and Release
 
 on:
   push:
-    branches: [ "main", "master", "beta" ]
+    branches: [ "main", "master", "beta", "release" ]
     tags:
       - 'v*'
 
