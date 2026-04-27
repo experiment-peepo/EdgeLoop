@@ -44,8 +44,7 @@ jobs:
         if ("${{ github.ref_type }}" -eq "tag") {
           $version = "${{ github.ref_name }}" -replace "v", ""
         } else {
-          $runNumber = "${{ github.run_number }}"
-          $version = "$baseVersion-build.$runNumber"
+          $version = "$baseVersion"
         }
         
         # Clean numeric version for AssemblyVersion/FileVersion
