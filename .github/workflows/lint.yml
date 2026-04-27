@@ -22,14 +22,17 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore EdgeLoop.sln
       
-    - name: Check Formatting
-      uses: reviewdog/action-dotnet-format@v1
+    - name: Setup reviewdog
+      uses: reviewdog/action-setup@v1
       with:
-        github_token: "${{ github.token }}"
-        reporter: github-pr-review
-        level: warning
-        fail_on_error: true
-        filter_mode: added
+        reviewdog_version: latest
+        
+    - name: Check Formatting
+      env:
+        REVIEWDOG_GITHUB_API_TOKEN: "${{ github.token }}"
+      run: |
+        dotnet format --verify-no-changes --verbosity diagnostic 2>&1 | \
+        reviewdog -efm="%f(%l,%c): %m" -name="dotnet-format" -reporter=github-pr-review -level=warning
       
     - name: Static Analysis
       run: dotnet build EdgeLoop.sln -c Release /p:AnalysisLevel=latest /p:EnforceCodeStyleInBuild=true
