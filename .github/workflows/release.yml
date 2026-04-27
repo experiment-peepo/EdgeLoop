@@ -32,12 +32,20 @@ jobs:
     - name: Generate Version and Extract Release Notes
       id: git_version
       run: |
+        # Extract version from .csproj
+        $projectFile = "EdgeLoop/EdgeLoop.csproj"
+        $projectContent = Get-Content $projectFile -Raw
+        if ($projectContent -match "<Version>(.*?)</Version>") {
+            $baseVersion = $matches[1]
+        } else {
+            $baseVersion = "1.0.0"
+        }
+
         if ("${{ github.ref_type }}" -eq "tag") {
           $version = "${{ github.ref_name }}" -replace "v", ""
         } else {
-          $baseVersion = "1.0.0"
           $runNumber = "${{ github.run_number }}"
-          $version = "$baseVersion.$runNumber"
+          $version = "$baseVersion-build.$runNumber"
         }
         
         # Clean numeric version for AssemblyVersion/FileVersion
