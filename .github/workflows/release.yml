@@ -13,8 +13,6 @@ jobs:
       contents: write
       id-token: write
       attestations: write
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     
     steps:
     - name: Checkout code
@@ -221,7 +219,7 @@ jobs:
         prerelease: ${{ steps.git_version.outputs.is_prerelease == 'true' }}
         allowUpdates: true
         omitBodyDuringUpdate: false
-        token: ${{ secrets.GITHUB_TOKEN }}
+        token: "${{ github.token }}"
 
     - name: Generate SBOM
       uses: anchore/sbom-action@v0

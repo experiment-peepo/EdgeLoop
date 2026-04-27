@@ -241,7 +241,7 @@ namespace EdgeLoop.Windows
                 var b = _targetScreen.Bounds;
                 Logger.Debug($"[HypnoWindow] Positioning: {b.Left},{b.Top} {b.Width}x{b.Height}");
                 SetWindowPos(hwnd, new IntPtr(-1), b.Left, b.Top, b.Width, b.Height,
-                    SWP_NOZORDER | SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+                    SWP_FRAMECHANGED | SWP_SHOWWINDOW);
 
                 // 3. WPF Metadata
                 this.WindowStartupLocation = WindowStartupLocation.Manual;
@@ -260,6 +260,10 @@ namespace EdgeLoop.Windows
                     this.Top = b.Top / dpi.DpiScaleY;
                     this.Width = b.Width / dpi.DpiScaleX;
                     this.Height = b.Height / dpi.DpiScaleY;
+
+                    // Re-assert Topmost state in WPF after move
+                    this.Topmost = false;
+                    this.Topmost = true;
 
                     Logger.Debug($"[HypnoWindow] Logical sync: {this.Left},{this.Top} {this.Width}x{this.Height} (DPI: {dpi.DpiScaleX})");
                 }), System.Windows.Threading.DispatcherPriority.Loaded);

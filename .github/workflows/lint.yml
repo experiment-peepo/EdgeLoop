@@ -9,8 +9,6 @@ on:
 jobs:
   lint:
     runs-on: windows-latest
-    env:
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
     
     steps:
     - name: Checkout code
@@ -27,7 +25,7 @@ jobs:
     - name: Check Formatting
       uses: reviewdog/action-dotnet-format@v1
       with:
-        github_token: ${{ secrets.GITHUB_TOKEN }}
+        github_token: "${{ github.token }}"
         reporter: github-pr-review
         level: warning
         fail_on_error: true

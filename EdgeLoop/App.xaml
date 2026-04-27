@@ -43,6 +43,17 @@
             <SolidColorBrush x:Key="WarningColor" Color="#FFD700"/>
             <SolidColorBrush x:Key="ErrorColor" Color="#FF4444"/> <!-- Bright Red for error -->
 
+            <!-- Custom Brushes for Neon Controls -->
+            <DrawingBrush x:Key="DashedTrackBrush" TileMode="Tile" Viewport="0,0,8,6" ViewportUnits="Absolute">
+                <DrawingBrush.Drawing>
+                    <GeometryDrawing Brush="#B3FF1493">
+                        <GeometryDrawing.Geometry>
+                            <RectangleGeometry Rect="0,0,1.5,6"/>
+                        </GeometryDrawing.Geometry>
+                    </GeometryDrawing>
+                </DrawingBrush.Drawing>
+            </DrawingBrush>
+
             <!-- Spacing System (4px base unit) - Enhanced for modern design -->
             <sys:Double x:Key="SpacingXSmall">4</sys:Double>
             <sys:Double x:Key="SpacingSmall">8</sys:Double>
@@ -120,7 +131,7 @@
                 <Setter Property="Margin" Value="0,0,0,8"/>
                 <Setter Property="Effect">
                     <Setter.Value>
-                        <DropShadowEffect Color="#FF69B4" BlurRadius="10" ShadowDepth="0" Opacity="0.5"/>
+                        <DropShadowEffect Color="#FF1493" BlurRadius="25" ShadowDepth="0" Opacity="0.8"/>
                     </Setter.Value>
                 </Setter>
             </Style>
@@ -500,14 +511,15 @@
             <!-- ComboBox Style with Pink Border -->
             <Style x:Key="PinkComboBoxStyle" TargetType="ComboBox">
                 <Setter Property="Foreground" Value="{StaticResource AccentPrimary}"/>
-                <Setter Property="Background" Value="{StaticResource BackgroundSecondary}"/>
+                <Setter Property="Background" Value="#E0E0E0"/>
                 <Setter Property="BorderBrush" Value="{StaticResource BorderPink}"/>
                 <Setter Property="BorderThickness" Value="1.5"/>
-                <Setter Property="Padding" Value="10,8"/>
+                <Setter Property="Padding" Value="12,6"/>
                 <Setter Property="Height" Value="36"/>
                 <Setter Property="FontSize" Value="13"/>
                 <Setter Property="FontWeight" Value="SemiBold"/>
                 <Setter Property="VerticalContentAlignment" Value="Center"/>
+                <Setter Property="HorizontalContentAlignment" Value="Center"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="ComboBox">
@@ -515,6 +527,9 @@
                                 <ToggleButton Name="ToggleButton" 
                                             Focusable="False" 
                                             ClickMode="Press"
+                                            Background="{TemplateBinding Background}"
+                                            BorderBrush="{TemplateBinding BorderBrush}"
+                                            BorderThickness="{TemplateBinding BorderThickness}"
                                             IsChecked="{Binding Path=IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
                                     <ToggleButton.Template>
                                         <ControlTemplate TargetType="ToggleButton">
@@ -533,7 +548,7 @@
                                                 </Border>
                                                 <Path x:Name="Arrow" 
                                                     Grid.Column="1" 
-                                                    Fill="{TemplateBinding Foreground}" 
+                                                    Fill="White" 
                                                     HorizontalAlignment="Center" 
                                                     VerticalAlignment="Center" 
                                                     Data="M 0 0 L 4 4 L 8 0 Z"/>
@@ -612,7 +627,7 @@
                 <Style.Resources>
                     <Style TargetType="ComboBoxItem">
                         <Setter Property="Background" Value="{StaticResource BackgroundSecondary}"/>
-                        <Setter Property="Foreground" Value="{StaticResource AccentPrimary}"/>
+                        <Setter Property="Foreground" Value="White"/>
                         <Setter Property="BorderThickness" Value="0"/>
                         <Setter Property="Padding" Value="10,8"/>
                         <Setter Property="FontSize" Value="13"/>
@@ -703,23 +718,15 @@
                                         </Setter>
                                     </Style>
                                 </Grid.Resources>
-                                <!-- Ticks with enhanced visibility -->
-                                <TickBar x:Name="TopTick" Fill="#FF69B4" Height="5" Margin="7,0,7,2" Placement="Top" Visibility="Collapsed" SnapsToDevicePixels="True" Opacity="0.8"/>
-                                <TickBar x:Name="BottomTick" Fill="#FF69B4" Height="5" Margin="7,2,7,0" Placement="Bottom" Visibility="Collapsed" SnapsToDevicePixels="True" Opacity="0.8"/>
-
-                                <!-- Track Background with enhanced gradient -->
-                                <Border x:Name="TrackBackground" Height="8" CornerRadius="4" VerticalAlignment="Center" Margin="13,0" IsHitTestVisible="False" UseLayoutRounding="True">
-                                    <Border.Background>
-                                        <LinearGradientBrush StartPoint="0,0" EndPoint="1,0">
-                                            <GradientStop Color="#1AFFFFFF" Offset="0"/>
-                                            <GradientStop Color="#2AFFFFFF" Offset="1"/>
-                                        </LinearGradientBrush>
-                                    </Border.Background>
-                                    <Border.BorderBrush>
-                                        <SolidColorBrush Color="#33FFFFFF" Opacity="0.3"/>
-                                    </Border.BorderBrush>
-                                    <Border.BorderThickness>1</Border.BorderThickness>
+                                <!-- Track Background with dashed pattern -->
+                                <Border x:Name="TrackBackground" Height="6" VerticalAlignment="Center" Margin="13,0" IsHitTestVisible="False" UseLayoutRounding="True"
+                                        Background="{StaticResource DashedTrackBrush}">
                                 </Border>
+
+                                <!-- Ticks with sleek modern look - Floating on top of track -->
+                                <TickBar x:Name="TopTick" Fill="White" Height="6" Margin="13,0" VerticalAlignment="Center" Visibility="Collapsed" SnapsToDevicePixels="True" Opacity="0.8"/>
+                                <TickBar x:Name="BottomTick" Fill="White" Height="6" Margin="13,0" VerticalAlignment="Center" Visibility="Collapsed" SnapsToDevicePixels="True" Opacity="0.8"/>
+
                                 <Grid VerticalAlignment="Center" Margin="13,0" Height="20" UseLayoutRounding="True">
                                     <Track x:Name="PART_Track" VerticalAlignment="Center" HorizontalAlignment="Stretch">
                                         <Track.DecreaseRepeatButton>
@@ -751,27 +758,28 @@
                 </Setter>
             </Style>
 
-            <!-- Custom Neon Scrollbar Style -->
+            <!-- Custom Neon Scrollbar Style - Ultra Sleek & Modern -->
             <Style x:Key="NeonScrollbar" TargetType="ScrollBar">
                 <Setter Property="Background" Value="Transparent"/>
-                <Setter Property="Width" Value="6"/>
+                <Setter Property="Width" Value="3"/>
+                <Setter Property="MinWidth" Value="3"/>
+                <Setter Property="Opacity" Value="0.4"/>
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="ScrollBar">
-                            <Grid x:Name="Bg" Background="{TemplateBinding Background}" SnapsToDevicePixels="true">
-                                <Track x:Name="PART_Track" IsDirectionReversed="true" IsEnabled="{TemplateBinding IsMouseOver}">
+                            <Grid x:Name="Bg" Background="Transparent" SnapsToDevicePixels="true">
+                                <Track x:Name="PART_Track" IsDirectionReversed="true">
                                     <Track.Thumb>
                                         <Thumb x:Name="Thumb">
                                             <Thumb.Template>
                                                 <ControlTemplate TargetType="Thumb">
                                                     <Border x:Name="ThumbVisual" 
                                                             Background="{StaticResource ScrollbarThumb}" 
-                                                            CornerRadius="3"
-                                                            Margin="1,0"/>
+                                                            CornerRadius="1.5"
+                                                            Margin="0"/>
                                                     <ControlTemplate.Triggers>
                                                         <Trigger Property="IsMouseOver" Value="true">
                                                             <Setter TargetName="ThumbVisual" Property="Background" Value="{StaticResource ScrollbarThumbHover}"/>
-                                                            <Setter TargetName="ThumbVisual" Property="Margin" Value="0,0"/>
                                                         </Trigger>
                                                     </ControlTemplate.Triggers>
                                                 </ControlTemplate>
@@ -780,6 +788,12 @@
                                     </Track.Thumb>
                                 </Track>
                             </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="true">
+                                    <Setter Property="Opacity" Value="1.0"/>
+                                    <Setter Property="Width" Value="6"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
                         </ControlTemplate>
                     </Setter.Value>
                 </Setter>
@@ -790,43 +804,25 @@
                     <Setter.Value>
                         <ControlTemplate TargetType="ScrollViewer">
                             <Grid x:Name="Grid" Background="{TemplateBinding Background}">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="*"/>
-                                    <RowDefinition Height="Auto"/>
-                                </Grid.RowDefinitions>
                                 <ScrollContentPresenter x:Name="PART_ScrollContentPresenter" 
                                                       CanContentScroll="{TemplateBinding CanContentScroll}" 
-                                                      CanHorizontallyScroll="False" 
-                                                      CanVerticallyScroll="False" 
                                                       Content="{TemplateBinding Content}" 
                                                       ContentTemplate="{TemplateBinding ContentTemplate}"
-                                                      Grid.Column="0" 
-                                                      Grid.Row="0" 
                                                       Margin="{TemplateBinding Padding}" 
                                                       SnapsToDevicePixels="{TemplateBinding SnapsToDevicePixels}"/>
                                 <ScrollBar x:Name="PART_VerticalScrollBar" 
-                                         AutomationProperties.AutomationId="VerticalScrollBar" 
-                                         Cursor="Arrow" 
-                                         Grid.Column="1" 
+                                         HorizontalAlignment="Right"
                                          Maximum="{TemplateBinding ScrollableHeight}" 
                                          Minimum="0" 
-                                         Grid.Row="0" 
                                          Style="{StaticResource NeonScrollbar}"
                                          Visibility="{TemplateBinding ComputedVerticalScrollBarVisibility}" 
                                          Value="{Binding VerticalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}" 
                                          ViewportSize="{TemplateBinding ViewportHeight}"/>
                                 <ScrollBar x:Name="PART_HorizontalScrollBar" 
-                                         AutomationProperties.AutomationId="HorizontalScrollBar" 
-                                         Cursor="Arrow" 
-                                         Grid.Column="0" 
+                                         VerticalAlignment="Bottom"
+                                         Orientation="Horizontal" 
                                          Maximum="{TemplateBinding ScrollableWidth}" 
                                          Minimum="0" 
-                                         Orientation="Horizontal" 
-                                         Grid.Row="1" 
                                          Style="{StaticResource NeonScrollbar}"
                                          Visibility="{TemplateBinding ComputedHorizontalScrollBarVisibility}" 
                                          Value="{Binding HorizontalOffset, Mode=OneWay, RelativeSource={RelativeSource TemplatedParent}}" 
