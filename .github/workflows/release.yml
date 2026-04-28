@@ -206,6 +206,20 @@ jobs:
 
 
 
+    - name: Cleanup Existing Release
+      if: github.ref == 'refs/heads/release'
+      run: |
+        $tag = "v${{ steps.git_version.outputs.version }}"
+        # Check if release exists and delete it to refresh the timestamp
+        $exists = gh release view $tag --json tagName 2>$null
+        if ($null -ne $exists) {
+            Write-Host "Deleting existing release $tag to refresh timestamp..."
+            gh release delete $tag --yes
+        }
+      env:
+        GH_TOKEN: "${{ github.token }}"
+      shell: pwsh
+
     - name: Update Git Tag
       run: |
         $tag = "v${{ steps.git_version.outputs.version }}"
