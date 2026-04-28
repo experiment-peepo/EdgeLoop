@@ -67,9 +67,12 @@ jobs:
         # Matches from the first ## header to the next ## header or end of file
         if ($changelog -match "(?s)## \[[^\]]+\] - \d{4}-\d{2}-\d{2}(.*?)(?=\n## \[|$)") {
             $notes = $matches[1].Trim()
-            # Escaping for multi-line output in GitHub Actions
-            $notes = $notes -replace "%", "%25" -replace "\n", "%0A" -replace "\r", "%0D"
-            echo "release_notes=$notes" >> $env:GITHUB_OUTPUT
+            
+            # Modern multi-line output handling
+            $delimiter = "EOF"
+            "release_notes<<$delimiter" >> $env:GITHUB_OUTPUT
+            $notes >> $env:GITHUB_OUTPUT
+            "$delimiter" >> $env:GITHUB_OUTPUT
         } else {
             echo "release_notes=No detailed changelog found for this version." >> $env:GITHUB_OUTPUT
         }
@@ -214,10 +217,10 @@ jobs:
 
     - name: Create Release
       if: github.ref_type == 'tag' || github.ref == 'refs/heads/release'
-      uses: ncipollo/release-action@v1
+      uses: softprops/action-gh-release@v2
       with:
-        artifacts: "EdgeLoop.zip"
-        tag: v${{ steps.git_version.outputs.version }}
+        files: EdgeLoop.zip
+        tag_name: v${{ steps.git_version.outputs.version }}
         name: ${{ steps.git_version.outputs.is_prerelease == 'true' && 'Beta Release ' || 'Release ' }}v${{ steps.git_version.outputs.version }}
         body: |
           ${{ steps.git_version.outputs.release_notes }}
@@ -233,9 +236,9 @@ jobs:
           - .NET 10 Desktop Runtime required (Framework-dependent build)
         draft: false
         prerelease: ${{ steps.git_version.outputs.is_prerelease == 'true' }}
-        allowUpdates: true
-        omitBodyDuringUpdate: false
         token: "${{ github.token }}"
+        fail_on_unmatched_files: true
+        generate_release_notes: false
 
     - name: Generate SBOM
       uses: anchore/sbom-action@v0
