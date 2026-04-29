@@ -164,10 +164,10 @@ namespace EdgeLoop.Classes
                 {
                     // Fallback 1: Extract from URL slug (No network request)
                     title = ExtractTitleFromUrlSlug(normalizedUrl);
-                    
+
                     // Fallback 2: Fetch HTML (Only if not a protected site that blocks HttpClient)
                     bool canScrape = !host.Contains("iwara.tv") && !host.Contains("rule34video.com");
-                    
+
                     if (string.IsNullOrEmpty(title) && canScrape)
                     {
                         if (!hasHtml)
