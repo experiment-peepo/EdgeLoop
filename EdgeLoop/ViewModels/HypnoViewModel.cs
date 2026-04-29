@@ -1101,6 +1101,12 @@ namespace EdgeLoop.ViewModels
                             bool isDownloadRequired = YtDlpService.IsDownloadRequiredSite(host);
                             int resolutionTimeoutMs = isDownloadRequired ? 1800000 : 30000;
 
+                            // Reset progress text before starting extraction
+                            Application.Current?.Dispatcher?.InvokeAsync(() =>
+                            {
+                                LoadingProgressText = "";
+                            });
+
                             // Warn the user once per session if they are streaming a site that relies on caching for 4K
                             if (isDownloadRequired && App.Settings?.EnableLocalCaching != true && !_hasShownCachingWarning)
                             {
@@ -1112,17 +1118,19 @@ namespace EdgeLoop.ViewModels
                                 });
                             }
 
-                            // Reset progress text before starting extraction
-                            Application.Current?.Dispatcher?.InvokeAsync(() =>
-                            {
-                                LoadingProgressText = "";
-                            });
-
                             var progress = new Progress<string>(status =>
                             {
                                 Application.Current?.Dispatcher?.InvokeAsync(() =>
                                 {
-                                    LoadingProgressText = status;
+                                    if (LoadingProgressText.StartsWith("⚠️"))
+                                    {
+                                        // Keep the warning on top, append status below
+                                        LoadingProgressText = $"⚠️ Performance Warning: Caching Disabled\n{status}";
+                                    }
+                                    else
+                                    {
+                                        LoadingProgressText = status;
+                                    }
                                 });
                             });
 

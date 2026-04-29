@@ -43,6 +43,13 @@ namespace EdgeLoop.Classes
             {
                 if (string.IsNullOrWhiteSpace(url)) return null;
 
+                // Guard: Iwara.tv blocks HttpClient (403). Use yt-dlp for all Iwara interactions.
+                if (url.Contains("iwara.tv", StringComparison.OrdinalIgnoreCase))
+                {
+                    Logger.Debug($"[StandardHtmlFetcher] Bypassing HttpClient for iwara.tv to avoid 403 blocks: {url}");
+                    return null;
+                }
+
                 // Check cache first
                 if (_htmlCache.TryGetValue(url, out string cachedHtml))
                 {
@@ -107,7 +114,15 @@ namespace EdgeLoop.Classes
         {
             try
             {
-                Logger.Debug($"Resolving redirect for: {url}");
+                if (string.IsNullOrWhiteSpace(url)) return url;
+
+                // Guard: Iwara.tv blocks HttpClient (403).
+                if (url.Contains("iwara.tv", StringComparison.OrdinalIgnoreCase))
+                {
+                    return url;
+                }
+
+                Logger.Debug($"[StandardHtmlFetcher] Resolving redirect for: {url}");
 
                 // Use GET instead of HEAD - some servers (including Rule34Video) only redirect on GET
                 using (var request = new HttpRequestMessage(HttpMethod.Get, url))

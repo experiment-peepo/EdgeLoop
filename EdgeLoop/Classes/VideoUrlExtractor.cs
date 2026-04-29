@@ -162,12 +162,21 @@ namespace EdgeLoop.Classes
 
                 if (string.IsNullOrEmpty(title))
                 {
-                    if (!hasHtml)
+                    // Fallback 1: Extract from URL slug (No network request)
+                    title = ExtractTitleFromUrlSlug(normalizedUrl);
+                    
+                    // Fallback 2: Fetch HTML (Only if not a protected site that blocks HttpClient)
+                    bool canScrape = !host.Contains("iwara.tv") && !host.Contains("rule34video.com");
+                    
+                    if (string.IsNullOrEmpty(title) && canScrape)
                     {
-                        html = await FetchHtmlAsync(normalizedUrl, cancellationToken);
-                        hasHtml = !string.IsNullOrWhiteSpace(html);
+                        if (!hasHtml)
+                        {
+                            html = await FetchHtmlAsync(normalizedUrl, cancellationToken);
+                            hasHtml = !string.IsNullOrWhiteSpace(html);
+                        }
+                        if (hasHtml) title = ExtractTitleFromHtml(html, host);
                     }
-                    if (hasHtml) title = ExtractTitleFromHtml(html, host);
                 }
 
                 if (videoUrl != null)
@@ -1034,6 +1043,54 @@ namespace EdgeLoop.Classes
                 Logger.Warning($"Error extracting video title from {pageUrl}: {ex.Message}");
                 return null;
             }
+        }
+
+        private string ExtractTitleFromUrlSlug(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return null;
+
+            try
+            {
+                var uri = new Uri(url);
+                var host = uri.Host.ToLowerInvariant();
+                var path = uri.AbsolutePath;
+
+                // Handle specific sites
+                if (host.Contains("iwara.tv"))
+                {
+                    // https://www.iwara.tv/video/UZcPefzEvubIa5/bengugu-hmv-sfx -> bengugu-hmv-sfx
+                    var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                    if (segments.Length >= 3 && segments[0] == "video")
+                    {
+                        return SanitizeTitle(segments[2], host);
+                    }
+                }
+                else if (host.Contains("hypnotube.com"))
+                {
+                    // https://hypnotube.com/video/seen-my-boyfriend-kpop-wbch-pmv-78110.html -> seen-my-boyfriend-kpop-wbch-pmv
+                    var slug = Path.GetFileNameWithoutExtension(path);
+                    return SanitizeTitle(slug, host);
+                }
+                else if (host.Contains("rule34video.com"))
+                {
+                    // https://rule34video.com/video/3067406/slug/ -> slug
+                    var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                    if (segments.Length >= 3 && segments[0] == "video")
+                    {
+                        return SanitizeTitle(segments[2], host);
+                    }
+                }
+
+                // Generic fallback for any slug
+                var genericSlug = Path.GetFileNameWithoutExtension(path.TrimEnd('/'));
+                if (!string.IsNullOrEmpty(genericSlug) && genericSlug.Length > 3)
+                {
+                    return SanitizeTitle(genericSlug, host);
+                }
+            }
+            catch { }
+
+            return null;
         }
 
         private string ExtractTitleFromHtml(string html, string host)

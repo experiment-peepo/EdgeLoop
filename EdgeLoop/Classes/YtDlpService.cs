@@ -173,7 +173,8 @@ namespace EdgeLoop.Classes
             OptionSet options = new OptionSet();
 
             // Request best combined stream for player compatibility (for streaming path)
-            options.Format = "best";
+            // Use format selection that favors single files but allows for better quality than just "best"
+            options.Format = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best";
 
             if (!string.IsNullOrEmpty(App.Settings?.UserAgent))
             {
@@ -344,8 +345,8 @@ namespace EdgeLoop.Classes
 
                 if (host.Contains("iwara.tv") || isYouTube)
                 {
-                    args.Add("--impersonate");
-                    args.Add("chrome");
+                    // Impersonate Chrome is already added globally in BuildOptionsForUrl, 
+                    // but we ensure it here for the manual process call.
                 }
 
                 if (isYouTube && string.IsNullOrEmpty(options.Cookies))
@@ -364,6 +365,9 @@ namespace EdgeLoop.Classes
                 args.Add("node");
                 args.Add("--remote-components");
                 args.Add("ejs:github");
+
+                // Suppress noisy warnings like "-f best" recommendation
+                args.Add("--no-warnings");
 
                 args.Add(url);
 

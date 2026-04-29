@@ -73,6 +73,8 @@ namespace EdgeLoop.Classes
                 // Check if this is a single video page instead of a playlist
                 bool isSingleVideo = mode == ImportMode.SingleVideo || (mode == ImportMode.Auto && IsVideoPageUrl(playlistUrl));
 
+                bool isIwara = host.Contains("iwara.tv");
+
                 if (isSingleVideo)
                 {
                     Logger.Debug($"[PlaylistImporter] Treating input as single video page: {playlistUrl}");
@@ -102,7 +104,7 @@ namespace EdgeLoop.Classes
                         videoLinkInfos.Add(new VideoLinkInfo { Url = kvp.Key, Title = kvp.Value });
                     }
                 }
-                else if (host.Contains("iwara.tv") && _ytDlpService != null)
+                else if (isIwara && _ytDlpService != null)
                 {
                     if (IsVideoPageUrl(playlistUrl))
                     {
@@ -111,24 +113,25 @@ namespace EdgeLoop.Classes
                     }
                     else
                     {
-                        Logger.Debug($"[PlaylistImporter] Using yt-dlp for iwara.tv playlist to bypass Cloudflare");
+                        Logger.Debug($"[PlaylistImporter] Using yt-dlp for iwara.tv playlist to bypass Cloudflare/403: {playlistUrl}");
                         var urls = await _ytDlpService.ExtractPlaylistUrlsAsync(playlistUrl, cancellationToken);
                         foreach (var url in urls) videoLinkInfos.Add(new VideoLinkInfo { Url = url, Title = null });
                     }
                 }
                 else if (_ytDlpService != null && _ytDlpService.IsAvailable && YtDlpService.IsDownloadRequiredSite(host))
                 {
-                    Logger.Debug($"[PlaylistImporter] Using yt-dlp for {host} playlist extraction");
+                    Logger.Debug($"[PlaylistImporter] Using yt-dlp for {host} playlist extraction (download-required site)");
                     var urls = await _ytDlpService.ExtractPlaylistUrlsAsync(playlistUrl, cancellationToken);
                     foreach (var url in urls) videoLinkInfos.Add(new VideoLinkInfo { Url = url, Title = null });
                 }
                 else
                 {
                     // Generic extraction
+                    Logger.Debug($"[PlaylistImporter] Falling back to generic scraping for {host}");
                     var links = await ExtractGenericPlaylistWithTitlesAsync(playlistUrl, cancellationToken);
-                    if (links.Count == 0 && _ytDlpService != null)
+                    if (links.Count == 0 && _ytDlpService != null && _ytDlpService.IsAvailable)
                     {
-                        Logger.Debug($"[PlaylistImporter] Generic scrape failed or returned 0, falling back to yt-dlp for {host}");
+                        Logger.Debug($"[PlaylistImporter] Generic scrape failed or returned 0, trying yt-dlp for {host}");
                         var urls = await _ytDlpService.ExtractPlaylistUrlsAsync(playlistUrl, cancellationToken);
                         foreach (var url in urls) videoLinkInfos.Add(new VideoLinkInfo { Url = url, Title = null });
                     }
