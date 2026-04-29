@@ -106,7 +106,7 @@ namespace EdgeLoop.ViewModels
                             if (!string.IsNullOrWhiteSpace(lastSegment))
                             {
                                 var slug = Uri.UnescapeDataString(lastSegment);
-                                
+
                                 // Remove extension if present (e.g. .html, .mp4)
                                 if (slug.Contains("."))
                                 {
