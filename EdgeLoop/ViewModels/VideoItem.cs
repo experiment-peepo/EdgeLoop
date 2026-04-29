@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text.RegularExpressions;
 using EdgeLoop.Classes;
 
 namespace EdgeLoop.ViewModels
@@ -21,7 +22,17 @@ namespace EdgeLoop.ViewModels
         public string FilePath
         {
             get => _filePath;
-            set => SetProperty(ref _filePath, value);
+            set
+            {
+                if (SetProperty(ref _filePath, value))
+                {
+                    OnPropertyChanged(nameof(FileName));
+                    OnPropertyChanged(nameof(SourceName));
+                    OnPropertyChanged(nameof(IsUrl));
+                    OnPropertyChanged(nameof(IsCached));
+                    OnPropertyChanged(nameof(TrackingPath));
+                }
+            }
         }
 
         private bool _isPlaying;
@@ -77,30 +88,52 @@ namespace EdgeLoop.ViewModels
                     return Title;
                 }
 
+                // If cached, use the original page URL or original file path for naming
+                // instead of the hash-based local cache filename.
+                string namingPath = !string.IsNullOrEmpty(OriginalPageUrl) ? OriginalPageUrl : FilePath;
+                bool isWebNaming = Uri.TryCreate(namingPath, UriKind.Absolute, out Uri uri) &&
+                                 (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
                 // Fall back to URL-based or file-based extraction
-                if (IsUrl)
+                if (isWebNaming)
                 {
                     try
                     {
-                        var uri = new Uri(FilePath);
                         var segments = uri.Segments;
                         if (segments.Length > 0)
                         {
-                            var lastSegment = segments[segments.Length - 1];
-                            if (!string.IsNullOrWhiteSpace(lastSegment) && lastSegment != "/")
+                            var lastSegment = segments[segments.Length - 1].TrimEnd('/');
+                            if (!string.IsNullOrWhiteSpace(lastSegment))
                             {
-                                return Uri.UnescapeDataString(lastSegment);
+                                var slug = Uri.UnescapeDataString(lastSegment);
+                                
+                                // Remove extension if present (e.g. .html, .mp4)
+                                if (slug.Contains("."))
+                                {
+                                    slug = slug.Substring(0, slug.LastIndexOf('.'));
+                                }
+
+                                // Remove common trailing ID patterns (e.g. shock-409 -> shock)
+                                slug = Regex.Replace(slug, @"-\d+$", "");
+
+                                // Capitalize and replace separators with spaces
+                                if (slug.Length > 0)
+                                {
+                                    return System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(
+                                        slug.Replace("-", " ").Replace("_", " ")
+                                    );
+                                }
                             }
                         }
-                        // Fallback to domain + path
+                        // Fallback to domain + path if slug extraction failed
                         return $"{uri.Host}{uri.AbsolutePath}";
                     }
                     catch
                     {
-                        return FilePath;
+                        return namingPath;
                     }
                 }
-                return Path.GetFileName(FilePath);
+                return Path.GetFileName(namingPath);
             }
         }
 
@@ -146,7 +179,17 @@ namespace EdgeLoop.ViewModels
         public string OriginalPageUrl
         {
             get => _originalPageUrl;
-            set => SetProperty(ref _originalPageUrl, value);
+            set
+            {
+                if (SetProperty(ref _originalPageUrl, value))
+                {
+                    OnPropertyChanged(nameof(FileName));
+                    OnPropertyChanged(nameof(SourceName));
+                    OnPropertyChanged(nameof(IsUrl));
+                    OnPropertyChanged(nameof(IsCached));
+                    OnPropertyChanged(nameof(TrackingPath));
+                }
+            }
         }
 
         /// <summary>
@@ -156,11 +199,16 @@ namespace EdgeLoop.ViewModels
         {
             get
             {
-                if (IsUrl)
+                // Prioritize original page URL for source identification
+                // This ensures that even when playing from local cache, the source is shown correctly (e.g. "Hypnotube")
+                string effectivePath = !string.IsNullOrEmpty(OriginalPageUrl) ? OriginalPageUrl : FilePath;
+                bool isWeb = Uri.TryCreate(effectivePath, UriKind.Absolute, out Uri uri) &&
+                             (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
+
+                if (isWeb)
                 {
                     try
                     {
-                        var uri = new Uri(!string.IsNullOrEmpty(OriginalPageUrl) ? OriginalPageUrl : FilePath);
                         var host = uri.Host.ToLowerInvariant();
                         if (host.StartsWith("www.")) host = host.Substring(4);
 
@@ -189,6 +237,11 @@ namespace EdgeLoop.ViewModels
                 return "Local File";
             }
         }
+
+        /// <summary>
+        /// Gets whether the file is currently being played from local cache
+        /// </summary>
+        public bool IsCached => !string.IsNullOrEmpty(OriginalPageUrl) && !IsUrl;
 
         /// <summary>
         /// Gets whether the file is valid and exists

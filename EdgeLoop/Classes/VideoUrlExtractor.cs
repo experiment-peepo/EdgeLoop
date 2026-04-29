@@ -1346,6 +1346,10 @@ namespace EdgeLoop.Classes
                     }
                 }
 
+                // Remove trailing numbering artifacts like (1), (2) which are often search result artifacts
+                // but keep year markers like (2024)
+                title = Regex.Replace(title, @"\s+\(\d\)$", "");
+
                 // PMVHaven specific: Remove uploader "by [Name]"
                 if (!string.IsNullOrEmpty(host) && host.Contains("pmvhaven.com"))
                 {

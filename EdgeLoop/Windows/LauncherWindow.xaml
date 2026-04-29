@@ -369,7 +369,12 @@
                                                     </Grid>
                                                      <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,2,0,0">
                                                          <TextBlock Text="{Binding FileName}" Foreground="{StaticResource TextPrimary}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" Margin="0,0,0,2"/>
-                                                         <TextBlock Text="{Binding SourceName}" Foreground="{StaticResource TextTertiary}" FontSize="11" FontStyle="Italic"/>
+                                                         <StackPanel Orientation="Horizontal">
+                                                             <TextBlock Text="{Binding SourceName}" Foreground="{StaticResource TextTertiary}" FontSize="11" FontStyle="Italic"/>
+                                                             <Border Background="{StaticResource SuccessColor}" CornerRadius="2" Margin="6,0,0,0" Padding="4,1" Visibility="{Binding IsCached, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                                 <TextBlock Text="CACHED" Foreground="White" FontSize="8" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                             </Border>
+                                                         </StackPanel>
                                                      </StackPanel>
                                                     <ComboBox Grid.Column="2" ItemsSource="{Binding DataContext.AvailableScreens, RelativeSource={RelativeSource AncestorType=Window}}" SelectedItem="{Binding AssignedScreen}" Style="{StaticResource PinkComboBoxStyle}" Width="220" Margin="12,0"/>
                                                     <Button Grid.Column="3" Style="{StaticResource ControlButton}" Command="{Binding DataContext.RemoveItemCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}" Width="24" Height="24" Margin="8,0,0,0">

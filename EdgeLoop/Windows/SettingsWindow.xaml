@@ -383,7 +383,7 @@
 
                             <StackPanel Margin="0,0,0,16">
                                 <TextBlock Text="Browser for Cookies" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                                <TextBlock Text="Select the browser where you are logged in to YouTube/Vimeo" Style="{StaticResource CaptionText}" Margin="0,4,0,8"/>
+                                <TextBlock Text="Select the browser for cookie extraction from sites like Iwara and YouTube" Style="{StaticResource CaptionText}" Margin="0,4,0,8"/>
                                 <ComboBox ItemsSource="{Binding AvailableBrowsers}" SelectedItem="{Binding BrowserForCookies}" Style="{StaticResource PinkComboBoxStyle}" Height="32"/>
                             </StackPanel>
 
