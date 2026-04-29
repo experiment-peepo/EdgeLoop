@@ -1262,7 +1262,7 @@ namespace EdgeLoop.ViewModels
                 var validationTasks = filePaths.Select(filePath => Task.Run(() =>
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    (string, bool, string) result;
+                    (string filePath, bool isValid, string errorMessage) result;
                     if (existingPaths.Contains(filePath))
                     {
                         result = (filePath, isValid: false, errorMessage: "File already in playlist");
