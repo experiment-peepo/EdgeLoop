@@ -281,6 +281,134 @@
                         </Grid>
                     </Expander>
 
+                    <!-- Censoring (detection on the decoded frame, before window opacity) -->
+                    <Expander Header="Censoring" Style="{StaticResource SettingsExpanderStyle}" IsExpanded="False">
+                        <StackPanel Margin="0,10,0,0">
+
+                            <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,10"
+                                       Text="Detects and covers content in the video itself. Because this runs on the decoded frame before the window opacity is applied, it keeps working at low opacity - unlike screen-capture tools, which only ever see the video already blended with whatever is behind it."/>
+
+                            <Grid Margin="0,0,0,8">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                                    <TextBlock Text="Enable in-player censoring" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
+                                    <TextBlock Text="{Binding CensorModelStatus}" Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <CheckBox Grid.Column="1"
+                                          IsChecked="{Binding EnableLocalCensor}"
+                                          Style="{StaticResource ModernCheckBoxStyle}"
+                                          VerticalAlignment="Center"/>
+                            </Grid>
+
+                            <TextBlock Text="Model file (leave empty to auto-detect from the Models folder)" Style="{StaticResource CaptionText}" Margin="0,6,0,4"/>
+                            <TextBox Text="{Binding CensorModelPath, UpdateSourceTrigger=PropertyChanged}"
+                                     Height="32" Padding="8,6" Background="#2A2A3E"
+                                     Foreground="{StaticResource TextPrimary}"
+                                     BorderBrush="{StaticResource AccentPrimary}" BorderThickness="1"
+                                     VerticalContentAlignment="Center"/>
+
+                            <Grid Margin="0,12,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                                    <TextBlock Text="Sensitivity" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Lower catches more, and gets more false positives" Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Slider Width="140" Minimum="0.05" Maximum="0.95" TickFrequency="0.05" IsSnapToTickEnabled="True"
+                                            Value="{Binding CensorConfidence}" Style="{StaticResource NeonSliderStyle}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding CensorConfidence, StringFormat={}{0:0.00}}" Foreground="{StaticResource TextPrimary}"
+                                               Width="40" TextAlignment="Right" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <Grid Margin="0,12,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                                    <TextBlock Text="Detection interval (ms)" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
+                                    <TextBlock Text="How often a frame is sampled. Lower reacts faster and costs more CPU" Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <TextBox Grid.Column="1" Width="80" Height="32" Padding="8,6" Background="#2A2A3E"
+                                         Foreground="{StaticResource TextPrimary}" BorderBrush="{StaticResource AccentPrimary}" BorderThickness="1"
+                                         VerticalContentAlignment="Center" TextAlignment="Center"
+                                         Text="{Binding CensorIntervalMs, UpdateSourceTrigger=PropertyChanged}"/>
+                            </Grid>
+
+                            <Grid Margin="0,12,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                                    <TextBlock Text="Hold time (ms)" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
+                                    <TextBlock Text="How long a box stays after detection drops. Stops flicker" Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <TextBox Grid.Column="1" Width="80" Height="32" Padding="8,6" Background="#2A2A3E"
+                                         Foreground="{StaticResource TextPrimary}" BorderBrush="{StaticResource AccentPrimary}" BorderThickness="1"
+                                         VerticalContentAlignment="Center" TextAlignment="Center"
+                                         Text="{Binding CensorHoldMs, UpdateSourceTrigger=PropertyChanged}"/>
+                            </Grid>
+
+                            <Grid Margin="0,12,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                                    <TextBlock Text="Box padding" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Grows each box so edges are not left uncovered" Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Slider Width="140" Minimum="0" Maximum="0.5" TickFrequency="0.01" IsSnapToTickEnabled="True"
+                                            Value="{Binding CensorPadding}" Style="{StaticResource NeonSliderStyle}" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding CensorPadding, StringFormat={}{0:0.00}}" Foreground="{StaticResource TextPrimary}"
+                                               Width="40" TextAlignment="Right" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                </StackPanel>
+                            </Grid>
+
+                            <TextBlock Text="What to cover" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold" Margin="0,16,0,4"/>
+                            <ItemsControl ItemsSource="{Binding CensorClassOptions}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <WrapPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <CheckBox Content="{Binding Name}"
+                                                  IsChecked="{Binding IsEnabled}"
+                                                  Foreground="{StaticResource TextPrimary}"
+                                                  Width="230" Margin="0,4,8,4"/>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+
+                            <Grid Margin="0,14,0,0">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
+                                    <TextBlock Text="Show detection labels" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
+                                    <TextBlock Text="Draws class name and confidence on each box. For tuning only" Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <CheckBox Grid.Column="1"
+                                          IsChecked="{Binding CensorShowLabels}"
+                                          Style="{StaticResource ModernCheckBoxStyle}"
+                                          VerticalAlignment="Center"/>
+                            </Grid>
+
+                        </StackPanel>
+                    </Expander>
+
                     <!-- General Settings (Application + Storage) -->
                     <Expander Header="General" Style="{StaticResource SettingsExpanderStyle}" IsExpanded="{Binding IsGeneralExpanded}">
                         <Grid Margin="0,10,0,0">
@@ -397,6 +525,26 @@
                                 </Grid>
                             </StackPanel>
                             
+                            <StackPanel Margin="0,0,0,16">
+                                <TextBlock Text="Iwara.tv Session Cookies" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
+                                <TextBlock Text="Format: sid=xxx; other=yyy" Foreground="{StaticResource TextTertiary}" FontSize="11" Margin="0,4,0,8"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBox Text="{Binding IwaraCookies, UpdateSourceTrigger=PropertyChanged}" Height="32" Padding="8,6" Background="#2A2A3E" Foreground="{StaticResource TextPrimary}" BorderBrush="{StaticResource AccentPrimary}" BorderThickness="1" VerticalContentAlignment="Center"/>
+                                    <Button Grid.Column="1" Command="{Binding PasteIwaraCookiesCommand}" Style="{StaticResource SecondaryButtonStyle}" Height="32" Padding="12,0" Margin="8,0,0,0" Content="Paste" FontWeight="SemiBold"/>
+                                </Grid>
+                            </StackPanel>
+
+                            <StackPanel Margin="0,0,0,16">
+                                <TextBlock Text="Rule34Video Session Cookies" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
+                                <TextBlock Text="Format: PHPSESSID=xxx; other=yyy" Foreground="{StaticResource TextTertiary}" FontSize="11" Margin="0,4,0,8"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                    <TextBox Text="{Binding Rule34VideoCookies, UpdateSourceTrigger=PropertyChanged}" Height="32" Padding="8,6" Background="#2A2A3E" Foreground="{StaticResource TextPrimary}" BorderBrush="{StaticResource AccentPrimary}" BorderThickness="1" VerticalContentAlignment="Center"/>
+                                    <Button Grid.Column="1" Command="{Binding PasteRule34CookiesCommand}" Style="{StaticResource SecondaryButtonStyle}" Height="32" Padding="12,0" Margin="8,0,0,0" Content="Paste" FontWeight="SemiBold"/>
+                                </Grid>
+                            </StackPanel>
+
                             <Button Command="{Binding CopyCookieScriptCommand}" Style="{StaticResource SecondaryButtonStyle}" Height="28" HorizontalAlignment="Left" Padding="10,0">
                                 <StackPanel Orientation="Horizontal">
                                     <Path Data="M14.6,16.6L19.2,12L14.6,7.4L16,6L22,12L16,18L14.6,16.6M9.4,16.6L4.8,12L9.4,7.4L8,6L2,12L8,18L9.4,16.6Z" Fill="{StaticResource AccentPrimary}" Stretch="Uniform" Width="12" Height="12" Margin="0,0,8,0"/>

@@ -11,6 +11,7 @@ using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Controls;
 using EdgeLoop.Classes;
+using EdgeLoop.Classes.Censoring;
 using FlyleafLib;
 using FlyleafLib.MediaPlayer;
 using Logger = EdgeLoop.Classes.Logger;
@@ -304,6 +305,189 @@ namespace EdgeLoop.ViewModels
             }
         }
 
+        #region Local censoring
+
+        // Detection runs here, on the decoded frame, rather than being left to a
+        // screen-capture tool. Those tools see the composited desktop, so a
+        // translucent player window is already blended with whatever is behind it
+        // by the time they look - at low opacity they largely detect the desktop
+        // instead of the video. Detecting before the window opacity is applied
+        // avoids that completely and works at any opacity.
+
+        private CensorService _censor;
+        private System.Windows.Threading.DispatcherTimer _censorTimer;
+        private IReadOnlyList<Detection> _censorBoxes = Array.Empty<Detection>();
+
+        /// <summary>Current censor boxes, normalised to the source video frame.</summary>
+        public IReadOnlyList<Detection> CensorBoxes
+        {
+            get => _censorBoxes;
+            private set
+            {
+                _censorBoxes = value ?? Array.Empty<Detection>();
+                OnPropertyChanged(nameof(CensorBoxes));
+            }
+        }
+
+        public string CensorStatus => _censor?.Status ?? "Disabled";
+
+        public bool CensorShowLabels => App.Settings?.CensorShowLabels ?? false;
+
+        public double CensorCornerRadius => App.Settings?.CensorCornerRadius ?? 0;
+
+        /// <summary>
+        /// Fill for the censor boxes. Opaque by default and deliberately so - the
+        /// window opacity is applied to the composited result, so a translucent
+        /// fill here would leave the content partly readable underneath.
+        /// </summary>
+        public Brush CensorFill
+        {
+            get
+            {
+                var spec = App.Settings?.CensorColor;
+                if (!string.IsNullOrWhiteSpace(spec))
+                {
+                    try
+                    {
+                        var converted = ColorConverter.ConvertFromString(spec);
+                        if (converted is Color color)
+                        {
+                            var brush = new SolidColorBrush(color);
+                            brush.Freeze();
+                            return brush;
+                        }
+                    }
+                    catch (FormatException)
+                    {
+                        Logger.Warning($"[Censor] CensorColor '{spec}' is not a valid colour; falling back to black.");
+                    }
+                }
+
+                return Brushes.Black;
+            }
+        }
+
+        /// <summary>Starts, reconfigures or stops censoring to match current settings.</summary>
+        public void RefreshCensor()
+        {
+            if (_disposed) return;
+
+            var settings = App.Settings;
+            if (settings == null || !settings.EnableLocalCensor)
+            {
+                StopCensor();
+                return;
+            }
+
+            if (_censor == null)
+            {
+                string path = string.IsNullOrWhiteSpace(settings.CensorModelPath)
+                    ? CensorModelLocator.FindDefault()
+                    : settings.CensorModelPath;
+
+                if (string.IsNullOrWhiteSpace(path))
+                {
+                    Logger.Warning("[Censor] Enabled, but no .onnx model was found. Place one in a 'Models' folder next to EdgeLoop.exe, or set CensorModelPath.");
+                    return;
+                }
+
+                var service = new CensorService();
+                if (!service.Start(path))
+                {
+                    service.Dispose();
+                    OnPropertyChanged(nameof(CensorStatus));
+                    return;
+                }
+
+                service.ResultsReady += OnCensorResults;
+                _censor = service;
+            }
+
+            ApplyCensorSettings(settings);
+
+            if (_censorTimer == null)
+            {
+                _censorTimer = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Background);
+                _censorTimer.Tick += CensorTimer_Tick;
+            }
+
+            _censorTimer.Interval = TimeSpan.FromMilliseconds(Math.Max(40, settings.CensorIntervalMs));
+            if (!_censorTimer.IsEnabled) _censorTimer.Start();
+
+            OnPropertyChanged(nameof(CensorStatus));
+            OnPropertyChanged(nameof(CensorFill));
+            OnPropertyChanged(nameof(CensorShowLabels));
+            OnPropertyChanged(nameof(CensorCornerRadius));
+        }
+
+        private void ApplyCensorSettings(UserSettings settings)
+        {
+            if (_censor == null) return;
+
+            _censor.Confidence = (float)Math.Clamp(settings.CensorConfidence, 0.05, 0.95);
+            _censor.ClassMask = settings.CensorClassMask;
+            _censor.HoldMs = Math.Max(0, settings.CensorHoldMs);
+            _censor.Padding = (float)Math.Clamp(settings.CensorPadding, 0.0, 0.5);
+        }
+
+        private void StopCensor()
+        {
+            if (_censorTimer != null && _censorTimer.IsEnabled)
+                _censorTimer.Stop();
+
+            if (_censor != null)
+            {
+                _censor.ResultsReady -= OnCensorResults;
+                _censor.Dispose();
+                _censor = null;
+            }
+
+            if (_censorBoxes.Count > 0)
+                CensorBoxes = Array.Empty<Detection>();
+
+            OnPropertyChanged(nameof(CensorStatus));
+        }
+
+        private void CensorTimer_Tick(object sender, EventArgs e)
+        {
+            if (_disposed || _censor == null) return;
+
+            var player = Player;
+            if (player == null || !player.IsPlaying) return;
+
+            try
+            {
+                // The snapshot has to happen on this thread - it touches the
+                // renderer's D3D context. Ask for it at roughly the model's input
+                // width so the GPU does the downscale and the CPU readback stays
+                // small; inference itself happens on the service's worker.
+                uint width = (uint)Math.Max(160, _censor.InputSize);
+                var frame = player.TakeSnapshotToBitmap(width, 0);
+
+                if (frame != null)
+                    _censor.Submit(frame);
+            }
+            catch (Exception ex)
+            {
+                Logger.Debug($"[Censor] Frame grab failed: {ex.Message}");
+            }
+        }
+
+        private void OnCensorResults(IReadOnlyList<Detection> boxes)
+        {
+            // Raised on the detection worker thread.
+            var dispatcher = System.Windows.Application.Current?.Dispatcher;
+            if (dispatcher == null) return;
+
+            dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (_disposed) return;
+                CensorBoxes = boxes;
+            }), System.Windows.Threading.DispatcherPriority.Render);
+        }
+
+        #endregion
+
         public bool IsShuffle
         {
             get => App.Settings?.VideoShuffle ?? true;
@@ -354,7 +538,10 @@ namespace EdgeLoop.ViewModels
 
             Config.Player.AutoPlay = false;
             Config.Player.MasterClock = MasterClock.Video;
-            Config.Player.Stats = true; // Enable telemetry stats
+            // Telemetry stats drive the on-screen drift/D3D-latency overlay, which
+            // re-evaluates its bindings at video framerate on every player window.
+            // Only pay for it when verbose logging is actually on.
+            Config.Player.Stats = App.Settings?.EnableDiagnosticMode ?? false;
             Config.Player.SeekAccurate = true; // Ensure precise resumption to the exact tick
 
             // Increase buffering to prevent stutters on high-resolution/high-bitrate videos
@@ -398,6 +585,8 @@ namespace EdgeLoop.ViewModels
             SkipCommand = new RelayCommand(_ => PlayNext(true));
             PreviousCommand = new RelayCommand(_ => PlayPrevious(true));
             TogglePlayPauseCommand = new RelayCommand(_ => TogglePlayPause());
+
+            RefreshCensor();
         }
 
         private int _toggleClickCount = 0;
@@ -2121,6 +2310,8 @@ namespace EdgeLoop.ViewModels
             _disposed = true;
 
             Logger.Debug($"[HypnoViewModel] Disposing (Current: {CurrentSource})");
+
+            StopCensor();
 
             // Force save position and record play record before disposing
             SaveCurrentPosition();

@@ -580,6 +580,23 @@ namespace EdgeLoop.Classes
         }
 
         /// <summary>
+        /// Applies the local censor settings to all players, starting or stopping
+        /// detection as needed.
+        /// </summary>
+        public void RefreshAllCensor()
+        {
+            List<HypnoWindow> playersSnapshot;
+            lock (_playersLock)
+            {
+                playersSnapshot = players.ToList();
+            }
+            foreach (var w in playersSnapshot)
+            {
+                w.ViewModel.RefreshCensor();
+            }
+        }
+
+        /// <summary>
         /// Applies the prevent minimize setting to all windows
         /// </summary>
         public void ApplyPreventMinimizeSetting()

@@ -26,3 +26,7 @@ Dependencies/yt-dlp.exe.bak
 *.diff
 script.csx
 tmp_test.cs
+
+# Detection models for the local censor - large, and not ours to redistribute.
+# See Models/README.md for where to get them.
+Models/*.onnx

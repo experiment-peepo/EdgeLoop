@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.Versioning;
 using System.Windows.Input;
 using EdgeLoop.Classes;
+using EdgeLoop.Classes.Censoring;
 using System.IO;
 
 namespace EdgeLoop.ViewModels
@@ -52,6 +53,8 @@ namespace EdgeLoop.ViewModels
 
         private bool _enableDiagnosticMode;
         private string _hypnotubeCookies;
+        private string _iwaraCookies;
+        private string _rule34VideoCookies;
         private string _browserForCookies;
 
         public ObservableCollection<string> AvailableBrowsers { get; } = new ObservableCollection<string> {
@@ -81,6 +84,18 @@ namespace EdgeLoop.ViewModels
         {
             get => _hypnotubeCookies;
             set => SetProperty(ref _hypnotubeCookies, CleanCookieString(value));
+        }
+
+        public string IwaraCookies
+        {
+            get => _iwaraCookies;
+            set => SetProperty(ref _iwaraCookies, CleanCookieString(value));
+        }
+
+        public string Rule34VideoCookies
+        {
+            get => _rule34VideoCookies;
+            set => SetProperty(ref _rule34VideoCookies, CleanCookieString(value));
         }
 
 
@@ -207,9 +222,20 @@ namespace EdgeLoop.ViewModels
             _rememberFilePosition = settings.RememberFilePosition;
             _enableSuperResolution = settings.EnableSuperResolution;
             _enableDiagnosticMode = settings.EnableDiagnosticMode;
+
+            _enableLocalCensor = settings.EnableLocalCensor;
+            _censorModelPath = settings.CensorModelPath;
+            _censorConfidence = settings.CensorConfidence;
+            _censorIntervalMs = settings.CensorIntervalMs;
+            _censorHoldMs = settings.CensorHoldMs;
+            _censorPadding = settings.CensorPadding;
+            _censorShowLabels = settings.CensorShowLabels;
+            LoadCensorClassOptions(settings.CensorClassMask);
             _enableLocalCaching = settings.EnableLocalCaching;
             _localCacheDirectory = settings.LocalCacheDirectory;
             _hypnotubeCookies = settings.HypnotubeCookies;
+            _iwaraCookies = settings.IwaraCookies;
+            _rule34VideoCookies = settings.Rule34VideoCookies;
             _browserForCookies = settings.BrowserForCookies ?? "Firefox";
 
 
@@ -250,6 +276,8 @@ namespace EdgeLoop.ViewModels
             ResetPositionsCommand = new RelayCommand(ResetPositions);
             CopyCookieScriptCommand = new RelayCommand(CopyCookieScript);
             PasteHypnoCookiesCommand = new RelayCommand(o => HypnotubeCookies = System.Windows.Clipboard.GetText());
+            PasteIwaraCookiesCommand = new RelayCommand(o => IwaraCookies = System.Windows.Clipboard.GetText());
+            PasteRule34CookiesCommand = new RelayCommand(o => Rule34VideoCookies = System.Windows.Clipboard.GetText());
             OpenDiagnosticsFolderCommand = new RelayCommand(OpenDiagnosticsFolder);
             BrowseCacheDirectoryCommand = new RelayCommand(ExecuteBrowseCacheDirectory);
         }
@@ -376,6 +404,111 @@ namespace EdgeLoop.ViewModels
             set => SetProperty(ref _enableSuperResolution, value);
         }
         private bool _enableSuperResolution;
+
+        // --- Local censor ---
+
+        public bool EnableLocalCensor
+        {
+            get => _enableLocalCensor;
+            set
+            {
+                if (SetProperty(ref _enableLocalCensor, value))
+                    OnPropertyChanged(nameof(CensorModelStatus));
+            }
+        }
+        private bool _enableLocalCensor;
+
+        public string CensorModelPath
+        {
+            get => _censorModelPath;
+            set
+            {
+                if (SetProperty(ref _censorModelPath, value))
+                    OnPropertyChanged(nameof(CensorModelStatus));
+            }
+        }
+        private string _censorModelPath;
+
+        public double CensorConfidence
+        {
+            get => _censorConfidence;
+            set => SetProperty(ref _censorConfidence, value);
+        }
+        private double _censorConfidence;
+
+        public int CensorIntervalMs
+        {
+            get => _censorIntervalMs;
+            set => SetProperty(ref _censorIntervalMs, value);
+        }
+        private int _censorIntervalMs;
+
+        public int CensorHoldMs
+        {
+            get => _censorHoldMs;
+            set => SetProperty(ref _censorHoldMs, value);
+        }
+        private int _censorHoldMs;
+
+        public double CensorPadding
+        {
+            get => _censorPadding;
+            set => SetProperty(ref _censorPadding, value);
+        }
+        private double _censorPadding;
+
+        public bool CensorShowLabels
+        {
+            get => _censorShowLabels;
+            set => SetProperty(ref _censorShowLabels, value);
+        }
+        private bool _censorShowLabels;
+
+        /// <summary>Tells the user which model will actually be used, or why none will.</summary>
+        public string CensorModelStatus
+        {
+            get
+            {
+                string path = string.IsNullOrWhiteSpace(CensorModelPath)
+                    ? CensorModelLocator.FindDefault()
+                    : CensorModelPath;
+
+                if (string.IsNullOrWhiteSpace(path))
+                    return "No model found. Put a YOLO11 .onnx file in the Models folder next to EdgeLoop.exe (see Models/README.md).";
+
+                return System.IO.File.Exists(path)
+                    ? "Using " + System.IO.Path.GetFileName(path)
+                    : "Model not found at: " + path;
+            }
+        }
+
+        /// <summary>Per-class censor toggles, backed by the bitmask in settings.</summary>
+        public System.Collections.ObjectModel.ObservableCollection<CensorClassOption> CensorClassOptions { get; } = new();
+
+        public int BuildCensorClassMask()
+        {
+            int mask = 0;
+            foreach (var option in CensorClassOptions)
+            {
+                if (option.IsEnabled)
+                    mask |= 1 << option.ClassId;
+            }
+            return mask;
+        }
+
+        private void LoadCensorClassOptions(int mask)
+        {
+            CensorClassOptions.Clear();
+            for (int i = 0; i < CensorClasses.Count; i++)
+            {
+                CensorClassOptions.Add(new CensorClassOption
+                {
+                    ClassId = i,
+                    Name = CensorClasses.Names[i].Replace('_', ' '),
+                    IsEnabled = CensorClasses.IsSet(mask, i),
+                });
+            }
+        }
 
         public bool EnableDiagnosticMode
         {
@@ -556,6 +689,8 @@ namespace EdgeLoop.ViewModels
         public ICommand ResetPositionsCommand { get; }
         public ICommand CopyCookieScriptCommand { get; }
         public ICommand PasteHypnoCookiesCommand { get; }
+        public ICommand PasteIwaraCookiesCommand { get; }
+        public ICommand PasteRule34CookiesCommand { get; }
         public ICommand OpenDiagnosticsFolderCommand { get; }
         public ICommand BrowseCacheDirectoryCommand { get; }
 
@@ -611,9 +746,21 @@ namespace EdgeLoop.ViewModels
             settings.RememberLastPlaylist = RememberLastPlaylist;
             settings.RememberFilePosition = RememberFilePosition;
             settings.EnableSuperResolution = EnableSuperResolution;
+
+            settings.EnableLocalCensor = EnableLocalCensor;
+            settings.CensorModelPath = string.IsNullOrWhiteSpace(CensorModelPath) ? null : CensorModelPath.Trim();
+            settings.CensorConfidence = Math.Clamp(CensorConfidence, 0.05, 0.95);
+            settings.CensorIntervalMs = Math.Max(40, CensorIntervalMs);
+            settings.CensorHoldMs = Math.Max(0, CensorHoldMs);
+            settings.CensorPadding = Math.Clamp(CensorPadding, 0.0, 0.5);
+            settings.CensorShowLabels = CensorShowLabels;
+            settings.CensorClassMask = BuildCensorClassMask();
+
             settings.EnableLocalCaching = EnableLocalCaching;
             settings.LocalCacheDirectory = LocalCacheDirectory;
             settings.HypnotubeCookies = HypnotubeCookies;
+            settings.IwaraCookies = IwaraCookies;
+            settings.Rule34VideoCookies = Rule34VideoCookies;
             settings.BrowserForCookies = BrowserForCookies;
 
 
@@ -636,6 +783,7 @@ namespace EdgeLoop.ViewModels
             if (ServiceContainer.TryGet<VideoPlayerService>(out var vps))
             {
                 vps.RefreshAllSuperResolution();
+                vps.RefreshAllCensor();
             }
 
             RequestClose?.Invoke(this, System.EventArgs.Empty);
@@ -646,6 +794,20 @@ namespace EdgeLoop.ViewModels
             RequestClose?.Invoke(this, System.EventArgs.Empty);
         }
 
+    }
+
+    /// <summary>One row in the per-class censor list.</summary>
+    public class CensorClassOption : ObservableObject
+    {
+        public int ClassId { get; set; }
+        public string Name { get; set; }
+
+        public bool IsEnabled
+        {
+            get => _isEnabled;
+            set => SetProperty(ref _isEnabled, value);
+        }
+        private bool _isEnabled;
     }
 }
 

@@ -24,6 +24,12 @@ namespace EdgeLoop.Classes
         [JsonPropertyName("HypnotubeCookies")]
         public virtual string HypnotubeCookiesEncrypted { get; set; } = null;
 
+        [JsonPropertyName("IwaraCookies")]
+        public virtual string IwaraCookiesEncrypted { get; set; } = null;
+
+        [JsonPropertyName("Rule34VideoCookies")]
+        public virtual string Rule34VideoCookiesEncrypted { get; set; } = null;
+
         [JsonPropertyName("Cookies")]
         public virtual string CookiesEncrypted { get; set; } = null;
 
@@ -39,6 +45,26 @@ namespace EdgeLoop.Classes
         {
             get => CookieProtector.Unprotect(HypnotubeCookiesEncrypted);
             set => HypnotubeCookiesEncrypted = CookieProtector.Protect(value);
+        }
+
+        /// <summary>
+        /// Gets the decrypted Iwara cookies for runtime use.
+        /// </summary>
+        [JsonIgnore]
+        public string IwaraCookies
+        {
+            get => CookieProtector.Unprotect(IwaraCookiesEncrypted);
+            set => IwaraCookiesEncrypted = CookieProtector.Protect(value);
+        }
+
+        /// <summary>
+        /// Gets the decrypted Rule34Video cookies for runtime use.
+        /// </summary>
+        [JsonIgnore]
+        public string Rule34VideoCookies
+        {
+            get => CookieProtector.Unprotect(Rule34VideoCookiesEncrypted);
+            set => Rule34VideoCookiesEncrypted = CookieProtector.Protect(value);
         }
 
         /// <summary>
@@ -72,6 +98,44 @@ namespace EdgeLoop.Classes
 
         public virtual bool AlwaysOpaque { get; set; } = false;
         public virtual bool EnableSuperResolution { get; set; } = false;
+
+        // Local Censor Settings
+        //
+        // Screen-capture censoring tools detect on the composited desktop, which
+        // means a translucent player window is blended with whatever is behind it
+        // before they ever see it - at low opacity they mostly detect the desktop.
+        // These settings drive detection on the decoded frame instead, before any
+        // window opacity is applied, so it works at any opacity.
+
+        /// <summary>Master switch for in-player detection and censoring.</summary>
+        public virtual bool EnableLocalCensor { get; set; } = false;
+
+        /// <summary>Path to a YOLO11 .onnx model. Empty means auto-discover under Models/.</summary>
+        public virtual string CensorModelPath { get; set; } = null;
+
+        /// <summary>Minimum class score to accept a detection.</summary>
+        public virtual double CensorConfidence { get; set; } = 0.35;
+
+        /// <summary>How often a frame is sampled for detection, in milliseconds.</summary>
+        public virtual int CensorIntervalMs { get; set; } = 125;
+
+        /// <summary>How long a box survives after the detector stops reporting it, in milliseconds.</summary>
+        public virtual int CensorHoldMs { get; set; } = 450;
+
+        /// <summary>Bit N set = censor class N. See <see cref="Censoring.CensorClasses"/>.</summary>
+        public virtual int CensorClassMask { get; set; } = Censoring.CensorClasses.DefaultMask;
+
+        /// <summary>Fraction of its own size each box grows by, so edges are not clipped.</summary>
+        public virtual double CensorPadding { get; set; } = 0.04;
+
+        /// <summary>Fill colour of the censor box, as #AARRGGBB or #RRGGBB.</summary>
+        public virtual string CensorColor { get; set; } = "#FF000000";
+
+        /// <summary>Corner rounding of the censor box, in device-independent pixels.</summary>
+        public virtual double CensorCornerRadius { get; set; } = 0;
+
+        /// <summary>Draws class name and confidence on each box. Diagnostics only.</summary>
+        public virtual bool CensorShowLabels { get; set; } = false;
 
         // History Settings
 

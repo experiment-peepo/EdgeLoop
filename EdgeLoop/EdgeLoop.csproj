@@ -16,6 +16,8 @@
     <Version>1.1.1</Version>
     <Company>Llamasoft</Company>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- Required by the detector's pixel-to-tensor loop (Classes/Censoring/NsfwDetector.cs) -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
   <!-- Publish settings for Release builds -->
@@ -41,12 +43,9 @@
       <YtDlpSourcePath>..\Dependencies\yt-dlp.exe</YtDlpSourcePath>
     </PropertyGroup>
     
-    <Exec Condition="!Exists('$(YtDlpSourcePath)')" 
-          Command="powershell.exe -ExecutionPolicy Bypass -File &quot;$(ProjectDir)..\update_dependencies.ps1&quot;" 
-          ContinueOnError="WarnAndContinue" />
+    <Exec Condition="!Exists('$(YtDlpSourcePath)')" Command="powershell.exe -ExecutionPolicy Bypass -File &quot;$(ProjectDir)..\update_dependencies.ps1&quot;" ContinueOnError="WarnAndContinue" />
     
-    <Warning Condition="!Exists('$(YtDlpSourcePath)')" 
-             Text="yt-dlp.exe could not be restored automatically. Web video extraction may fail. Please ensure you have internet access and run update_dependencies.ps1 manually." />
+    <Warning Condition="!Exists('$(YtDlpSourcePath)')" Text="yt-dlp.exe could not be restored automatically. Web video extraction may fail. Please ensure you have internet access and run update_dependencies.ps1 manually." />
   </Target>
 
   <ItemGroup>
@@ -56,8 +55,21 @@
     </Content>
   </ItemGroup>
 
+  <!--
+    Detection models for the local censor. Not committed (see Models/README.md);
+    whatever is present is copied next to the exe, where CensorModelLocator
+    looks for it.
+  -->
+  <ItemGroup>
+    <Content Include="..\Models\*.onnx">
+      <Link>Models\%(FileName)%(Extension)</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="HtmlAgilityPack" Version="1.12.4" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.20.1" />
     <PackageReference Include="YoutubeDLSharp" Version="1.2.0" />
   </ItemGroup>
 

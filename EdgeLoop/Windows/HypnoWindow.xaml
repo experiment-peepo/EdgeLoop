@@ -15,6 +15,7 @@
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:EdgeLoop.Windows"
+        xmlns:controls="clr-namespace:EdgeLoop.Controls"
         xmlns:flyleaf="clr-namespace:FlyleafLib.Controls.WPF;assembly=FlyleafLib.Controls.WPF"
         mc:Ignorable="d"
         Title="EDGELOOP" Height="450" Width="800"
@@ -38,6 +39,23 @@
             VerticalAlignment="Stretch"
             Stretch="Uniform">
         </flyleaf:FlyleafD3DImage>
+
+        <!--
+            Censor boxes. Must sit directly above the video and below everything
+            else: WPF composites this tree first and applies Window.Opacity to the
+            result, so an opaque box here replaces the video pixels *before* the
+            window is made translucent. That is what makes it hold up at low
+            opacity, where a screen-capture censor cannot see the content at all.
+        -->
+        <controls:CensorOverlay x:Name="CensorLayer"
+                                Boxes="{Binding CensorBoxes}"
+                                VideoWidth="{Binding Player.Video.Width}"
+                                VideoHeight="{Binding Player.Video.Height}"
+                                FillBrush="{Binding CensorFill}"
+                                CornerRadius="{Binding CensorCornerRadius}"
+                                ShowLabels="{Binding CensorShowLabels}"
+                                HorizontalAlignment="Stretch"
+                                VerticalAlignment="Stretch"/>
 
         <!-- Tint Overlay (Immersion) -->
         <Border x:Name="TintOverlay" Background="Transparent" IsHitTestVisible="False"/>
