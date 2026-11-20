@@ -14,30 +14,39 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
+      with:
+        # yt-dlp.exe is stored in Git LFS
+        lfs: true
 
-    - name: Get latest yt-dlp version
+    - name: Download latest yt-dlp.exe
       id: get_version
       run: |
-        VERSION=$(curl -s https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest | jq -r .tag_name)
-        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        set -euo pipefail
+        VERSION=$(curl -fsSL https://api.github.com/repos/yt-dlp/yt-dlp/releases/latest | jq -r .tag_name)
+        BASE="https://github.com/yt-dlp/yt-dlp/releases/download/${VERSION}"
+        curl -fsSL -o /tmp/yt-dlp.exe "${BASE}/yt-dlp.exe"
+        curl -fsSL -o /tmp/SHA2-256SUMS "${BASE}/SHA2-256SUMS"
+        EXPECTED=$(awk '$2 == "yt-dlp.exe" { print $1 }' /tmp/SHA2-256SUMS)
+        ACTUAL=$(sha256sum /tmp/yt-dlp.exe | awk '{ print $1 }')
+        if [ -z "$EXPECTED" ] || [ "$EXPECTED" != "$ACTUAL" ]; then
+          echo "Checksum mismatch for yt-dlp.exe (expected '$EXPECTED', got '$ACTUAL')" >&2
+          exit 1
+        fi
+        mkdir -p Dependencies
+        mv /tmp/yt-dlp.exe Dependencies/yt-dlp.exe
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
-    - name: Check if update needed
-      id: check
-      run: |
-        # This is a placeholder for checking the version currently in the repo if we tracked it in a file.
-        # For now, we'll just download it to ensure we always have the latest in the 'release' build process.
-        echo "update_needed=true" >> $GITHUB_OUTPUT
-
+    # Opens a PR only when the downloaded binary differs from the committed one.
     - name: Create Pull Request
-      if: steps.check.outputs.update_needed == 'true'
-      uses: peter-evans/create-pull-request@v6
+      uses: peter-evans/create-pull-request@v8
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
+        add-paths: Dependencies/yt-dlp.exe
         commit-message: "Deps: Update yt-dlp to ${{ steps.get_version.outputs.version }}"
         title: "Deps: Update yt-dlp to ${{ steps.get_version.outputs.version }}"
         body: |
           Weekly automated update for `yt-dlp`.
-          Version: `${{ steps.get_version.outputs.version }}`
+          Version: `${{ steps.get_version.outputs.version }}` (SHA-256 verified against the release's SHA2-256SUMS)
         branch: auto-update-ytdlp
-        labels: internal, documentation
+        labels: dependencies

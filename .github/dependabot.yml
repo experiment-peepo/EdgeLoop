@@ -1,0 +1,38 @@
+version: 2
+
+updates:
+  - package-ecosystem: "nuget"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "Deps"
+    groups:
+      vortice:
+        patterns:
+          - "Vortice.*"
+      test-packages:
+        patterns:
+          - "xunit*"
+          - "Microsoft.NET.Test.Sdk"
+          - "Moq"
+          - "FluentAssertions"
+          - "coverlet.*"
+          - "Microsoft.Extensions.TimeProvider.Testing"
+    ignore:
+      # The FFmpeg bindings must match the FFmpeg DLLs shipped in FlyleafLib/FFmpeg.
+      # A new major means new native DLLs (and usually a FlyleafLib update), so bump it by hand.
+      - dependency-name: "Flyleaf.FFmpeg.*"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    commit-message:
+      prefix: "CI"
+    groups:
+      actions:
+        patterns:
+          - "*"
