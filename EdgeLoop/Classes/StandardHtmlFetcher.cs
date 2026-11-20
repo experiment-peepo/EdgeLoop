@@ -43,13 +43,6 @@ namespace EdgeLoop.Classes
             {
                 if (string.IsNullOrWhiteSpace(url)) return null;
 
-                // Guard: Iwara.tv blocks HttpClient (403). Use yt-dlp for all Iwara interactions.
-                if (url.Contains("iwara.tv", StringComparison.OrdinalIgnoreCase))
-                {
-                    Logger.Debug($"[StandardHtmlFetcher] Bypassing HttpClient for iwara.tv to avoid 403 blocks: {url}");
-                    return null;
-                }
-
                 // Check cache first
                 if (_htmlCache.TryGetValue(url, out string cachedHtml))
                 {
@@ -61,15 +54,36 @@ namespace EdgeLoop.Classes
 
                 using (var request = new HttpRequestMessage(HttpMethod.Get, url))
                 {
-                    // Add Hypnotube cookies if applicable
-                    // Add Hypnotube cookies if applicable
-                    if (url.Contains("hypnotube.com") && App.Settings != null && !string.IsNullOrEmpty(App.Settings.HypnotubeCookies))
+                    // Add session cookies if applicable
+                    if (App.Settings != null)
                     {
-                        var cookies = App.Settings.HypnotubeCookies.Trim();
-                        if (cookies.Contains("="))
+                        if (url.Contains("hypnotube.com"))
                         {
-                            request.Headers.TryAddWithoutValidation("Cookie", cookies);
-                            Logger.Debug($"[Hypnotube] Applied session cookies for request");
+                            if (!string.IsNullOrEmpty(App.Settings.HypnotubeCookies))
+                                request.Headers.TryAddWithoutValidation("Cookie", App.Settings.HypnotubeCookies.Trim());
+                            
+                            request.Headers.TryAddWithoutValidation("Referer", "https://hypnotube.com/");
+                            request.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36");
+                            Logger.Debug($"[Hypnotube] Applied browser headers for request");
+                        }
+                        else if (url.Contains("iwara.tv"))
+                        {
+                            if (!string.IsNullOrEmpty(App.Settings.IwaraCookies))
+                                request.Headers.TryAddWithoutValidation("Cookie", App.Settings.IwaraCookies.Trim());
+
+                            request.Headers.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
+                            request.Headers.TryAddWithoutValidation("Accept-Language", "en-US,en;q=0.9");
+                            request.Headers.TryAddWithoutValidation("Upgrade-Insecure-Requests", "1");
+                            request.Headers.TryAddWithoutValidation("Referer", "https://www.iwara.tv/");
+                            request.Headers.TryAddWithoutValidation("Origin", "https://www.iwara.tv");
+                            request.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36");
+                            request.Headers.TryAddWithoutValidation("X-Site", "www.iwara.tv");
+                            Logger.Debug($"[Iwara] Applied full browser headers for request");
+                        }
+                        else if (url.Contains("rule34video.com") && !string.IsNullOrEmpty(App.Settings.Rule34VideoCookies))
+                        {
+                            request.Headers.TryAddWithoutValidation("Cookie", App.Settings.Rule34VideoCookies.Trim());
+                            Logger.Debug($"[Rule34Video] Applied session cookies for request");
                         }
                     }
 
@@ -115,12 +129,6 @@ namespace EdgeLoop.Classes
             try
             {
                 if (string.IsNullOrWhiteSpace(url)) return url;
-
-                // Guard: Iwara.tv blocks HttpClient (403).
-                if (url.Contains("iwara.tv", StringComparison.OrdinalIgnoreCase))
-                {
-                    return url;
-                }
 
                 Logger.Debug($"[StandardHtmlFetcher] Resolving redirect for: {url}");
 

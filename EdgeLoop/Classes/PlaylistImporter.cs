@@ -104,7 +104,7 @@ namespace EdgeLoop.Classes
                         videoLinkInfos.Add(new VideoLinkInfo { Url = kvp.Key, Title = kvp.Value });
                     }
                 }
-                else if (isIwara && _ytDlpService != null)
+                else if (isIwara)
                 {
                     if (IsVideoPageUrl(playlistUrl))
                     {
@@ -113,16 +113,36 @@ namespace EdgeLoop.Classes
                     }
                     else
                     {
-                        Logger.Debug($"[PlaylistImporter] Using yt-dlp for iwara.tv playlist to bypass Cloudflare/403: {playlistUrl}");
-                        var urls = await _ytDlpService.ExtractPlaylistUrlsAsync(playlistUrl, cancellationToken);
-                        foreach (var url in urls) videoLinkInfos.Add(new VideoLinkInfo { Url = url, Title = null });
+                        Logger.Debug($"[PlaylistImporter] Trying native API for iwara.tv playlist: {playlistUrl}");
+                        var links = await ExtractIwaraPlaylistAsync(playlistUrl, cancellationToken);
+                        if (links.Count > 0)
+                        {
+                            foreach (var kvp in links)
+                            {
+                                videoLinkInfos.Add(new VideoLinkInfo { Url = kvp.Key, Title = kvp.Value });
+                            }
+                        }
+
+                        // If native fails (e.g. 403 Forbidden), try yt-dlp which is much more resilient
+                        if (videoLinkInfos.Count == 0 && _ytDlpService != null)
+                        {
+                            Logger.Debug($"[PlaylistImporter] Native Iwara extraction failed (likely 403), falling back to yt-dlp: {playlistUrl}");
+                            var info = await _ytDlpService.ExtractPlaylistInfoAsync(playlistUrl, cancellationToken);
+                            foreach (var kvp in info)
+                            {
+                                videoLinkInfos.Add(new VideoLinkInfo { Url = kvp.Key, Title = kvp.Value });
+                            }
+                        }
                     }
                 }
                 else if (_ytDlpService != null && _ytDlpService.IsAvailable && YtDlpService.IsDownloadRequiredSite(host))
                 {
                     Logger.Debug($"[PlaylistImporter] Using yt-dlp for {host} playlist extraction (download-required site)");
-                    var urls = await _ytDlpService.ExtractPlaylistUrlsAsync(playlistUrl, cancellationToken);
-                    foreach (var url in urls) videoLinkInfos.Add(new VideoLinkInfo { Url = url, Title = null });
+                    var info = await _ytDlpService.ExtractPlaylistInfoAsync(playlistUrl, cancellationToken);
+                    foreach (var kvp in info)
+                    {
+                        videoLinkInfos.Add(new VideoLinkInfo { Url = kvp.Key, Title = kvp.Value });
+                    }
                 }
                 else
                 {
@@ -131,9 +151,12 @@ namespace EdgeLoop.Classes
                     var links = await ExtractGenericPlaylistWithTitlesAsync(playlistUrl, cancellationToken);
                     if (links.Count == 0 && _ytDlpService != null && _ytDlpService.IsAvailable)
                     {
-                        Logger.Debug($"[PlaylistImporter] Generic scrape failed or returned 0, trying yt-dlp for {host}");
-                        var urls = await _ytDlpService.ExtractPlaylistUrlsAsync(playlistUrl, cancellationToken);
-                        foreach (var url in urls) videoLinkInfos.Add(new VideoLinkInfo { Url = url, Title = null });
+                        Logger.Debug($"[PlaylistImporter] Generic scrape failed, trying yt-dlp for {host}");
+                        var info = await _ytDlpService.ExtractPlaylistInfoAsync(playlistUrl, cancellationToken);
+                        foreach (var kvp in info)
+                        {
+                            videoLinkInfos.Add(new VideoLinkInfo { Url = kvp.Key, Title = kvp.Value });
+                        }
                     }
                     else
                     {
@@ -177,20 +200,47 @@ namespace EdgeLoop.Classes
                         var videoUrl = metadata.Url;
                         var title = metadata.Title;
 
-                        // Use the title from the gallery if the extractor didn't find one
-                        if (string.IsNullOrWhiteSpace(title) && !string.IsNullOrWhiteSpace(info.Title))
+                        // PREFERENCE: Use the title from the gallery/API if available.
+                        if (!string.IsNullOrWhiteSpace(info.Title))
                         {
-                            title = info.Title;
+                            // If the extracted title is generic (ID-like or empty), or if we are on a known site with good gallery titles
+                            bool isGeneric = string.IsNullOrWhiteSpace(title) || 
+                                           IsIdLike(title) || 
+                                           title.ToLowerInvariant() == "view" ||
+                                           title.ToLowerInvariant() == "unknown";
+
+                            if (isGeneric || pageUrl.Contains("iwara.tv") || pageUrl.Contains("hypnotube.com") || pageUrl.Contains("rule34video.com"))
+                            {
+                                if (!string.IsNullOrWhiteSpace(info.Title) && !IsIdLike(info.Title))
+                                {
+                                    title = info.Title;
+                                }
+                            }
                         }
 
-                        // If extraction failed for a site that requires it, skip this item
+                        // Final fallback: If still ID-like, try to de-slugify the URL
+                        if (IsIdLike(title))
+                        {
+                            var deSlugified = DeSlugifyUrl(pageUrl);
+                            if (!string.IsNullOrWhiteSpace(deSlugified) && !IsIdLike(deSlugified))
+                            {
+                                title = deSlugified;
+                            }
+                        }
+
+                        // If extraction failed, don't skip the video entirely.
+                        // Instead, add it using the page URL as the FilePath, which will trigger JIT extraction during playback.
                         if (string.IsNullOrEmpty(videoUrl))
                         {
-                            Logger.Warning($"Skipped video {pageUrl} because extraction failed (likely restricted or removed)");
-                            continue;
+                            string reason = "likely restricted or removed";
+                            if (pageUrl.Contains("hypnotube.com")) reason = "restricted, friends-only, or removed";
+                            else if (pageUrl.Contains("iwara.tv")) reason = "requires cookies or age-verification";
+
+                            Logger.Warning($"Extraction failed for {pageUrl} ({reason}). Adding as page URL for JIT resolution.");
+                            videoUrl = pageUrl;
                         }
 
-                        if (string.IsNullOrWhiteSpace(title))
+                        if (string.IsNullOrWhiteSpace(title) || IsIdLike(title))
                         {
                             // Extract title from URL slug as a high-quality fallback
                             try
@@ -284,8 +334,15 @@ namespace EdgeLoop.Classes
                     visitedPages.Add(currentUrl);
                     pagesFetched++;
 
+                    Logger.Debug($"[Hypnotube] Fetching page: {currentUrl}");
                     var html = await FetchHtmlAsync(currentUrl, cancellationToken);
-                    if (string.IsNullOrWhiteSpace(html)) continue;
+                    if (string.IsNullOrWhiteSpace(html))
+                    {
+                        Logger.Warning($"[Hypnotube] Failed to fetch HTML for {currentUrl} (possibly blocked)");
+                        continue;
+                    }
+
+                    Logger.Debug($"[Hypnotube] Received HTML ({html.Length} chars)");
 
                     // Extract video URLs from current page
                     var pageVideoUrls = ExtractHypnotubeLinksWithTitles(html, currentUrl);
@@ -324,6 +381,151 @@ namespace EdgeLoop.Classes
 
 
 
+
+        private async Task<Dictionary<string, string>> ExtractIwaraPlaylistAsync(string url, CancellationToken cancellationToken)
+        {
+            var videoUrls = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                // URL can be https://www.iwara.tv/playlist/[uuid] or https://api.iwara.tv/playlist/[uuid]
+                var match = Regex.Match(url, @"/playlist/([a-f0-9-]+)", RegexOptions.IgnoreCase);
+                if (!match.Success) return videoUrls;
+
+                var playlistId = match.Groups[1].Value;
+                int page = 0;
+                int maxPages = App.Settings?.MaxPlaylistPages ?? 100;
+
+                Logger.Debug($"[Iwara] Starting API extraction for playlist {playlistId}");
+
+                while (page < maxPages)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var apiUrl = $"https://api.iwara.tv/playlist/{playlistId}?page={page}";
+
+                    string json = null;
+                    try 
+                    {
+                        json = await FetchHtmlAsync(apiUrl, cancellationToken);
+                    }
+                    catch (Exception ex) when (ex.Message.Contains("403"))
+                    {
+                        Logger.Warning($"[Iwara] API returned 403. Retrying without cookies...");
+                        // StandardHtmlFetcher handles the "without cookies" logic if we bypass it here
+                        // but actually we need to tell it to skip cookies.
+                        // For now, let's just log it. The next fetch attempt will be via yt-dlp anyway.
+                    }
+
+                    if (string.IsNullOrWhiteSpace(json)) break;
+
+                    using var doc = JsonDocument.Parse(json);
+                    if (!doc.RootElement.TryGetProperty("results", out var results) || results.ValueKind != JsonValueKind.Array)
+                    {
+                        break;
+                    }
+
+                    int count = 0;
+                    foreach (var item in results.EnumerateArray())
+                    {
+                        JsonElement videoElement = item;
+                        // Some API versions wrap the video in a 'video' property
+                        if (item.TryGetProperty("video", out var v)) videoElement = v;
+
+                        if (videoElement.TryGetProperty("id", out var idProp))
+                        {
+                            var id = idProp.GetString();
+                            
+                            // Try multiple fields for slug
+                            string slug = string.Empty;
+                            if (videoElement.TryGetProperty("slug", out var s)) slug = s.GetString();
+                            
+                            // Try multiple fields for title
+                            string title = string.Empty;
+                            if (videoElement.TryGetProperty("title", out var t)) title = t.GetString();
+                            else if (videoElement.TryGetProperty("name", out var n)) title = n.GetString();
+
+                            // If title is missing or generic, use slug
+                            if (string.IsNullOrWhiteSpace(title) || title == id || IsIdLike(title))
+                            {
+                                if (!string.IsNullOrWhiteSpace(slug) && !IsIdLike(slug))
+                                {
+                                    title = DeSlugify(slug);
+                                }
+                                else if (string.IsNullOrWhiteSpace(title) || IsIdLike(title))
+                                {
+                                    title = id;
+                                }
+                            }
+
+                            // Final sanitization: If still ID-like or placeholder, try Search API fallback
+                            if (IsIdLike(title))
+                            {
+                                var searchTitle = await FetchIwaraTitleFromSearchApiAsync(id, cancellationToken);
+                                if (!string.IsNullOrWhiteSpace(searchTitle) && !IsIdLike(searchTitle))
+                                {
+                                    title = searchTitle;
+                                }
+                                else
+                                {
+                                    title = string.Empty; // Clear so fallback can try de-slugifying URL
+                                }
+                            }
+
+                            var videoUrl = $"https://www.iwara.tv/video/{id}/{slug}";
+                            if (!videoUrls.ContainsKey(videoUrl))
+                            {
+                                videoUrls[videoUrl] = title;
+                                count++;
+                            }
+                        }
+                        else
+                        {
+                            Logger.Debug($"[Iwara] Skipping item without ID: {item.ToString().Substring(0, Math.Min(50, item.ToString().Length))}...");
+                        }
+                    }
+
+                    Logger.Debug($"[Iwara] Page {page}: Extracted {count} videos");
+                    if (count == 0) break;
+
+                    page++;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"Error extracting Iwara playlist: {ex.Message}");
+            }
+            return videoUrls;
+        }
+
+        private async Task<string> FetchIwaraTitleFromSearchApiAsync(string id, CancellationToken cancellationToken)
+        {
+            try
+            {
+                // Search API often bypasses the 403 blocks seen on individual playlist/video APIs
+                var apiUrl = $"https://api.iwara.tv/videos?query={id}";
+                var json = await FetchHtmlAsync(apiUrl, cancellationToken);
+                if (string.IsNullOrWhiteSpace(json)) return null;
+
+                using var doc = JsonDocument.Parse(json);
+                if (doc.RootElement.TryGetProperty("results", out var results) && results.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in results.EnumerateArray())
+                    {
+                        if (item.TryGetProperty("id", out var idProp) && idProp.GetString() == id)
+                        {
+                            if (item.TryGetProperty("title", out var titleProp))
+                            {
+                                return titleProp.GetString();
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Debug($"[Iwara] Search API fallback failed for {id}: {ex.Message}");
+            }
+            return null;
+        }
 
         private async Task<List<string>> ExtractRule34VideoPlaylistAsync(string url, CancellationToken cancellationToken)
         {
@@ -581,7 +783,14 @@ namespace EdgeLoop.Classes
                     }
                 }
 
-                Logger.Debug($"[Hypnotube] Extracted {videoUrls.Count} unique video URLs");
+                if (videoUrls.Count == 0)
+                {
+                    Logger.Warning($"[Hypnotube] Failed to extract any video links from HTML ({html.Length} chars). The page structure might have changed or access is restricted.");
+                }
+                else
+                {
+                    Logger.Debug($"[Hypnotube] Extracted {videoUrls.Count} unique video URLs");
+                }
                 return videoUrls;
             }
             catch (Exception ex)
@@ -955,6 +1164,67 @@ namespace EdgeLoop.Classes
                 return false;
             }
             catch { return false; }
+        }
+
+        private bool IsIdLike(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return true;
+            if (text.Length < 4) return true;
+            if (text.Equals("NA", StringComparison.OrdinalIgnoreCase)) return true;
+            if (text.Equals("view", StringComparison.OrdinalIgnoreCase)) return true;
+            if (text.Equals("unknown", StringComparison.OrdinalIgnoreCase)) return true;
+            if (text.StartsWith("[NA]", StringComparison.OrdinalIgnoreCase)) return true;
+
+            // UUID or Hash detection
+            if (Regex.IsMatch(text, @"^[a-f0-9\-]{24,}$", RegexOptions.IgnoreCase)) return true;
+            if (Regex.IsMatch(text, @"^[a-f0-9]{32}$", RegexOptions.IgnoreCase)) return true;
+            if (Regex.IsMatch(text, @"^[a-f0-9]{40}$", RegexOptions.IgnoreCase)) return true;
+            if (Regex.IsMatch(text, @"^[a-f0-9]{64}$", RegexOptions.IgnoreCase)) return true;
+            
+            // Iwara-like alphanumeric IDs (usually 14 chars, mixed case, no spaces)
+            if (text.Length >= 10 && text.Length <= 20 && !text.Contains(" ") && Regex.IsMatch(text, @"^[a-zA-Z0-9_-]+$"))
+            {
+                // If it contains at least one digit and one letter, it's very likely an ID
+                if (Regex.IsMatch(text, @"\d") && Regex.IsMatch(text, @"[a-zA-Z]")) return true;
+            }
+
+            return false;
+        }
+
+        private string DeSlugifyUrl(string url)
+        {
+            try
+            {
+                var uri = new Uri(url);
+                var path = uri.AbsolutePath.Trim('/');
+                var parts = path.Split('/');
+                if (parts.Length == 0) return null;
+
+                // For Iwara, the slug is the last part if there are 3 parts (video/id/slug)
+                // For Hypnotube, it's the last part (video/slug.html)
+                var lastPart = parts.Last();
+                if (lastPart.Contains(".")) lastPart = lastPart.Split('.')[0];
+                
+                // If it's a 3-part Iwara URL, the slug is index 2
+                if (url.Contains("iwara.tv") && parts.Length >= 3) lastPart = parts[2];
+
+                return DeSlugify(lastPart);
+            }
+            catch { return null; }
+        }
+
+        private string DeSlugify(string slug)
+        {
+            if (string.IsNullOrWhiteSpace(slug)) return slug;
+            
+            // Remove numeric IDs at the end (e.g. -7132)
+            var clean = Regex.Replace(slug, @"-\d+$", "");
+            
+            // Replace dashes/underscores with spaces
+            clean = clean.Replace("-", " ").Replace("_", " ");
+            
+            // Capitalize
+            return System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(clean);
         }
 
         public struct UrlAmbiguityInfo

@@ -81,13 +81,20 @@ namespace EdgeLoop.Classes
 
                     Logger.Debug($"[yt-dlp] Extracting video URL: {url}");
 
-                    OptionSet options = BuildOptionsForUrl(url, out cookieFile);
+                    // Clean URL for Hypnotube/Iwara (strip playlist params that break yt-dlp)
+                    var fetchUrl = url;
+                    if (fetchUrl.Contains("hypnotube.com") || fetchUrl.Contains("iwara.tv"))
+                    {
+                        if (fetchUrl.Contains("?")) fetchUrl = fetchUrl.Split('?')[0];
+                    }
+
+                    OptionSet options = BuildOptionsForUrl(fetchUrl, out cookieFile);
 
                     // Enforce a timeout to prevent hung processes
                     using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                     timeoutCts.CancelAfter(ExtractionTimeout);
 
-                    var result = await _ytdl.RunVideoDataFetch(url, ct: timeoutCts.Token, overrideOptions: options);
+                    var result = await _ytdl.RunVideoDataFetch(fetchUrl, ct: timeoutCts.Token, overrideOptions: options);
 
                     if (!result.Success)
                     {
@@ -201,10 +208,29 @@ namespace EdgeLoop.Classes
                 bool isIwara = host.Contains("iwara.tv");
                 bool isHypno = host.Contains("hypnotube.com");
 
+                if (isIwara)
+                {
+                    // For Iwara, we must use these specific headers to bypass Cloudflare
+                    options.AddHeaders = new[] { 
+                        "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+                        "X-Site: www.iwara.tv"
+                    };
+                }
+
                 if (isHypno && !string.IsNullOrEmpty(App.Settings?.HypnotubeCookies))
                 {
                     Logger.Debug($"[yt-dlp] Using Hypnotube cookies for extraction");
                     cookieFile = CreateTempCookieFile(App.Settings.HypnotubeCookies, "hypnotube.com");
+                }
+                else if (isIwara && !string.IsNullOrEmpty(App.Settings?.IwaraCookies))
+                {
+                    Logger.Debug($"[yt-dlp] Using Iwara cookies for extraction");
+                    cookieFile = CreateTempCookieFile(App.Settings.IwaraCookies, "iwara.tv");
+                }
+                else if (host.Contains("rule34video.com") && !string.IsNullOrEmpty(App.Settings?.Rule34VideoCookies))
+                {
+                    Logger.Debug($"[yt-dlp] Using Rule34Video cookies for extraction");
+                    cookieFile = CreateTempCookieFile(App.Settings.Rule34VideoCookies, "rule34video.com");
                 }
                 else if (isYouTube || isIwara || isHypno)
                 {
@@ -216,7 +242,7 @@ namespace EdgeLoop.Classes
                     }
                     else
                     {
-                        var browser = App.Settings?.BrowserForCookies ?? "chrome";
+                        var browser = App.Settings?.BrowserForCookies ?? "Firefox";
                         options.AddCustomOption<string>("--cookies-from-browser", browser);
                         Logger.Debug($"[yt-dlp] Using --cookies-from-browser {browser} for {host}");
                     }
@@ -305,49 +331,60 @@ namespace EdgeLoop.Classes
         }
 
         /// <summary>
-        /// Extracts a list of video URLs from a playlist or profile URL using yt-dlp natively.
+        /// Extracts video page URLs and human-readable titles from a playlist URL using yt-dlp.
         /// </summary>
-        public async Task<List<string>> ExtractPlaylistUrlsAsync(string url, CancellationToken cancellationToken = default)
+        public async Task<Dictionary<string, string>> ExtractPlaylistInfoAsync(string playlistUrl, CancellationToken cancellationToken = default)
         {
-            var urls = new List<string>();
-            if (!_isAvailable) return urls;
+            var results = new Dictionary<string, string>();
+            if (!_isAvailable) return results;
 
             string cookieFile = null;
             try
             {
-                Logger.Debug($"[yt-dlp] Extracting playlist URLs: {url}");
+                // Clean URL for Hypnotube/Iwara (strip playlist params that break things)
+                if (playlistUrl.Contains("hypnotube.com") || playlistUrl.Contains("iwara.tv"))
+                {
+                    if (playlistUrl.Contains("?")) playlistUrl = playlistUrl.Split('?')[0];
+                }
+
+                Logger.Debug($"[yt-dlp] Extracting playlist info: {playlistUrl}");
 
                 var args = new List<string> {
                     "--flat-playlist",
-                    "--print", "url",
-                    "--impersonate", "chrome"
+                    "--print", "%(webpage_url)s|%(title)s",
+                    "--no-check-certificates",
+                    "--impersonate", "chrome",
+                    "--no-warnings",
+                    "--js-runtimes", "node",
+                    "--remote-components", "ejs:github"
                 };
 
-                // Manually handle User-Agent if configured
-                if (!string.IsNullOrEmpty(App.Settings?.UserAgent))
-                {
-                    args.Add("--add-header");
-                    args.Add($"User-Agent:{App.Settings.UserAgent}");
-                }
-
-                // Add configured options manually
-                OptionSet options = BuildOptionsForUrl(url, out cookieFile);
+                // Build options (includes cookies and headers)
+                OptionSet options = BuildOptionsForUrl(playlistUrl, out cookieFile);
                 if (!string.IsNullOrEmpty(options.Cookies))
                 {
                     args.Add("--cookies");
                     args.Add(options.Cookies);
                 }
 
-                // Add Cloudflare/Bot bypass logic
-                var uri = new Uri(url);
+                var uri = new Uri(playlistUrl);
                 var host = uri.Host.ToLowerInvariant();
-                bool isYouTube = host.Contains("youtube.com") || host.Contains("youtu.be");
 
-                if (host.Contains("iwara.tv") || isYouTube)
+                if (options.AddHeaders != null)
                 {
-                    // Impersonate Chrome is already added globally in BuildOptionsForUrl, 
-                    // but we ensure it here for the manual process call.
+                    // Since MultiValue<string> is tricky to iterate in this version, 
+                    // we handle the most common case or use a custom approach.
+                    // For Iwara, we know we have X-Site and User-Agent.
+                    if (host.Contains("iwara.tv"))
+                    {
+                        args.Add("--add-header");
+                        args.Add("X-Site:www.iwara.tv");
+                        args.Add("--add-header");
+                        args.Add("User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36");
+                    }
                 }
+
+                bool isYouTube = host.Contains("youtube.com") || host.Contains("youtu.be");
 
                 if (isYouTube && string.IsNullOrEmpty(options.Cookies))
                 {
@@ -355,21 +392,14 @@ namespace EdgeLoop.Classes
                     args.Add("--cookies-from-browser");
                     args.Add(browser);
                 }
+                else if (host.Contains("iwara.tv") && string.IsNullOrEmpty(options.Cookies))
+                {
+                    // Fallback to browser cookies for Iwara if no manual cookies provided
+                    args.Add("--cookies-from-browser");
+                    args.Add("firefox");
+                }
 
-                // Add impersonation to metadata extraction too
-                args.Add("--impersonate");
-                args.Add("chrome");
-
-                // YouTube EJS Challenge Solver
-                args.Add("--js-runtimes");
-                args.Add("node");
-                args.Add("--remote-components");
-                args.Add("ejs:github");
-
-                // Suppress noisy warnings like "-f best" recommendation
-                args.Add("--no-warnings");
-
-                args.Add(url);
+                args.Add(playlistUrl);
 
                 var psi = new ProcessStartInfo
                 {
@@ -381,103 +411,69 @@ namespace EdgeLoop.Classes
                     WindowStyle = ProcessWindowStyle.Hidden
                 };
 
-                foreach (var arg in args)
-                {
-                    psi.ArgumentList.Add(arg);
-                }
+                foreach (var arg in args) psi.ArgumentList.Add(arg);
 
-                using var proc = Process.Start(psi);
-                if (proc == null) return urls;
-
-                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-                timeoutCts.CancelAfter(TimeSpan.FromSeconds(120));
-
-                using (timeoutCts.Token.Register(() =>
+                using (var proc = Process.Start(psi))
                 {
-                    try { if (!proc.HasExited) proc.Kill(); } catch { }
-                }))
-                {
-                    string line;
-                    while ((line = await proc.StandardOutput.ReadLineAsync()) != null)
+                    if (proc == null) return results;
+
+                    using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    timeoutCts.CancelAfter(TimeSpan.FromSeconds(120));
+
+                    using (timeoutCts.Token.Register(() => { try { if (!proc.HasExited) proc.Kill(); } catch { } }))
                     {
-                        if (string.IsNullOrWhiteSpace(line)) continue;
-                        var trimmed = line.Trim();
-                        // Assume any URL returned is a valid video link (yt-dlp extracts proper links)
-                        if (trimmed.StartsWith("http", StringComparison.OrdinalIgnoreCase))
+                        string line;
+                        while ((line = await proc.StandardOutput.ReadLineAsync()) != null)
                         {
-                            urls.Add(trimmed);
-                        }
-                    }
-
-                    await proc.WaitForExitAsync(cancellationToken);
-                    if (proc.ExitCode != 0)
-                    {
-                        var err = await proc.StandardError.ReadToEndAsync();
-                        Logger.Warning($"[yt-dlp] Playlist extraction returned {proc.ExitCode}: {err}");
-
-                        // FALLBACK: Retry without cookies if database is locked
-                        if (args.Contains("--cookies-from-browser") && IsCookieLockError(err))
-                        {
-                            Logger.Info($"[yt-dlp] Cookie database locked during playlist extraction. Retrying without cookies...");
-
-                            // Remove --cookies-from-browser and its value
-                            int idx = args.IndexOf("--cookies-from-browser");
-                            if (idx >= 0)
+                            if (string.IsNullOrWhiteSpace(line)) continue;
+                            if (line.Contains("|"))
                             {
-                                args.RemoveAt(idx + 1); // Remove the browser name
-                                args.RemoveAt(idx);     // Remove the flag
-                            }
+                                var parts = line.Split('|');
+                                var itemUrl = parts[0].Trim();
+                                var itemTitle = parts.Length > 1 ? parts[1].Trim() : null;
 
-                            // Re-run the process
-                            var fallbackPsi = new ProcessStartInfo
-                            {
-                                FileName = _ytDlpPath,
-                                CreateNoWindow = true,
-                                UseShellExecute = false,
-                                RedirectStandardOutput = true,
-                                RedirectStandardError = true,
-                                WindowStyle = ProcessWindowStyle.Hidden
-                            };
-                            foreach (var arg in args) fallbackPsi.ArgumentList.Add(arg);
+                                // yt-dlp returns "NA" for missing fields in print templates
+                                if (itemTitle == "NA") itemTitle = null;
 
-                            using var fallbackProc = Process.Start(fallbackPsi);
-                            if (fallbackProc != null)
-                            {
-                                urls.Clear(); // Clear any partial results
-                                while ((line = await fallbackProc.StandardOutput.ReadLineAsync()) != null)
+                                if (!string.IsNullOrEmpty(itemUrl) && !results.ContainsKey(itemUrl))
                                 {
-                                    if (string.IsNullOrWhiteSpace(line)) continue;
-                                    var trimmed = line.Trim();
-                                    if (trimmed.StartsWith("http", StringComparison.OrdinalIgnoreCase)) urls.Add(trimmed);
-                                }
-                                await fallbackProc.WaitForExitAsync(cancellationToken);
-                                if (fallbackProc.ExitCode == 0)
-                                {
-                                    Logger.Debug($"[yt-dlp] Playlist fallback successful (fetched {urls.Count} URLs)");
+                                    results[itemUrl] = itemTitle;
                                 }
                             }
+                            else if (line.StartsWith("http"))
+                            {
+                                var itemUrl = line.Trim();
+                                if (!results.ContainsKey(itemUrl)) results[itemUrl] = null;
+                            }
                         }
+                        await proc.WaitForExitAsync(cancellationToken);
                     }
                 }
 
-                Logger.Debug($"[yt-dlp] Successfully extracted {urls.Count} URLs from playlist.");
-                return urls;
-            }
-            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
-            {
-                Logger.Warning($"[yt-dlp] Playlist extraction timed out");
-                return urls;
+                Logger.Debug($"[yt-dlp] Successfully extracted {results.Count} items from playlist.");
             }
             catch (Exception ex)
             {
-                Logger.Warning($"[yt-dlp] Exception during playlist extraction: {ex.Message}");
-                return urls;
+                Logger.Warning($"[yt-dlp] Playlist extraction failed: {ex.Message}");
             }
             finally
             {
                 CleanupCookieFile(cookieFile);
             }
+
+            return results;
         }
+
+        /// <summary>
+        /// Extracts a list of video URLs from a playlist or profile URL using yt-dlp natively.
+        /// </summary>
+        public async Task<List<string>> ExtractPlaylistUrlsAsync(string url, CancellationToken cancellationToken = default)
+        {
+            var info = await ExtractPlaylistInfoAsync(url, cancellationToken);
+            return info.Keys.ToList();
+        }
+
+
 
         /// <summary>
         /// Sites that serve separate video+audio streams, requiring download+mux for best quality.

@@ -34,6 +34,12 @@ namespace EdgeLoop.Classes
         {
             if (string.IsNullOrWhiteSpace(pageUrl)) return new VideoMetadata();
 
+            // Clean URL for Hypnotube/Iwara (strip playlist params that break things)
+            if (pageUrl.Contains("hypnotube.com") || pageUrl.Contains("iwara.tv"))
+            {
+                if (pageUrl.Contains("?")) pageUrl = pageUrl.Split('?')[0];
+            }
+
             var normalizedUrl = FileValidator.NormalizeUrl(pageUrl);
             var uri = new Uri(normalizedUrl);
             var host = uri.Host.ToLowerInvariant();
@@ -1419,7 +1425,12 @@ namespace EdgeLoop.Classes
                     }
                 }
 
-                return string.IsNullOrWhiteSpace(title) ? null : title;
+                if (string.IsNullOrWhiteSpace(title)) return null;
+                
+                var lower = title.ToLowerInvariant();
+                if (lower == "na" || lower == "[na]" || lower == "view" || lower == "unknown") return null;
+
+                return title;
             }
             catch (Exception ex)
             {
