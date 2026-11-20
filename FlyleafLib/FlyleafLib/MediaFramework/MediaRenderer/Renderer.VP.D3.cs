@@ -66,6 +66,7 @@ public unsafe partial class Renderer
     };
     RenderTargetViewDescription[]   d3rtvDesc   = new RenderTargetViewDescription[2];
     FillPlanesDelegate              D3FillPlanesStage;
+    VideoProcessorRotation          d3Rotation  = VideoProcessorRotation.Identity;
 
     bool                            d3CanPresent; // Don't render / present during out of bounds viewport
 
@@ -88,7 +89,9 @@ public unsafe partial class Renderer
         if (d3CacheEntry.Failed && !needsFillUnlock)
             return;
 
-        vd = device.QueryInterface<ID3D11VideoDevice>();
+        try
+        { vd = device.QueryInterface<ID3D11VideoDevice>(); }
+        catch { vd = null; }
         if (vd == null)
         {
             if (needsFillUnlock)
@@ -97,7 +100,9 @@ public unsafe partial class Renderer
             return;
         }
 
-        vc = context.QueryInterface<ID3D11VideoContext>();
+        try
+        { vc = context.QueryInterface<ID3D11VideoContext>(); }
+        catch { vc = null; }
         if (vc != null)
             if (vd.CreateVideoProcessorEnumerator(ref vped, out ve).Success)    // TBR: vpcd config (maybe requires max sizes)
                 vd.CreateVideoProcessor(ve, 0, out vp);               // TBR: config for which rate index?
@@ -115,8 +120,8 @@ public unsafe partial class Renderer
             return;
         }
 
-        if (CanDebug && needsFillUnlock)
-            Log.Debug($"D3D11 Video Processor\r\n{GetDump()}");
+        if (CanTrace && needsFillUnlock)
+            Log.Trace($"D3D11 Video Processor\r\n{GetDump()}");
 
         vc.VideoProcessorSetStreamAutoProcessingMode(vp, 0, false);
         vc.VideoProcessorSetOutputColorSpace(vp, d3ColorOut);
@@ -138,12 +143,12 @@ public unsafe partial class Renderer
         FFmpegSetup();
     }
 
-    bool D3Config()
+    bool D3Config(AVFrame* frame)
     {
-        if (VideoDecoder.VideoAccelerated)
+        if (VideoDecoder.HWAccelerated)
             D3HWConfig();
         else
-            D3SWConfig();
+            D3SWConfig(frame);
 
         D3Deinterlace(); // TBR: maybe request instead?
 
@@ -158,7 +163,7 @@ public unsafe partial class Renderer
             d3ColorIn.Nominal_Range = 1;
         }
 
-        d3ColorIn.YCbCr_Matrix = scfg.ColorSpace != ColorSpace.Bt601 ? 1u : 0u;
+        d3ColorIn.YCbCr_Matrix = scfg.ColorSpace != ColorSpace.BT601 ? 1u : 0u;
 
         vc.VideoProcessorSetStreamColorSpace(vp, 0, d3ColorIn);
 
@@ -174,15 +179,15 @@ public unsafe partial class Renderer
 
         return true;
     }
-    bool D3SWConfig()
+    bool D3SWConfig(AVFrame* frame)
     {
-        if (scfg.ColorType == ColorType.RGB && scfg.PixelFormat != AVPixelFormat.Rgba)
+        if (scfg.ColorType == ColorType.RGB && scfg.PixelFormat != AVPixelFormat.RGBA)
         {   // TBR: re-ordered RGB offsets?* extra pass*
-            SwsConfig();
+            SwsConfig(frame);
             canFL = false;
         }
         else
-            FLSwsConfig();
+            FLSwsConfig(frame);
 
         context.VSSetShader(vsSimple);
         vpivd.Texture2D.ArraySlice = 0;
@@ -327,10 +332,10 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
         if (!ucfg.SuperResolution)
             DisableSuperRes();
         else
-        {
-            if (scfg.PixelComp0Depth <= 8 && // Seems it crashes with 10-bit?
-               (((rotation == 0 || rotation == 180) && view.Width > VisibleWidth && view.Height > VisibleHeight) ||
-                ((rotation == 90 || rotation == 270) && view.Width > VisibleHeight && view.Height > VisibleWidth)))
+        {   // Seems it crashes with 10-bit | RGB/GRAY?
+            if (scfg.PixelComp0Depth == 8 && scfg.ColorType == ColorType.YUV &&
+               (((rotation == 0 || rotation == 180) && view.Width > VisibleWidth || view.Height > VisibleHeight) ||
+                ((rotation == 90 || rotation == 270) && view.Width > VisibleHeight || view.Height > VisibleWidth)))
                 EnableSuperRes();
             else
                 DisableSuperRes();
@@ -362,7 +367,7 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
         int     srcLeft,    srcTop,     srcRight,   srcBottom;
         double  scaleX,     scaleY,     scaleXRot,  scaleYRot;
 
-        if (rotation == 0)
+        if (d3Rotation == VideoProcessorRotation.Identity)
         {
             cropLeft = view.X < 0 ? (int)(-view.X) : 0;
             cropTop = view.Y < 0 ? (int)(-view.Y) : 0;
@@ -375,7 +380,7 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
             srcRight = srcLeft + (int)(dstWidth * scaleX);
             srcBottom = srcTop + (int)(dstHeight * scaleY);
         }
-        else if (rotation == 180)
+        else if (d3Rotation == VideoProcessorRotation.Rotation180)
         {
             cropRight = right > width ? right - width : 0;
             cropBottom = bottom > height ? bottom - height : 0;
@@ -388,7 +393,7 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
             srcRight = srcLeft + (int)(dstWidth * scaleX);
             srcBottom = srcTop + (int)(dstHeight * scaleY);
         }
-        else if (rotation == 90)
+        else if (d3Rotation == VideoProcessorRotation.Rotation90)
         {
             cropTop = view.Y < 0 ? (int)(-view.Y) : 0;
             cropRight = right > width ? right - width : 0;
@@ -401,7 +406,7 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
             srcRight = srcLeft + (int)(dstHeight * scaleXRot);
             srcBottom = srcTop + (int)(dstWidth * scaleYRot);
         }
-        else if (rotation == 270)
+        else if (d3Rotation == VideoProcessorRotation.Rotation270)
         {
             cropLeft = view.X < 0 ? (int)(-view.X) : 0;
             cropBottom = bottom > height ? bottom - height : 0;
@@ -428,22 +433,26 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
     }
     void D3SetSize()
     {
-        SwapChain.VPOV?.Dispose();
+        SwapChain.SwapChainVPOV?.Dispose();
+        SwapChain.SwapChainVPOV = null;
         SetSize();
 
-        if (SwapChain.BackBuffer != null)
-            SwapChain.VPOV = vd.CreateVideoProcessorOutputView(SwapChain.BackBuffer, ve, vpovd);
+        if (SwapChain.SwapChainBackBuffer != null)
+            SwapChain.SwapChainVPOV = vd.CreateVideoProcessorOutputView(SwapChain.SwapChainBackBuffer, ve, vpovd);
+
+        D3DImage?.EnsureVpov(); // Fork: the shared texture needs its own output view once the VP exists
 
         vc.VideoProcessorSetOutputTargetRect(vp, true, new(0, 0, ControlWidth, ControlHeight));
     }
     void D3SetRotationFlip()
     {
         SetRotation();
-        vc.VideoProcessorSetStreamRotation(vp, 0, true, ToD3Rotation());
+        d3Rotation = ToD3Rotation();
+        vc.VideoProcessorSetStreamRotation(vp, 0, true, d3Rotation);
 
         VideoProcessorRotation ToD3Rotation()
         {
-            if (rotation < 45 || rotation == 360)
+            if (rotation < 45 || rotation > 315)
                 return VideoProcessorRotation.Identity;
 
             if (rotation < 135)
@@ -457,18 +466,17 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
     }
     void D3SetCrop()
     {
-        crop = scfg.Crop + ucfg.crop;
+        crop = scfg.Crop + userCrop;
         VisibleWidth = scfg.txtWidth - crop.Width;
         VisibleHeight = scfg.txtHeight - crop.Height;
 
         SetVisibleSizeAndRatioHelper();
 
-        vpRequests &= ~VPRequestType.Crop;
         vpRequests |= VPRequestType.Viewport;
     }
     void D3Deinterlace()
     {
-        FieldType = ucfg.DeInterlace == DeInterlace.Auto ? scfg.FieldOrder : (VideoFrameFormat)ucfg.DeInterlace;
+        FieldType = DeInterlace == DeInterlace.Auto ? scfg.FieldOrder : (VideoFrameFormat)DeInterlace;
         vc.VideoProcessorSetStreamFrameFormat(vp, 0, FieldType);
         RaiseUI(nameof(FieldType));
     }
@@ -484,6 +492,7 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
     static readonly SuperResNvidia  SuperResEnabledNvidia   = new(true);
     static readonly SuperResNvidia  SuperResDisabledNvidia  = new(false);
     static readonly Guid            GUID_SUPERRES_NVIDIA    = Guid.Parse("d43ce1b3-1f4b-48ac-baee-c3c25375e6f7");
+    bool superResNvidiaAvailable;
 
     [StructLayout(LayoutKind.Sequential)]
     struct SuperResIntel
@@ -504,14 +513,19 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
         if (SuperResolution)
             return;
 
-        SuperResolution = true;
-        RaiseUI(nameof(SuperResolution));
+        if (gpuAdapter.Vendor == GPUVendor.Nvidia)
+        {
+            if (!superResNvidiaAvailable)
+                return;
 
-        if (GPUAdapter.Vendor == GPUVendor.Nvidia)
             fixed (SuperResNvidia* ptr = &SuperResEnabledNvidia)
                 vc.VideoProcessorSetStreamExtension(vp, 0, GUID_SUPERRES_NVIDIA, (uint)sizeof(SuperResNvidia), (nint)ptr);
-        else if (GPUAdapter.Vendor == GPUVendor.Intel)
+        }
+        else if (gpuAdapter.Vendor == GPUVendor.Intel)
             UpdateSuperResIntel(true);
+
+        SuperResolution = true;
+        RaiseUI(nameof(SuperResolution));
     }
 
     void DisableSuperRes()
@@ -554,19 +568,22 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
 
     void D3ProcessRequests()
     {
-        while (vpRequestsIn != VPRequestType.Empty)
+        while ((vpRequests = TakeVPRequests()) != VPRequestType.Empty)
         {
-            if (vpRequestsIn.HasFlag(VPRequestType.ReConfigVP))
+            if (vpRequests.HasFlag(VPRequestType.ReConfigVP))
             {
+                VPRequest(vpRequests & ~VPRequestType.ReConfigVP, execute: false);
                 VPSwitch();
-                return;
+                if (VideoProcessor != VideoProcessors.D3D11)
+                    return;
+                continue;
             }
-
-            vpRequests = vpRequestsIn;
-            vpRequestsIn = VPRequestType.Empty;
 
             if (vpRequests.HasFlag(VPRequestType.BackColor))
                 SetBackColor();
+
+            if (vpRequests.HasFlag(VPRequestType.UpdateSwapChain))
+                UpdateHDRSwapchain();
 
             if (vpRequests.HasFlag(VPRequestType.RotationFlip))
                 D3SetRotationFlip();
@@ -593,14 +610,27 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
             return; // TODO: when we dispose on switch
 
         /* [Undocumented Deinterlace]
-        * Currently we don't use Past/Future frames so we consider only Bob/Weave methods (we also consider that are supported by D3D11VP)
-        * For Bob -double rate- we set the second field (InputFrameOrField/OutputIndex)
-        * TODO: Bring secondField to renderer so Render refreshes can work also with it (maybe ShowFrameX too)
-        * TBR: Vortice bug with Past / Future surfaces (no support for now - only useful for deinterlace?*)
-        */
+         * Currently we don't use Past/Future frames so we consider only Bob/Weave methods (we also consider that are supported by D3D11VP)
+         * For Bob -double rate- we set the second field (InputFrameOrField/OutputIndex)
+         * TODO: Bring secondField to renderer so Render refreshes can work also with it (maybe ShowFrameX too)
+         * TBR: Vortice bug with Past / Future surfaces (no support for now - only useful for deinterlace?*)
+         */
         vpsa[0].InputSurface = frame.VPIV;
         vpsa[0].OutputIndex = vpsa[0].InputFrameOrField = secondField ? 1u : 0u;
-        vc.VideoProcessorBlt(vp, CurrentVpov, 0, 1, vpsa);
+
+        PostProcessSurface surface = null;
+        if (postProcessor != null && SwapChain.BackBuffer is { } backBuffer)
+            surface = GetPostProcessSurface(false, backBuffer.Description.Width, backBuffer.Description.Height);
+
+        vc.VideoProcessorBlt(vp, surface?.VPOV ?? SwapChain.VPOV, 0, 1, vpsa);
+
+        if (surface != null)
+        {
+            if (!RunPostProcessor(surface, SwapChain.BackBufferRtv, surface.Width, surface.Height, Viewport, false))
+                vc.VideoProcessorBlt(vp, SwapChain.VPOV, 0, 1, vpsa);
+
+            context.OMSetRenderTargets(SwapChain.BackBufferRtv);
+        }
 
         if (context2d != null)
             ucfg.OnD2DDraw(this, context2d);
@@ -623,6 +653,9 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
             return;
 
         D3Disposed = true;
+        foreach (var filter in ucfg.D3Filters.Values)
+            filter.Dispose();
+        NotifyFiltersChanged();
 
         FFmpegDispose();
 
@@ -651,19 +684,19 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
         dump += $"MaxStreamStates           {vpCaps.MaxStreamStates}\r\n";
 
         dump += $"\n[Video Processor Device Caps]\r\n";
-        foreach (VideoProcessorDeviceCaps cap in Enum.GetValues<VideoProcessorDeviceCaps>())
+        foreach (var cap in Enum.GetValues<VideoProcessorDeviceCaps>())
             dump += $"{cap,-25} {((vpCaps.DeviceCaps & cap) != 0 ? "yes" : "no")}\r\n";
 
         dump += $"\n[Video Processor Feature Caps]\r\n";
-        foreach (VideoProcessorFeatureCaps cap in Enum.GetValues<VideoProcessorFeatureCaps>())
+        foreach (var cap in Enum.GetValues<VideoProcessorFeatureCaps>())
             dump += $"{cap,-25} {((vpCaps.FeatureCaps & cap) != 0 ? "yes" : "no")}\r\n";
 
         dump += $"\n[Video Processor Stereo Caps]\r\n";
-        foreach (VideoProcessorStereoCaps cap in Enum.GetValues<VideoProcessorStereoCaps>())
+        foreach (var cap in Enum.GetValues<VideoProcessorStereoCaps>())
             dump += $"{cap,-25} {((vpCaps.StereoCaps & cap) != 0 ? "yes" : "no")}\r\n";
 
         dump += $"\n[Video Processor Input Format Caps]\r\n";
-        foreach (VideoProcessorFormatCaps cap in Enum.GetValues<VideoProcessorFormatCaps>())
+        foreach (var cap in Enum.GetValues<VideoProcessorFormatCaps>())
             dump += $"{cap,-25} {((vpCaps.InputFormatCaps & cap) != 0 ? "yes" : "no")}\r\n";
 
         dump += $"\n[Video Processor Filter Caps]\r\n";
@@ -678,14 +711,13 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
                 dump += $"{filter,-25} no\r\n";
 
         dump += $"\n[Video Processor Auto Stream Caps]\r\n";
-        foreach (VideoProcessorAutoStreamCaps cap in Enum.GetValues<VideoProcessorAutoStreamCaps>())
+        foreach (var cap in Enum.GetValues<VideoProcessorAutoStreamCaps>())
             dump += $"{cap,-25} {((vpCaps.AutoStreamCaps & cap) != 0 ? "yes" : "no")}\r\n";
 
-        VideoProcessorRateConversionCaps rcCap = new();
         for (uint i = 0; i < vpCaps.RateConversionCapsCount; i++)
         {
-            ve.GetVideoProcessorRateConversionCaps(i, out rcCap);
-            VideoProcessorProcessorCaps pCaps = (VideoProcessorProcessorCaps) rcCap.ProcessorCaps;
+            ve.GetVideoProcessorRateConversionCaps(i, out var rcCap);
+            var pCaps = (VideoProcessorProcessorCaps) rcCap.ProcessorCaps;
 
             dump += $"\n[Video Processor Rate Conversion Caps #{i}]\r\n";
 
@@ -695,7 +727,7 @@ color = float4(Texture2.Sample(Sampler, input.Texture).r, Texture3.Sample(Sample
                 dump += $"\t{field.Name,-35} {field.GetValue(rcCap)}\r\n";
 
             dump += $"\n\t[Video Processor Processor Caps]\r\n";
-            foreach (VideoProcessorProcessorCaps cap in Enum.GetValues(typeof(VideoProcessorProcessorCaps)))
+            foreach (var cap in Enum.GetValues<VideoProcessorProcessorCaps>())
                 dump += $"\t{cap,-35} {(((VideoProcessorProcessorCaps)rcCap.ProcessorCaps & cap) != 0 ? "yes" : "no")}\r\n";
         }
 

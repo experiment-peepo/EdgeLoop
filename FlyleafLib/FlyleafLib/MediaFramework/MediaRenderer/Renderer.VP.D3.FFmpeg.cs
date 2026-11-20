@@ -6,9 +6,9 @@ namespace FlyleafLib.MediaFramework.MediaRenderer;
 
 public unsafe partial class Renderer
 {
-    internal AVBufferRef*           ffDevice, ffFrames;
-    internal ID3D11Texture2D        ffTexture; // required from videostream?
-    internal Texture2DDescription   ffTextureDesc;
+    internal AVBufferRef*           ffDevice, ffFrames, ffFramesFEL;
+    internal ID3D11Texture2D        ffTexture, ffTextureFEL; // required from videostream?
+    internal Texture2DDescription   ffTextureDesc, ffTextureDescFEL;
     internal FFFramesInfo           ffFramesInfo = new();
     internal class FFFramesInfo { public AVCodecID CodecId; public int CodedWidth; public int CodedHeight; }
 
@@ -27,10 +27,10 @@ public unsafe partial class Renderer
         var device_ctx          = (AVHWDeviceContext*)                  ffDevice->data;
         var hwCtx               = (AVD3D11VADeviceContext*)             device_ctx->hwctx;
 
-        hwCtx->device = (Flyleaf.FFmpeg.ID3D11Device*)device.NativePointer;
-        hwCtx->device_context = (Flyleaf.FFmpeg.ID3D11DeviceContext*)context.NativePointer;
-        hwCtx->video_device = (Flyleaf.FFmpeg.ID3D11VideoDevice*)vd.NativePointer;
-        hwCtx->video_context = (Flyleaf.FFmpeg.ID3D11VideoContext*)vc.NativePointer;
+        hwCtx->device = (FF.ID3D11Device*)device.NativePointer;
+        hwCtx->device_context = (FF.ID3D11DeviceContext*)context.NativePointer;
+        hwCtx->video_device = (FF.ID3D11VideoDevice*)vd.NativePointer;
+        hwCtx->video_context = (FF.ID3D11VideoContext*)vc.NativePointer;
 
         int ret = av_hwdevice_ctx_init(ffDevice);
         if (ret == 0)
@@ -105,8 +105,8 @@ public unsafe partial class Renderer
         if (reqSize != framesCtx->initial_pool_size)
         {
             codecCtx->extra_hw_frames = codecCtx->extra_hw_frames - Math.Abs(reqSize - framesCtx->initial_pool_size);
-            Log.Warn($"HW frames changed from {Config.Decoder.MaxVideoFrames} to {codecCtx->extra_hw_frames - 1}");
-            Config.Decoder.SetMaxVideoFrames(codecCtx->extra_hw_frames - 1);
+            Log.Warn($"HW frames changed from {Config.Video.MaxFrames} to {codecCtx->extra_hw_frames - 1}");
+            Config.Video.SetMaxFrames(codecCtx->extra_hw_frames - 1);
         }
 
         ffTexture = new((nint)hwCtx->texture);
@@ -121,6 +121,39 @@ public unsafe partial class Renderer
             Log.Debug($"HW frames allocated ({framesCtx->initial_pool_size})");
 
         return true;
+    }
+
+    internal void ConfigFELHWFrames(AVCodecContext* codecCtx)
+    {
+        if (ffFramesFEL != null)
+            av_buffer_unref(ref ffFramesFEL);
+        ffFramesFEL = null;
+        ffTextureFEL?.Dispose();
+        ffTextureFEL = null;
+
+        int ret;
+        fixed (AVBufferRef** ptr = &ffFramesFEL)
+            if ((ret = avcodec_get_hw_frames_parameters(codecCtx, ffDevice, VideoDecoder.HW_PIX_FMT, ptr)) != 0)
+            {
+                Log.Error($"{FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
+                return;
+            }
+
+        var framesCtx       = (AVHWFramesContext*)ffFramesFEL->data;
+        var hwCtx           = (AVD3D11VAFramesContext *)framesCtx->hwctx;
+        hwCtx->BindFlags |= (uint)BindFlags.Decoder | (uint)BindFlags.ShaderResource;
+
+        if ((ret = av_hwframe_ctx_init(ffFramesFEL)) != 0)
+        {
+            Log.Error($"{FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
+            av_buffer_unref(ref ffFramesFEL);
+            ffFramesFEL = null;
+            return;
+        }
+
+        ffTextureFEL = new((nint)hwCtx->texture);
+        ffTextureFEL.AddRef(); // FFmpeg ref
+        ffTextureDescFEL = ffTextureFEL.Description;
     }
 
     bool NeedsHWFrames(AVCodecContext* codecCtx)
@@ -157,7 +190,7 @@ public unsafe partial class Renderer
         else
             num_surfaces += 2;
 
-        if (num_surfaces + Config.Decoder.MaxVideoFrames + 1 != ffTextureDesc.ArraySize)
+        if (num_surfaces + Config.Video.MaxFrames + 1 != ffTextureDesc.ArraySize)
             return true;
 
         return false;
@@ -175,6 +208,18 @@ public unsafe partial class Renderer
         {
             ffTexture.Dispose();
             ffTexture = null;
+        }
+
+        if (ffFramesFEL != null)
+        {
+            av_buffer_unref(ref ffFramesFEL);
+            ffFramesFEL = null;
+        }
+
+        if (ffTextureFEL != null)
+        {
+            ffTextureFEL.Dispose();
+            ffTextureFEL = null;
         }
 
         if (ffDevice != null)

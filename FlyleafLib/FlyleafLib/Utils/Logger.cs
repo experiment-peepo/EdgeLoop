@@ -45,14 +45,18 @@ public static class Logger
 
     internal static void SetOutput()
     {
+        // Fork: the logger can be used before the engine (and its config) exists
         if (Engine.Config == null)
         {
             Output = DebugPtr;
             return;
         }
 
-        string output = Engine.Config.LogOutput;
+        SetOutput(Engine.Config.LogOutput);
+    }
 
+    internal static void SetOutput(string output)
+    {
         if (string.IsNullOrEmpty(output))
             Output = DevNullPtr;
         else if (output.StartsWith(':'))
@@ -70,34 +74,40 @@ public static class Logger
         {
             lock (lockFileStream)
             {
-                if (fileStream != null)
-                {   // Flush File Data on Previously Opened File Stream
-                    while (fileData.TryDequeue(out byte[] data))
-                        fileStream.Write(data, 0, data.Length);
-                    fileStream.Dispose();
+                string path = Path.GetFullPath(output);
+                bool append = Engine.Config.LogAppend;
+                bool roll = !append && Engine.Config.LogRollMaxFiles > 0 && Engine.Config.LogRollMaxFileSize > 0;
+                if (string.Equals(path, fileStream?.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    Output = roll ? FileRollPtr : FilePtr;
+                    return;
                 }
 
-                string dir = Path.GetDirectoryName(output);
-                if (!string.IsNullOrEmpty(dir))
-                    Directory.CreateDirectory(dir);
+                var directory = Path.GetDirectoryName(path);
+                if (!string.IsNullOrEmpty(directory))
+                    Directory.CreateDirectory(directory);
+                if (roll)
+                    RollLogFiles(path);
 
-                if (Engine.Config.LogAppend)
+                // Open the replacement before disturbing the current destination.
+                var replacement = new FileStream(path, append ? FileMode.Append : FileMode.Create, FileAccess.Write);
+                try
                 {
-                    fileStream = new(output, FileMode.Append, FileAccess.Write);
-                    Output = FilePtr;
+                    if (fileStream != null)
+                    {
+                        while (fileData.TryDequeue(out byte[] data))
+                            fileStream.Write(data, 0, data.Length);
+                        fileStream.Dispose();
+                    }
+                }
+                catch
+                {
+                    replacement.Dispose();
+                    throw;
                 }
 
-                else if (Engine.Config.LogRollMaxFiles > 0 && Engine.Config.LogRollMaxFileSize > 0)
-                {
-                    RollLogFiles(); // If we have rolling log enables and do not append, then we need to roll the log files first
-                    fileStream = new(Engine.Config.LogOutput, FileMode.Create, FileAccess.Write);
-                    Output = FileRollPtr;
-                }
-                else
-                {
-                    fileStream = new(output, FileMode.Create, FileAccess.Write);
-                    Output = FilePtr;
-                }
+                fileStream = replacement;
+                Output = roll ? FileRollPtr : FilePtr;
             }
         }
     }
@@ -117,30 +127,26 @@ public static class Logger
 
         if (!fileTaskRunning && fileData.Count > Engine.Config.LogCachedLines)
         {
-            if (fileStream.Length >= Engine.Config.LogRollMaxFileSize)
+            lock (lockFileStream)
             {
-                while (fileTaskRunning)
-                    Thread.Sleep(10);
-
-                lock (lockFileStream)
+                if (fileTaskRunning)
+                    return;
+                if (fileStream.Length < Engine.Config.LogRollMaxFileSize)
                 {
-                    while (fileData.TryDequeue(out byte[] data))
-                        fileStream.Write(data, 0, data.Length);
-
-                    fileStream.Flush();
+                    FlushFileData();
+                    return;
                 }
 
-                HandleLogFileRolling();
+                while (fileData.TryDequeue(out byte[] data))
+                    fileStream.Write(data, 0, data.Length);
+                fileStream.Flush();
+                HandleLogFileRolling(fileStream);
             }
-            else
-                FlushFileData();
         }
     }
 
-    static void RollLogFiles()
+    static void RollLogFiles(string name)
     {
-        string name = Engine.Config.LogOutput;
-
         for (long i = Engine.Config.LogRollMaxFiles; i > 0; i--)
         {
             string logFile = $"{name}.{i}";
@@ -158,20 +164,25 @@ public static class Logger
             File.Move(name, $"{name}.{1}");
     }
 
-    static void HandleLogFileRolling()
+    static void HandleLogFileRolling(FileStream stream)
     {
         fileTaskRunning = true;
 
         Task.Run(() =>
         {
-            lock (lockFileStream)
+            try
             {
-                fileStream.Dispose();
-                RollLogFiles();
-                fileStream = new(Engine.Config.LogOutput, FileMode.Create, FileAccess.Write);
+                lock (lockFileStream)
+                {
+                    if (!ReferenceEquals(fileStream, stream))
+                        return;
+                    string path = stream.Name;
+                    stream.Dispose();
+                    RollLogFiles(path);
+                    fileStream = new(path, FileMode.Create, FileAccess.Write);
+                }
             }
-
-            fileTaskRunning = false;
+            finally { fileTaskRunning = false; }
         });
     }
 

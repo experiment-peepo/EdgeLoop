@@ -7,7 +7,7 @@ partial class Player
 {
     /* Player Key Bindings
      *
-     * Config.Player.KeyBindings.Keys
+     * Config.Playback.KeyBindings.Keys
      *
      * KeyDown / KeyUp Events (Control / WinFormsHost / WindowFront (FlyleafWindow))
      * Exposes KeyDown/KeyUp if required to listen on additional Controls/Windows
@@ -75,7 +75,7 @@ partial class Player
         }
 
         List<KeyBinding> keysList = new();
-        var spanList = CollectionsMarshal.AsSpan(player.Config.Player.KeyBindings.Keys); // should create dictionary here with key+alt+ctrl+shift hash
+        var spanList = CollectionsMarshal.AsSpan(player.Config.Playback.KeyBindings.Keys); // should create dictionary here with key+alt+ctrl+shift hash
         foreach (var binding in spanList)
             if (binding.Key == key)
                 keysList.Add(binding);
@@ -120,42 +120,110 @@ partial class Player
             player.Log.Debug($"[Keys|{(isKeyUp ? "Up" : "Down")}] {(binding.Action == KeyBindingAction.Custom && binding.ActionName != null ? binding.ActionName : binding.Action)}");
         binding.ActionInternal?.Invoke();
     }
+
+    internal Action GetKeyBindingAction(KeyBindingAction action)
+        => keyBindingActions.GetValueOrDefault(action);
+    Dictionary<KeyBindingAction, Action> keyBindingActions;
+    void InitializeKeyBindingActions() => keyBindingActions = new()
+    {
+        [KeyBindingAction.ForceIdle] = Activity.ForceIdle,
+        [KeyBindingAction.ForceActive] = Activity.ForceActive,
+        [KeyBindingAction.ForceFullActive] = Activity.ForceFullActive,
+
+        [KeyBindingAction.AudioDelayAdd] = Audio.DelayAdd,
+        [KeyBindingAction.AudioDelayRemove] = Audio.DelayRemove,
+        [KeyBindingAction.AudioDelayAdd2] = Audio.DelayAdd2,
+        [KeyBindingAction.AudioDelayRemove2] = Audio.DelayRemove2,
+        [KeyBindingAction.ToggleAudio] = Audio.Toggle,
+        [KeyBindingAction.ToggleMute] = Audio.ToggleMute,
+        [KeyBindingAction.VolumeUp] = Audio.VolumeUp,
+        [KeyBindingAction.VolumeDown] = Audio.VolumeDown,
+
+        [KeyBindingAction.TakeSnapshot] = Commands.TakeSnapshotAction,
+        [KeyBindingAction.NormalScreen] = NormalScreen,
+        [KeyBindingAction.FullScreen] = FullScreen,
+        [KeyBindingAction.ToggleFullScreen] = ToggleFullScreen,
+        [KeyBindingAction.ToggleRecording] = ToggleRecording,
+        [KeyBindingAction.ToggleVideo] = Video.Toggle,
+        [KeyBindingAction.ToggleKeepRatio] = () => Renderer?.ToggleKeepRatio(),
+        [KeyBindingAction.ToggleHWAcceleration] = Config.Video.ToggleHWAcceleration,
+        [KeyBindingAction.ZoomIn] = () => Renderer?.ZoomIn(),
+        [KeyBindingAction.ZoomOut] = () => Renderer?.ZoomOut(),
+        [KeyBindingAction.ShowPrevFrame] = ShowFramePrev,
+        [KeyBindingAction.ShowNextFrame] = ShowFrameNext,
+
+        [KeyBindingAction.SubtitlesDelayAdd] = Subtitles.DelayAdd,
+        [KeyBindingAction.SubtitlesDelayRemove] = Subtitles.DelayRemove,
+        [KeyBindingAction.SubtitlesDelayAdd2] = Subtitles.DelayAdd2,
+        [KeyBindingAction.SubtitlesDelayRemove2] = Subtitles.DelayRemove2,
+        [KeyBindingAction.ToggleSubtitles] = Subtitles.Toggle,
+
+        [KeyBindingAction.OpenFromClipboard] = OpenFromClipboard,
+        [KeyBindingAction.OpenFromFileDialog] = OpenFromFileDialog,
+        [KeyBindingAction.OpenNextItem] = OpenNextItem,
+        [KeyBindingAction.OpenPrevItem] = OpenPrevItem,
+        [KeyBindingAction.CopyToClipboard] = CopyToClipboard,
+        [KeyBindingAction.CopyItemToClipboard] = CopyItemToClipboard,
+
+        [KeyBindingAction.Flush] = Flush,
+        [KeyBindingAction.Stop] = Stop,
+        [KeyBindingAction.Pause] = Pause,
+        [KeyBindingAction.Play] = Play,
+        [KeyBindingAction.TogglePlayPause] = TogglePlayPause,
+        [KeyBindingAction.ToggleReversePlayback] = ToggleReversePlayback,
+        [KeyBindingAction.ToggleLoopPlayback] = ToggleLoopPlayback,
+
+        [KeyBindingAction.ToggleSeekAccurate] = ToggleSeekAccurate,
+        [KeyBindingAction.SeekBackward] = SeekBackward,
+        [KeyBindingAction.SeekForward] = SeekForward,
+        [KeyBindingAction.SeekBackward2] = SeekBackward2,
+        [KeyBindingAction.SeekForward2] = SeekForward2,
+        [KeyBindingAction.SeekBackward3] = SeekBackward3,
+        [KeyBindingAction.SeekForward3] = SeekForward3,
+        [KeyBindingAction.SeekToStart] = SeekToStart,
+        [KeyBindingAction.SeekToEnd] = SeekToEnd,
+
+        [KeyBindingAction.SpeedAdd] = SpeedUp,
+        [KeyBindingAction.SpeedAdd2] = SpeedUp2,
+        [KeyBindingAction.SpeedRemove] = SpeedDown,
+        [KeyBindingAction.SpeedRemove2] = SpeedDown2,
+
+        [KeyBindingAction.ResetAll] = ResetAll,
+    };
 }
 
+/// <summary>Saved shortcut definitions for <see cref="Config.PlaybackConfig.KeyBindings"/>.</summary>
 public class KeysConfig
 {
-    /// <summary>
-    /// Currently configured key bindings
-    /// (Normally you should not access this directly)
-    /// </summary>
+    /// <summary>Saved key gestures and action identifiers. Executable delegates are assigned at runtime.</summary>
     public List<KeyBinding> Keys { get; set; }
 
     Player player;
 
     public KeysConfig() { }
 
+    /// <summary>Copies the configuration shell with no player reference or shortcut entries.</summary>
     public KeysConfig Clone()
     {
         KeysConfig keys = (KeysConfig) MemberwiseClone();
         keys.player = null;
         keys.Keys = null;
+
         return keys;
     }
 
     internal void SetPlayer(Player player)
     {
-        Keys ??= new List<KeyBinding>();
+        Keys ??= [];
 
         if (!player.Config.Loaded && Keys.Count == 0)
             LoadDefault();
 
-        this.player = player;
-
         foreach (var binding in Keys)
-        {
             if (binding.Action != KeyBindingAction.Custom)
-                binding.ActionInternal = GetKeyBindingAction(binding.Action);
-        }
+                binding.ActionInternal = player.GetKeyBindingAction(binding.Action);
+
+        this.player = player;
     }
 
     /// <summary>
@@ -201,15 +269,21 @@ public class KeysConfig
             {
                 Keys[i].IsKeyUp = isKeyUpBinding.Contains(action);
                 Keys[i].Action = action;
-                Keys[i].ActionInternal = player != null ? GetKeyBindingAction(action) : null;
+                Keys[i].ActionInternal = player?.GetKeyBindingAction(action);
 
                 return;
             }
 
-        if (player == null)
-            Keys.Add(new KeyBinding() { Alt = alt, Ctrl = ctrl, Shift = shift, Key = key, IsKeyUp = isKeyUpBinding.Contains(action), Action = action });
-        else
-            Keys.Add(new KeyBinding() { Alt = alt, Ctrl = ctrl, Shift = shift, Key = key, IsKeyUp = isKeyUpBinding.Contains(action), Action = action, ActionInternal = GetKeyBindingAction(action) });
+        Keys.Add(new()
+        {
+            Alt = alt,
+            Ctrl = ctrl,
+            Shift = shift,
+            Key = key,
+            IsKeyUp = isKeyUpBinding.Contains(action),
+            Action = action,
+            ActionInternal = player?.GetKeyBindingAction(action)
+        });
     }
 
     public bool Exists(string actionName)
@@ -293,6 +367,8 @@ public class KeysConfig
 
         Add(Key.V, KeyBindingAction.OpenFromClipboard, false, true);
         Add(Key.O, KeyBindingAction.OpenFromFileDialog);
+        Add(Key.Up, KeyBindingAction.OpenPrevItem, false, true);
+        Add(Key.Down, KeyBindingAction.OpenNextItem, false, true);
         Add(Key.C, KeyBindingAction.CopyToClipboard, false, true);
         Add(Key.C, KeyBindingAction.CopyItemToClipboard, false, false, true);
 
@@ -328,7 +404,7 @@ public class KeysConfig
         Add(Key.A, KeyBindingAction.ToggleAudio, false, false, true);
         Add(Key.S, KeyBindingAction.ToggleSubtitles, false, false, true);
         Add(Key.V, KeyBindingAction.ToggleVideo, false, false, true);
-        Add(Key.H, KeyBindingAction.ToggleVideoAcceleration, false, true);
+        Add(Key.H, KeyBindingAction.ToggleHWAcceleration, false, true);
 
         Add(Key.T, KeyBindingAction.TakeSnapshot, false, true);
         Add(Key.R, KeyBindingAction.ToggleRecording, false, true);
@@ -346,165 +422,14 @@ public class KeysConfig
         Add(Key.Q, KeyBindingAction.Stop, false, true, false);
     }
 
-    private Action GetKeyBindingAction(KeyBindingAction action)
-    {
-        switch (action)
-        {
-            case KeyBindingAction.ForceIdle:
-                return player.Activity.ForceIdle;
-            case KeyBindingAction.ForceActive:
-                return player.Activity.ForceActive;
-            case KeyBindingAction.ForceFullActive:
-                return player.Activity.ForceFullActive;
-
-            case KeyBindingAction.AudioDelayAdd:
-                return player.Config.Audio.DelayAdd;
-            case KeyBindingAction.AudioDelayRemove:
-                return player.Config.Audio.DelayRemove;
-            case KeyBindingAction.AudioDelayAdd2:
-                return player.Config.Audio.DelayAdd2;
-            case KeyBindingAction.AudioDelayRemove2:
-                return player.Config.Audio.DelayRemove2;
-            case KeyBindingAction.ToggleAudio:
-                return player.Config.Audio.Toggle;
-            case KeyBindingAction.ToggleMute:
-                return player.Config.Audio.ToggleMute;
-            case KeyBindingAction.VolumeUp:
-                return player.Config.Audio.VolumeUp;
-            case KeyBindingAction.VolumeDown:
-                return player.Config.Audio.VolumeDown;
-
-            case KeyBindingAction.ToggleVideo:
-                return player.Config.Video.Toggle;
-            case KeyBindingAction.ToggleKeepRatio:
-                return player.Config.Video.ToggleKeepRatio;
-            case KeyBindingAction.ToggleVideoAcceleration:
-                return player.Config.Video.ToggleVideoAcceleration;
-
-            case KeyBindingAction.SubtitlesDelayAdd:
-                return player.Config.Subtitles.DelayAdd;
-            case KeyBindingAction.SubtitlesDelayRemove:
-                return player.Config.Subtitles.DelayRemove;
-            case KeyBindingAction.SubtitlesDelayAdd2:
-                return player.Config.Subtitles.DelayAdd2;
-            case KeyBindingAction.SubtitlesDelayRemove2:
-                return player.Config.Subtitles.DelayRemove2;
-            case KeyBindingAction.ToggleSubtitles:
-                return player.Config.Subtitles.Toggle;
-
-            case KeyBindingAction.OpenFromClipboard:
-                return player.OpenFromClipboard;
-
-            case KeyBindingAction.OpenFromFileDialog:
-                return player.OpenFromFileDialog;
-
-            case KeyBindingAction.CopyToClipboard:
-                return player.CopyToClipboard;
-
-            case KeyBindingAction.CopyItemToClipboard:
-                return player.CopyItemToClipboard;
-
-            case KeyBindingAction.Flush:
-                return player.Flush;
-
-            case KeyBindingAction.Stop:
-                return player.Stop;
-
-            case KeyBindingAction.Pause:
-                return player.Pause;
-
-            case KeyBindingAction.Play:
-                return player.Play;
-
-            case KeyBindingAction.TogglePlayPause:
-                return player.TogglePlayPause;
-
-            case KeyBindingAction.TakeSnapshot:
-                return player.Commands.TakeSnapshotAction;
-
-            case KeyBindingAction.NormalScreen:
-                return player.NormalScreen;
-
-            case KeyBindingAction.FullScreen:
-                return player.FullScreen;
-
-            case KeyBindingAction.ToggleFullScreen:
-                return player.ToggleFullScreen;
-
-            case KeyBindingAction.ToggleRecording:
-                return player.ToggleRecording;
-
-            case KeyBindingAction.ToggleReversePlayback:
-                return player.ToggleReversePlayback;
-
-            case KeyBindingAction.ToggleLoopPlayback:
-                return player.ToggleLoopPlayback;
-
-            case KeyBindingAction.ToggleSeekAccurate:
-                return player.ToggleSeekAccurate;
-
-            case KeyBindingAction.SeekBackward:
-                return player.SeekBackward;
-
-            case KeyBindingAction.SeekForward:
-                return player.SeekForward;
-
-            case KeyBindingAction.SeekBackward2:
-                return player.SeekBackward2;
-
-            case KeyBindingAction.SeekForward2:
-                return player.SeekForward2;
-
-            case KeyBindingAction.SeekBackward3:
-                return player.SeekBackward3;
-
-            case KeyBindingAction.SeekForward3:
-                return player.SeekForward3;
-
-            case KeyBindingAction.SeekToStart:
-                return player.SeekToStart;
-
-            case KeyBindingAction.SeekToEnd:
-                return player.SeekToEnd;
-
-            case KeyBindingAction.SpeedAdd:
-                return player.SpeedUp;
-
-            case KeyBindingAction.SpeedAdd2:
-                return player.SpeedUp2;
-
-            case KeyBindingAction.SpeedRemove:
-                return player.SpeedDown;
-
-            case KeyBindingAction.SpeedRemove2:
-                return player.SpeedDown2;
-
-            case KeyBindingAction.ShowPrevFrame:
-                return player.ShowFramePrev;
-
-            case KeyBindingAction.ShowNextFrame:
-                return player.ShowFrameNext;
-
-            case KeyBindingAction.ZoomIn:
-                return player.Config.Video.ZoomIn;
-
-            case KeyBindingAction.ZoomOut:
-                return player.Config.Video.ZoomOut;
-
-            case KeyBindingAction.ResetAll:
-                return player.ResetAll;
-        }
-
-        return null;
-    }
-    private static HashSet<KeyBindingAction> isKeyUpBinding = new()
-    {
-        // TODO: Should Fire once one KeyDown and not again until KeyUp is fired (in case of Tasks keep track of already running actions?)
-
+    static HashSet<KeyBindingAction> isKeyUpBinding = new()
+    {   // TODO: Should Fire once one KeyDown and not again until KeyUp is fired (in case of Tasks keep track of already running actions?)
         // Having issues with alt/ctrl/shift (should save state of alt/ctrl/shift on keydown and not checked on keyup)
 
         { KeyBindingAction.OpenFromClipboard },
         { KeyBindingAction.OpenFromFileDialog },
+        { KeyBindingAction.OpenNextItem },
+        { KeyBindingAction.OpenPrevItem },
         { KeyBindingAction.CopyToClipboard },
         { KeyBindingAction.TakeSnapshot },
         { KeyBindingAction.NormalScreen },
@@ -513,7 +438,7 @@ public class KeysConfig
         { KeyBindingAction.ToggleAudio },
         { KeyBindingAction.ToggleVideo },
         { KeyBindingAction.ToggleKeepRatio },
-        { KeyBindingAction.ToggleVideoAcceleration },
+        { KeyBindingAction.ToggleHWAcceleration },
         { KeyBindingAction.ToggleSubtitles },
         { KeyBindingAction.ToggleMute },
         { KeyBindingAction.TogglePlayPause },
@@ -537,6 +462,7 @@ public class KeysConfig
         { KeyBindingAction.ResetAll }
     };
 }
+/// <summary>A saved keyboard gesture and action identifier that can be connected to a runtime command.</summary>
 public class KeyBinding
 {
     public bool Alt { get; set; }
@@ -548,11 +474,9 @@ public class KeyBinding
     string actionName;
     public bool IsKeyUp { get; set; }
 
-    /// <summary>
-    /// Sets action for custom key binding
-    /// </summary>
-    /// <param name="action"></param>
-    /// <param name="isKeyUp"></param>
+    /// <summary>Registers a custom runtime delegate and sets the saved key-up or key-down trigger.</summary>
+    /// <param name="action">Delegate to invoke for this shortcut.</param>
+    /// <param name="isKeyUp">True to invoke the action on key release.</param>
     public void SetAction(Action action, bool isKeyUp)
     {
         ActionInternal = action;
@@ -562,9 +486,8 @@ public class KeyBinding
     internal Action ActionInternal;
 }
 
-// NOTE: To be able to support compatibility with previous config versions add new to end?
 public enum KeyBindingAction
-{
+{   // NOTE: To be able to support compatibility with previous config versions add new to end
     Custom,
     ForceIdle, ForceActive, ForceFullActive,
 
@@ -579,7 +502,7 @@ public enum KeyBindingAction
     ToggleAudio, ToggleVideo, ToggleSubtitles,
 
     ToggleKeepRatio,
-    ToggleVideoAcceleration,
+    ToggleHWAcceleration,
     ToggleRecording,
     ToggleSeekAccurate, SeekForward, SeekBackward, SeekForward2, SeekBackward2, SeekForward3, SeekBackward3,
     SpeedAdd, SpeedAdd2, SpeedRemove, SpeedRemove2,
@@ -589,4 +512,5 @@ public enum KeyBindingAction
     ZoomIn, ZoomOut,
 
     SeekToStart, SeekToEnd,
+    OpenNextItem, OpenPrevItem,
 }

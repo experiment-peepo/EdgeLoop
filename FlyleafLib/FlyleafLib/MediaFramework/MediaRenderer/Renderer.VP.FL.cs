@@ -1,10 +1,11 @@
-using FlyleafLib.MediaFramework.MediaFrame;
+﻿using FlyleafLib.MediaFramework.MediaFrame;
+using System.Diagnostics;
 using System.Numerics;
-using System.Runtime.InteropServices;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
 using Vortice.Mathematics;
+using ID3D11Texture2D = Vortice.Direct3D11.ID3D11Texture2D;
 
 namespace FlyleafLib.MediaFramework.MediaRenderer;
 
@@ -25,10 +26,24 @@ public unsafe partial class Renderer
     ID3D11Buffer    psBuffer;
     PSBufferType    psData    = new();
 
+    ID3D11Buffer    hdrBuffer;
+    HDRBufferType   hdrData   = new();
+    bool            checkHDRConfig;
+
+    ID3D11Buffer    doviBuffer;
+
     ID3D11Buffer    vsBuffer;
     VSBufferType    vsData    = new();
-
     bool            vflip;
+
+    ID3D11Buffer    panoBuffer;
+    PanoBufferType  panoData  = new() { PanoParams = new(0, 0, 0.5f, 90f), AspectRatio = 1.778f };
+
+    ID3D11ShaderResourceView
+                    iccSrv;
+    ID3D11Texture2D iccTxt;
+    static readonly nint    // TBR: But consider global support not just here* OpenMonitorProfile(SwapChain.Monitor.Hwnd)
+                    iccDst  = NativeMethods.OpenSRgbProfile();
 
     static InputElementDescription[] inputElements =
     {
@@ -87,8 +102,120 @@ public unsafe partial class Renderer
         }
     };
 
+    static BufferDescription psDesc = new()
+    {
+        Usage           = ResourceUsage.Default,
+        BindFlags       = BindFlags.ConstantBuffer,
+        CPUAccessFlags  = CpuAccessFlags.None,
+        ByteWidth       = (uint)sizeof(PSBufferType)
+    };
+
+    struct PSBufferType
+    {
+        public int   CoeffsIndex;
+        public float Brightness;    // -0.5  to 0.5     (0.0 default)
+        public float Contrast;      //  0.0  to 2.0     (1.0 default)
+        public float Hue;           // -3.14 to 3.14    (0.0 default)
+
+        public float Saturation;    //  0.0  to 2.0     (1.0 default)
+        public float UVOffset;
+        Vector2 pad;
+
+        public PSBufferType()
+        {
+            Brightness = 0;
+            Contrast = 1;
+            Hue = 0;
+            Saturation = 1;
+        }
+    }
+
+    static BufferDescription hdrDesc = new()
+    {
+        Usage           = ResourceUsage.Default,
+        BindFlags       = BindFlags.ConstantBuffer,
+        CPUAccessFlags  = CpuAccessFlags.None,
+        ByteWidth       = (uint)sizeof(HDRBufferType)
+    };
+
+    struct HDRBufferType
+    {
+        public ToneSplineParams Spline; // 6 floats
+        public float SourceMinNits;
+        public float SourcePeakNits;
+
+        public float TargetMinNits;
+        public float TargetPeakNits;
+        public int   NativeOutput;
+        public float HLGGamma;
+
+        public float BT1886BlackRoot;
+        public float BT1886InvRange;
+        public float GamutMinPQ;
+        public float GamutInvRangePQ;
+
+        public HDRBufferType()
+        {
+            TargetMinNits = 0.203f;
+            TargetPeakNits = 203;
+            HLGGamma = 1.2f * MathF.Pow(1.111f, MathF.Log2(TargetPeakNits / 1000.0f));
+        }
+    }
+
+    struct ToneSplineParams
+    {
+        public float SrcPivot;
+        public float DstPivot;
+        public float Pa;
+        public float Slope;
+
+        public float Qa;
+        public float Qb;
+    }
+
+    static BufferDescription vsDesc = new()
+    {
+        Usage           = ResourceUsage.Default,
+        BindFlags       = BindFlags.ConstantBuffer,
+        CPUAccessFlags  = CpuAccessFlags.None,
+        ByteWidth       = (uint)sizeof(VSBufferType)
+    };
+
+    struct VSBufferType
+    {
+        public Matrix4x4    Matrix; // Rotation | HV Flip
+        public Vector4      Crop;
+
+        public VSBufferType()
+        {
+            Matrix = Matrix4x4.Identity;
+            Crop = new(0, 0, 1, 1);
+        }
+    }
+
+    static BufferDescription panoDesc = new()
+    {
+        Usage           = ResourceUsage.Default,
+        BindFlags       = BindFlags.ConstantBuffer,
+        CPUAccessFlags  = CpuAccessFlags.None,
+        ByteWidth       = (uint)sizeof(PanoBufferType)
+    };
+
+    struct PanoBufferType
+    {
+        public Vector4 PanoParams;  // yaw degrees, pitch degrees, zoom, fov degrees
+        public float AspectRatio;
+        Vector3 pad;
+        public Vector4 SourceRegion;
+    }
+
     void FLInit()
     {
+        Debug.Assert(sizeof(PSBufferType) % 16 == 0);
+        Debug.Assert(sizeof(HDRBufferType) % 16 == 0);
+        Debug.Assert(sizeof(VSBufferType) % 16 == 0);
+        Debug.Assert(sizeof(PanoBufferType) % 16 == 0);
+
         for (int i = 0; i < txtDesc.Length; i++)
         {   // TBR: For SW disposing per frame... Immutable might not worth it (D3 requires RenderTarget / Default usage)
             txtDesc[i].Usage = ResourceUsage.Default;
@@ -109,6 +236,9 @@ public unsafe partial class Renderer
     {
         vsBuffer = device.CreateBuffer(vsDesc);
         psBuffer = device.CreateBuffer(psDesc);
+        hdrBuffer = device.CreateBuffer(hdrDesc);
+        doviBuffer = device.CreateBuffer(doviDesc);
+        panoBuffer = device.CreateBuffer(panoDesc);
         vertexBuffer = device.CreateBuffer<float>(vertexBufferData, vertexBufferDesc);
         inputLayout = device.CreateInputLayout(inputElements, ShaderCompiler.VSBlob);
         samplerLinear = device.CreateSamplerState(samplerLinearDesc);
@@ -121,10 +251,18 @@ public unsafe partial class Renderer
         blendStateAlpha = device.CreateBlendState(blendDesc);
         psShader["rgba"] = ShaderCompiler.CompilePS(device, "rgba", "color = float4(Texture1.Sample(Sampler, input.Texture).rgba);");
 
+        iccTxt = device.CreateTexture2D(Format.R16G16B16A16_UNorm, 33 * 33, 33);
+        iccSrv = device.CreateShaderResourceView(iccTxt);
+        context.PSSetShaderResource(4, iccSrv);
+
         context.IASetVertexBuffer(0, vertexBuffer, sizeof(float) * 5);
         context.IASetInputLayout(inputLayout);
         context.IASetPrimitiveTopology(PrimitiveTopology.TriangleList);
         context.PSSetConstantBuffer(0, psBuffer);
+        context.PSSetConstantBuffer(1, hdrBuffer);
+        context.PSSetConstantBuffer(2, doviBuffer);
+        context.PSSetConstantBuffer(3, panoBuffer);
+        context.UpdateSubresource(hdrData, hdrBuffer);
         context.VSSetConstantBuffer(0, vsBuffer);
         context.VSSetShader(vsMain);
         context.PSSetSampler(0, samplerLinear);
@@ -136,6 +274,10 @@ public unsafe partial class Renderer
     {
         SetViewport(ControlWidth, ControlHeight);
         context.RSSetViewport(Viewport);
+
+        // Update pano aspectRatio when viewport changes
+        if (Pano360._enabled)
+            vpRequests |= VPRequestType.UpdatePano;
     }
     void FLSetRotationFlip()
     {
@@ -143,11 +285,11 @@ public unsafe partial class Renderer
 
         vsData.Matrix = Matrix4x4.CreateFromYawPitchRoll(0.0f, 0.0f, (float)(Math.PI / 180 * rotation));
 
-        vflip = ucfg.vflip ^ scfg.VFlip;
+        vflip = userVFlip ^ scfg.VFlip;
 
-        if (ucfg.hflip || vflip)
+        if (userHFlip || vflip)
         {
-            vsData.Matrix *= Matrix4x4.CreateScale(ucfg.hflip ? -1 : 1, vflip ? -1 : 1, 1);
+            vsData.Matrix *= Matrix4x4.CreateScale(userHFlip ? -1 : 1, vflip ? -1 : 1, 1);
             context.RSSetState(rsStateHVFlip);
         }
         else
@@ -157,89 +299,142 @@ public unsafe partial class Renderer
     }
     void FLSetCrop()
     {
-        crop = scfg.Crop + ucfg.crop;
-        VisibleWidth = scfg.txtWidth - crop.Width;
-        VisibleHeight = scfg.txtHeight - crop.Height;
+        uint sourceWidth;
+        uint sourceHeight;
+        CropRect sourceCrop;
 
-        if (VideoProcessor == VideoProcessors.SwsScale &&
-            (scfg.Cropping.HasFlag(Cropping.Codec) || scfg.Cropping.HasFlag(Cropping.Texture)))
-        {   // SwsScale does codec's cropping and we don't use texture cropping
-            crop = scfg.cropStream + ucfg.crop;
-
-            var totalWidth  = VisibleWidth  + scfg.cropStream.Width;
-            var totalHeight = VisibleHeight + scfg.cropStream.Height;
-
-            vsData.Crop = new()
-            {
-                X = crop.Left / ((float)totalWidth),
-                Y = crop.Top / ((float)totalHeight),
-                Z = (totalWidth - crop.Right) / ((float)totalWidth),
-                W = (totalHeight - crop.Bottom) / ((float)totalHeight)
-            };
+        if (VideoProcessor == VideoProcessors.SwsScale)
+        {
+            sourceWidth = swsWidth;
+            sourceHeight = swsHeight;
+            sourceCrop = swsCrop;
         }
         else
-            vsData.Crop = new()
-            {
-                X = crop.Left / (float)scfg.txtWidth,
-                Y = crop.Top / (float)scfg.txtHeight,
-                Z = (scfg.txtWidth - crop.Right) / (float)scfg.txtWidth, //1.0f - (right  / (float)textWidth),
-                W = (scfg.txtHeight - crop.Bottom) / (float)scfg.txtHeight //1.0f - (bottom / (float)textHeight)
-            };
+        {
+            sourceWidth = scfg.txtWidth;
+            sourceHeight = scfg.txtHeight;
+            sourceCrop = scfg.Crop;
+        }
 
-        var alphaPos = ucfg._SplitFrameAlphaPosition;
+        crop = sourceCrop + userCrop;
+        VisibleWidth = sourceWidth - crop.Width;
+        VisibleHeight = sourceHeight - crop.Height;
+
+        vsData.Crop = new()
+        {
+            X = crop.Left / (float)sourceWidth,
+            Y = crop.Top / (float)sourceHeight,
+            Z = (sourceWidth - crop.Right) / (float)sourceWidth,
+            W = (sourceHeight - crop.Bottom) / (float)sourceHeight
+        };
+
+        var alphaPos = splitFrameAlphaPosition;
+
         if (alphaPos != SplitFrameAlphaPosition.None)
         {
-            if (alphaPos == SplitFrameAlphaPosition.Left || alphaPos == SplitFrameAlphaPosition.Right)
+            if (alphaPos is SplitFrameAlphaPosition.Left or SplitFrameAlphaPosition.Right)
                 VisibleWidth /= 2;
-            else if (alphaPos == SplitFrameAlphaPosition.Top || alphaPos == SplitFrameAlphaPosition.Bottom)
+            else
                 VisibleHeight /= 2;
         }
 
         SetVisibleSizeAndRatioHelper();
 
-        vpRequests &= ~VPRequestType.Crop;
         vpRequests |= VPRequestType.Viewport | VPRequestType.UpdateVS;
     }
-    void FLSetHDRtoSDR()
+
+    internal void FLUpdateTargetNitsConfig(bool hdr)
     {
-        psData.Tonemap = ucfg.HDRtoSDRMethod;
-
-        switch (psData.Tonemap)
+        if (hdr == hdrSwapchain && UsesDisplayMapping)
         {
-            case HDRtoSDRMethod.Hable:
-                psData.HDRTone = 10_000f / ucfg.SDRDisplayNits;
-                break;
+            FLUpdateTargetNits();
+            RenderRequest();
+        }
+        else
+            checkHDRConfig = true;
+    }
+    void FLUpdateTargetNits()
+    {
+        checkHDRConfig = false;
 
-            case HDRtoSDRMethod.Reinhard:
-                psData.HDRTone = (10_000f / ucfg.SDRDisplayNits) / 2f;
-                break;
+        float autoTargetPeak;
+        float autoTargetMin;
+        float configTargetPeak;
+        float configTargetMin;
 
-            case HDRtoSDRMethod.Aces:
-                psData.HDRTone = (10_000f / ucfg.SDRDisplayNits) / 7f;
-                break;
+        if (hdrSwapchain)
+        {
+            autoTargetPeak = float.IsFinite(autoHDRPeakNits) && autoHDRPeakNits > 0 ? autoHDRPeakNits : 1000.0f;
+            autoTargetMin = float.IsFinite(autoHDRMinNits) && autoHDRMinNits >= 0 ? autoHDRMinNits : 0.0f;
+            configTargetPeak = ucfg.TargetHDRPeakNits;
+            configTargetMin = ucfg.TargetHDRMinNits;
+            hdrData.NativeOutput = 1;
+        }
+        else
+        {
+            autoTargetPeak = float.IsFinite(autoSDRPeakNits) && autoSDRPeakNits > 0 ? autoSDRPeakNits : 203.0f;
+            autoTargetMin = float.IsFinite(autoSDRMinNits) && autoSDRMinNits >= 0 ? autoSDRMinNits : 0.203f;
+            configTargetPeak = ucfg.TargetSDRPeakNits;
+            configTargetMin = ucfg.TargetSDRMinNits;
+            hdrData.NativeOutput = 0;
         }
 
-        vpRequests &= ~VPRequestType.HDRtoSDR;
-        vpRequests |= VPRequestType.UpdatePS;
+        var target = DisplayLuminanceRange.Resolve(configTargetMin, configTargetPeak, autoTargetMin, autoTargetPeak, hdrSwapchain);
+        hdrData.TargetPeakNits = target.Peak;
+        hdrData.TargetMinNits = target.Minimum;
+
+        hdrData.BT1886BlackRoot = MathF.Pow(hdrData.TargetMinNits / hdrData.TargetPeakNits, 1.0f / 2.4f);
+        hdrData.BT1886InvRange = 1.0f / (1.0f - hdrData.BT1886BlackRoot);
+
+        if (hdrData.NativeOutput == 0)
+            FLGamutUpdateTarget(isDovi && doviAppliedData?.IsCM4 == true
+                ? doviAppliedData.SourceGamut : DoviTargetGamut.Unknown);
+
+        hdrData.HLGGamma = hdrData.TargetPeakNits >= 400.0f && hdrData.TargetPeakNits <= 2000.0f ?
+            1.2f + 0.42f * MathF.Log10(hdrData.TargetPeakNits / 1000.0f) :          // BT.2100-3
+            1.2f * MathF.Pow(1.111f, MathF.Log2(hdrData.TargetPeakNits / 1000.0f)); // BT.2100-3 extended range
+
+        if (hdrHasStats && (!isDovi || DoviUseHDRDetect || doviL1Nits == null))
+        {
+            FLHDRApply();
+            Interlocked.And(ref pendingVPRequests, ~(int)VPRequestType.UpdateHDR);
+        }
+        else
+            VPRequest(VPRequestType.UpdateHDR, execute: false);
+
+        TargetDynamicRange = $"{(hdrSwapchain ? "HDR" : "SDR")} ({hdrData.TargetMinNits:F2}/{hdrData.TargetPeakNits:F0})";
+        RaiseUI(nameof(TargetDynamicRange));
+    }
+    void FLSetPano360() => FLSetPano360(Viewport.Width, Viewport.Height);
+    void FLSetPano360(float width, float height)
+    {
+        var pano = Pano360;
+        panoData.PanoParams = new((float)pano._yaw, (float)pano._pitch, (float)pano._zoom, (float)pano._fov);
+        float ratio = width > 0 && height > 0 ? width / height : 1.0f;
+        // The camera's horizontal axis becomes vertical after an output quarter turn.
+        panoData.AspectRatio = rotation == 90 || rotation == 270 ? 1 / ratio : ratio;
+        panoData.SourceRegion = vsData.Crop;
+        context.UpdateSubresource(panoData, panoBuffer);
     }
 
     void FLProcessRequests()
     {
-        while (vpRequestsIn != VPRequestType.Empty)
+        while ((vpRequests = TakeVPRequests()) != VPRequestType.Empty)
         {
-            if (vpRequestsIn.HasFlag(VPRequestType.ReConfigVP))
+            if (vpRequests.HasFlag(VPRequestType.ReConfigVP))
             {
+                VPRequest(vpRequests & ~VPRequestType.ReConfigVP, execute: false);
                 VPSwitch();
-
                 if (VideoProcessor == VideoProcessors.D3D11)
                     return;
+                continue;
             }
-
-            vpRequests = vpRequestsIn;
-            vpRequestsIn = VPRequestType.Empty;
 
             if (vpRequests.HasFlag(VPRequestType.BackColor))
                 SetBackColor();
+
+            if (vpRequests.HasFlag(VPRequestType.UpdateSwapChain))
+                UpdateHDRSwapchain();
 
             if (vpRequests.HasFlag(VPRequestType.RotationFlip))
                 FLSetRotationFlip();
@@ -256,46 +451,97 @@ public unsafe partial class Renderer
             if (vpRequests.HasFlag(VPRequestType.Viewport))
                 FLSetViewport();
 
-            if (vpRequests.HasFlag(VPRequestType.HDRtoSDR))
-                FLSetHDRtoSDR();
-
             if (vpRequests.HasFlag(VPRequestType.UpdateVS))
                 context.UpdateSubresource(vsData, vsBuffer);
 
             if (vpRequests.HasFlag(VPRequestType.UpdatePS))
                 context.UpdateSubresource(psData, psBuffer);
 
+            if (vpRequests.HasFlag(VPRequestType.UpdateHDR))
+                context.UpdateSubresource(hdrData, hdrBuffer);
+
+            if (vpRequests.HasFlag(VPRequestType.UpdatePano))
+                FLSetPano360();
         }
     }
+    void FLBindVideoFrame(VideoFrame frame, bool resetHDRDetect)
+    {
+        context.PSSetShaderResources(0, frame.SRV);
+        bool felReady = felShaderEnabled && FLBindFEL(frame);
+
+        if (!isPQSpline)
+            return;
+
+        if (resetHDRDetect)
+            FLHDRDetectReset();
+
+        if (isDovi)
+            FLDoviApply(frame, felReady);
+        else
+            FLHDRDetect();
+    }
+
     void FLRender(VideoFrame frame)
     {
         if (frame.SRV == null)
-            return; // TODO: when we dispose on switch
+            return;
 
-        context.OMSetRenderTargets(CurrentRtv);
-        context.ClearRenderTargetView(CurrentRtv, ucfg.flBackColor);
-        context.PSSetShaderResources(0, frame.SRV);
+        PostProcessSurface surface = null;
+        if (postProcessor != null && SwapChain.BackBuffer is { } backBuffer)
+            surface = GetPostProcessSurface(false, backBuffer.Description.Width, backBuffer.Description.Height);
+
+        var target = surface?.RTV ?? SwapChain.BackBufferRtv;
+
+        context.OMSetRenderTargets(target);
+        context.ClearRenderTargetView(target, ucfg.flBackColor);
+        FLBindVideoFrame(frame, false);
+
+        // HDRDetect may have restored the swapchain RTV.
+        if (surface != null)
+            context.OMSetRenderTargets(target);
+
         context.Draw(6, 0);
+
+        if (surface != null)
+        {
+            if (!RunPostProcessor(surface, SwapChain.BackBufferRtv,
+                surface.Width, surface.Height, Viewport, false))
+            {
+                context.OMSetRenderTargets(SwapChain.BackBufferRtv);
+                context.ClearRenderTargetView(SwapChain.BackBufferRtv, ucfg.flBackColor);
+                context.Draw(6, 0);
+            }
+            else
+                context.OMSetRenderTargets(SwapChain.BackBufferRtv);
+        }
 
         if (context2d != null)
             ucfg.OnD2DDraw(this, context2d);
 
         FLSubsRender();
     }
-    void FLRender(ID3D11ShaderResourceView[] srvs, ID3D11RenderTargetView rtv, Viewport view)
+
+    void FLRender(VideoFrame frame, ID3D11RenderTargetView rtv, Viewport view)
     {
+        FLBindVideoFrame(frame, true);
         context.OMSetRenderTargets(rtv);
         context.RSSetViewport(view);
-        context.PSSetShaderResources(0, srvs);
+        if (Pano360._enabled)
+            FLSetPano360(view.Width, view.Height);
+
         context.Draw(6, 0);
     }
 
     void FLDispose()
     {   // Called by Device Dispose only* (shared lock)
 
+        hdrSwapchain = false;
+        hdrData.NativeOutput = 0;
+
         // TODO: Dispose filters?*
         SwsDispose();
         SubsDispose();
+        FLHDRDispose();
 
         if (snapshot != null)
         {
@@ -310,6 +556,9 @@ public unsafe partial class Renderer
 
         vsBuffer.Dispose();
         psBuffer.Dispose();
+        hdrBuffer.Dispose();
+        doviBuffer.Dispose();
+        panoBuffer.Dispose();
         inputLayout.Dispose();
         vertexBuffer.Dispose();
         samplerLinear.Dispose();
@@ -318,58 +567,9 @@ public unsafe partial class Renderer
         vsSimple.Dispose();
         rsStateHVFlip.Dispose();
         blendStateAlpha.Dispose();
-    }
-
-    static BufferDescription psDesc = new()
-    {
-        Usage           = ResourceUsage.Default,
-        BindFlags       = BindFlags.ConstantBuffer,
-        CPUAccessFlags  = CpuAccessFlags.None,
-        ByteWidth       = (uint)(sizeof(PSBufferType) + (16 - (sizeof(PSBufferType) % 16)))
-    };
-
-    [StructLayout(LayoutKind.Sequential)]
-    struct PSBufferType
-    {
-        public int CoeffsIndex;
-
-        public float Brightness;    // -0.5  to 0.5     (0.0 default)
-        public float Contrast;      //  0.0  to 2.0     (1.0 default)
-        public float Hue;           // -3.14 to 3.14    (0.0 default)
-        public float Saturation;    //  0.0  to 2.0     (1.0 default)
-
-        public float UVOffset;
-        public HDRtoSDRMethod Tonemap;
-        public float HDRTone;
-
-        public PSBufferType()
-        {
-            Brightness = 0;
-            Contrast = 1;
-            Hue = 0;
-            Saturation = 1;
-            Tonemap = HDRtoSDRMethod.Hable;
-        }
-    }
-
-    internal static BufferDescription vsDesc = new()
-    {
-        Usage           = ResourceUsage.Default,
-        BindFlags       = BindFlags.ConstantBuffer,
-        CPUAccessFlags  = CpuAccessFlags.None,
-        ByteWidth       = (uint)(sizeof(VSBufferType) + (16 - (sizeof(VSBufferType) % 16)))
-    };
-
-    [StructLayout(LayoutKind.Sequential)]
-    internal struct VSBufferType
-    {
-        public Matrix4x4    Matrix; // Rotation | HV Flip
-        public Vector4      Crop;
-
-        public VSBufferType()
-        {
-            Matrix = Matrix4x4.Identity;
-            Crop = new(0, 0, 1, 1);
-        }
+        iccSrv.Dispose();
+        iccTxt.Dispose();
+        FLGamutDispose();
+        checkHDRConfig = true;
     }
 }

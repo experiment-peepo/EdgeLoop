@@ -18,8 +18,12 @@ public unsafe partial class Renderer
         {
             renderRequestAt = DateTime.UtcNow.Ticks;
 
-            if ((frame != null || forceClear))
+            if (frame != null || forceClear)
+            {
+                if (isPQSpline)
+                    FLHDRDetectReset();
                 Frames.SetRendererFrame(frame);
+            }
 
             if (!SwapChain.CanPresent || !canIdle || isIdleRunning)
                 return;
@@ -185,7 +189,20 @@ public unsafe partial class Renderer
             lastRenderAt = DateTime.UtcNow.Ticks;
 
             if (!SwapChain.CanPresent)
+            {
+                if (Config.Playback.SnapshotAlways)
+                    lock (lockRenderLoops)
+                    {
+                        if (VideoProcessor == VideoProcessors.D3D11)
+                            D3ProcessRequests();
+                        else
+                            FLProcessRequests();
+
+                        Frames.SetRendererFrame(frame);
+                    }
+
                 return true;
+            }
 
             lock (lockRenderLoops)
             {

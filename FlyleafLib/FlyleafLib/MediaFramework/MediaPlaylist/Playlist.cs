@@ -139,6 +139,7 @@ public class Playlist : NotifyPropertyChanged
 
         decoder.ScrapeItem(item);
 
+        // TBR: This can cause issues - UI is not sync so might not work properly
         UIInvokeIfRequired(() =>
         {
             BindingOperations.EnableCollectionSynchronization(item.ExternalAudioStreams, item.lockExternalStreams);

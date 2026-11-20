@@ -43,6 +43,7 @@ public unsafe partial class Renderer : NotifyPropertyChanged
     public GPUAdapter GPUAdapter => gpuAdapter;
     GPUAdapter gpuAdapter;
     ID3D11DeviceContext     context;
+    internal void UnsetRenderTargets() => context?.UnsetRenderTargets();
     bool                    forceWarp;
 
     internal LogHandler     Log;
@@ -59,7 +60,8 @@ public unsafe partial class Renderer : NotifyPropertyChanged
         Config = videoDecoder.Config;
         this.player = player;
         ucfg = Config.Video;
-        Frames = new(Config.Decoder);
+        Pano360 = new(this);
+        Frames = new(Config.Video);
         SwapChain = new(this);
 
         Init();
@@ -156,7 +158,7 @@ public unsafe partial class Renderer : NotifyPropertyChanged
                         if (!gpuAdapters.TryGetValue(desc.Luid, out gpuAdapter))
                         {
                             dxgiExists = false;
-                            gpuAdapter = Engine.Video.GetGPUAdapter(DXGIAdapter, desc);
+                            gpuAdapter = VideoEngine.GetGPUAdapter(DXGIAdapter, desc);
                             gpuAdapters.Add(GPUAdapter.Luid, GPUAdapter);
                         }
                 }
@@ -178,6 +180,7 @@ public unsafe partial class Renderer : NotifyPropertyChanged
 
         FLSetup();
         D3Setup();
+        PostProcessSetup();
         D3DImageInit();
 
         if (CanInfo)
@@ -256,6 +259,7 @@ public unsafe partial class Renderer : NotifyPropertyChanged
             if (!isDeviceReset)
                 RenderIdleStop(); // Ensures it didn't start again (after CanPresent = false)
             Frames.Dispose();
+            PostProcessDispose();
             D3Dispose();
             FLDispose();
             D3DImageDispose();

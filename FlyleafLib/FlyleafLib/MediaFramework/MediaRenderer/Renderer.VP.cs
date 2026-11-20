@@ -1,16 +1,70 @@
-using FlyleafLib.MediaFramework.MediaFrame;
+﻿using FlyleafLib.MediaFramework.MediaFrame;
 using FlyleafLib.MediaFramework.MediaStream;
+using System.Linq;
 using System.Text.Json.Serialization;
 using System.Windows;
 using Vortice.Direct3D11;
+using Vortice.DXGI;
 using Vortice.Mathematics;
+using static FlyleafLib.Utils.NativeMethods;
 using WPoint = System.Windows.Point;
 
 namespace FlyleafLib.MediaFramework.MediaRenderer;
 
-public unsafe partial class Renderer : IVP
+public unsafe partial class Renderer
 {
     public event EventHandler ViewportChanged;
+
+    /// <summary>Raised on the UI dispatcher after filter setup or processor reconfiguration.</summary>
+    public event EventHandler FiltersChanged;
+
+    public DisplayLuminanceSnapshot? GetDisplayLuminance()
+    {
+        lock (lockDevice)
+        {
+            if (D3Disposed || scfg == null)
+                return null;
+            return new(
+                DisplayLuminanceRange.Resolve(-1, -1, autoSDRMinNits, autoSDRPeakNits, false),
+                DisplayLuminanceRange.Resolve(ucfg.TargetSDRMinNits, ucfg.TargetSDRPeakNits, autoSDRMinNits, autoSDRPeakNits, false),
+                DisplayLuminanceRange.Resolve(-1, -1, autoHDRMinNits, autoHDRPeakNits, true),
+                DisplayLuminanceRange.Resolve(ucfg.TargetHDRMinNits, ucfg.TargetHDRPeakNits, autoHDRMinNits, autoHDRPeakNits, true),
+                hdrSwapchain, VideoProcessor != VideoProcessors.D3D11 && UsesDisplayMapping,
+                new(hdrData.TargetMinNits, hdrData.TargetPeakNits));
+        }
+    }
+
+    /// <summary>Available source pixels for user cropping, after source/padding crop and before split-alpha layout.</summary>
+    public (uint Width, uint Height) GetCropBounds()
+    {
+        lock (lockDevice)
+        {
+            if (D3Disposed || scfg == null)
+                return (0, 0);
+            var sourceWidth = VideoProcessor == VideoProcessors.SwsScale ? swsWidth : scfg.txtWidth;
+            var sourceHeight = VideoProcessor == VideoProcessors.SwsScale ? swsHeight : scfg.txtHeight;
+            var sourceCrop = VideoProcessor == VideoProcessors.SwsScale ? swsCrop : scfg.Crop;
+            return ((uint)Math.Max(0, (long)sourceWidth - sourceCrop.Left - sourceCrop.Right),
+                (uint)Math.Max(0, (long)sourceHeight - sourceCrop.Top - sourceCrop.Bottom));
+        }
+    }
+
+    /// <summary>Captures the active processor and references to its existing configuration filters.</summary>
+    public (VideoProcessors Processor, FLFilter[] FlyleafFilters, D3Filter[] D3D11Filters) GetVideoFilters()
+    {
+        lock (lockDevice)
+        {
+            if (D3Disposed || scfg == null)
+                return (VideoProcessors.Auto, [], []);
+            return (VideoProcessor, ucfg.FLFilters.Values.ToArray(), ucfg.D3Filters.Values.Where(f => f.Available).ToArray());
+        }
+    }
+
+    void NotifyFiltersChanged()
+    {
+        if (FiltersChanged != null)
+            UI(() => FiltersChanged?.Invoke(this, EventArgs.Empty));
+    }
 
     public VideoProcessors VideoProcessor { get; private set; } = VideoProcessors.Auto; // Ensures we catch the 'change' initially
     public Viewport Viewport { get; private set; }
@@ -31,18 +85,28 @@ public unsafe partial class Renderer : IVP
     internal double curRatio, keepRatio, fillRatio;
 
     bool            canFL, canD3;
-    VPRequestType   vpRequestsIn, vpRequests; // In: From User | ProcessRequests Copy
+    int             pendingVPRequests;
+    VPRequestType   vpRequests; // Render-thread work, including requests added by the current pass
 
-    internal unsafe delegate VideoFrame FillPlanesDelegate(ref AVFrame* frame);
+    float           autoSDRMinNits      = 0.203f;
+    float           autoSDRPeakNits     = 203;
+    float           autoHDRMinNits      = 0.0f;
+    float           autoHDRPeakNits     = 1000.0f;
+    bool            displayHDREnabled;
+    bool            hdrSwapchain;
+
+    internal delegate VideoFrame FillPlanesDelegate(ref AVFrame* frame);
     internal FillPlanesDelegate FillPlanes;
 
-    void IVP.VPRequest(VPRequestType request)
-        => VPRequest(request);
-    internal void VPRequest(VPRequestType request)
+    internal void VPRequest(VPRequestType request, bool execute = true)
     {
-        vpRequestsIn |= request;
-        RenderRequest();
+        Interlocked.Or(ref pendingVPRequests, (int)request);
+        if (execute)
+            RenderRequest();
     }
+
+    VPRequestType TakeVPRequests()
+        => (VPRequestType)Interlocked.Exchange(ref pendingVPRequests, 0);
 
     VideoProcessors VPSelection()
     {
@@ -67,30 +131,36 @@ public unsafe partial class Renderer : IVP
          * - Slow Performance (CPU/RAM)
          */
 
-        canD3 = vp != null && (VideoDecoder.VideoAccelerated ||
+        canD3 = vp != null && (VideoDecoder.HWAccelerated ||
             (!scfg.VFlip && scfg.PixelComp0Depth == 8));
 
-        canFL = VideoDecoder.VideoAccelerated ||
+        canFL = VideoDecoder.HWAccelerated ||
             (!scfg.PixelFormatDesc->flags.HasFlag(PixFmtFlags.Pal) && (!scfg.PixelFormatDesc->flags.HasFlag(PixFmtFlags.Be) || scfg.PixelComp0Depth <= 8));
 
-        if (ucfg.VideoProcessor == VideoProcessors.D3D11 && canD3)
+        // 360 Panoramic mode requires Flyleaf VP (custom pixel shader)
+        if (Pano360._enabled)
+            return canFL ? VideoProcessors.Flyleaf : VideoProcessors.SwsScale;
+
+        if (PreferredVideoProcessor == VideoProcessors.D3D11 && canD3)
             return VideoProcessors.D3D11;
 
-        if (ucfg.VideoProcessor == VideoProcessors.Flyleaf && canFL)
+        if (PreferredVideoProcessor == VideoProcessors.Flyleaf && canFL)
             return VideoProcessors.Flyleaf;
 
-        if (ucfg.VideoProcessor == VideoProcessors.SwsScale) // always support?
+        if (PreferredVideoProcessor == VideoProcessors.SwsScale) // always support?
             return VideoProcessors.SwsScale;
 
         // Auto Selection | TBR: (Maybe AutoD3D11, AutoFlyleaf or user selection with callback?)
 
-        var fieldType = ucfg.DeInterlace == DeInterlace.Auto ? scfg.FieldOrder : (VideoFrameFormat)ucfg.DeInterlace;
+        var fieldType = DeInterlace == DeInterlace.Auto ? scfg.FieldOrder : (VideoFrameFormat)DeInterlace;
 
-        if (canFL &&
-            // Alpha | Split Frame Alpha | HV Flip | BT.2020
-            (!canD3 || scfg.ColorSpace == ColorSpace.Bt2020 || ucfg.hflip || ucfg.vflip || ucfg.SplitFrameAlphaPosition != SplitFrameAlphaPosition.None || scfg.PixelFormatDesc->flags.HasFlag(PixFmtFlags.Alpha)) ||
+        bool requiresFL =
+            // Alpha | Split Frame Alpha | HV Flip | BT.2020/HDR
+            FLDoviSupported() || !canD3 || scfg.ColorSpace == ColorSpace.BT2020 || scfg.iccData != null || userHFlip || userVFlip || SplitFrameAlphaPosition != SplitFrameAlphaPosition.None || scfg.PixelFormatDesc->flags.HasFlag(PixFmtFlags.Alpha) ||
             // SW w/o Deinterlace | Super Resolution
-            (!VideoDecoder.VideoAccelerated && fieldType == VideoFrameFormat.Progressive && !ucfg.SuperResolution))
+            (!VideoDecoder.HWAccelerated && fieldType == VideoFrameFormat.Progressive && !ucfg.SuperResolution);
+
+        if (canFL && requiresFL)
             return VideoProcessors.Flyleaf;
 
         if (canD3)
@@ -105,59 +175,76 @@ public unsafe partial class Renderer : IVP
             Frames.SetRendererFrame(null);
 
         scfg = videoStream;
-        VPConfigHelper();
+        Interlocked.And(ref pendingVPRequests, ~(int)VPRequestType.ReConfigVP);
+        VPConfigHelper(true, frame);
 
         return true; // todo
     }
     internal void VPSwitchCheck()
     {   // User's VP Switch
-        if (scfg != null && ucfg.VideoProcessor != VideoProcessor && VideoProcessor != VPSelection())
+        if (scfg != null && VideoProcessor != VPSelection())
             VPRequest(VPRequestType.ReConfigVP);
     }
     void VPSwitch()
     {   // Called from ProcessRequests (RenderLoop) | lockRenderLoops
         bool wasRunning = VideoDecoder.IsRunning;
         if (wasRunning)
-            VideoDecoder.Pause(); // don't call me from lock (Frames) - deadlock with Runinternal
-
-        lock (Frames)
         {
-            var oldvp = VideoProcessor;
-            VPConfigHelper(request: false); // this comes from RenderLoop
+            Monitor.Exit(lockRenderLoops);
+            VideoDecoder.Pause();
+            Monitor.Enter(lockRenderLoops);
+        }
 
-            if (oldvp == VideoProcessor)
-                return;
-
-            if (!VideoDecoder.VideoAccelerated)
+        try
+        {
+            lock (Frames)
             {
-                Frames.Dispose();
+                var oldvp = VideoProcessor;
+                var avframe = Frames.RendererFrame != null ? Frames.RendererFrame.AVFrame : null;
+                if (avframe == null)
+                    avframe = Frames.Last != null ? Frames.Last.AVFrame : null;
 
-                // Clear Screen
-                context.OMSetRenderTargets(CurrentRtv);
-                context.ClearRenderTargetView(CurrentRtv, ucfg.flBackColor);
+                VPConfigHelper(request: false, avframe); // this comes from RenderLoop
 
-                if (D3DImage == null || !D3DImage.IsEnabled)
-                    SwapChain.Present(1, Vortice.DXGI.PresentFlags.None);
+                if (oldvp == VideoProcessor)
+                    return;
 
-                return;
+                if (!VideoDecoder.HWAccelerated)
+                {
+                    Frames.Dispose();
+
+                    // Clear Screen
+                    context.OMSetRenderTargets(SwapChain.BackBufferRtv);
+                    context.ClearRenderTargetView(SwapChain.BackBufferRtv, ucfg.flBackColor);
+                    if (D3DImage == null || !D3DImage.IsEnabled) // Fork: D3DImage frames are composed by WPF, not presented
+                        SwapChain.Present(1, PresentFlags.None);
+
+                    return;
+                }
+
+                bool renderFrameDone = false;
+                var curFrame = Frames.First;
+                while (curFrame != null)
+                {
+                    if (Frames.RendererFrame == curFrame)
+                        renderFrameDone = true;
+
+                    VPSwitchFrame(curFrame);
+                    curFrame = curFrame.Next;
+                }
+
+                if (!renderFrameDone && Frames.RendererFrame != null)
+                    VPSwitchFrame(Frames.RendererFrame);
             }
-
-            bool renderFrameDone = false;
-            var curFrame = Frames.First;
-            while (curFrame != null)
-            {
-                if (Frames.RendererFrame != curFrame)
-                    renderFrameDone = true;
-
-                VPSwitchFrame(curFrame);
-                curFrame = curFrame.Next;
-            }
-
-            if (!renderFrameDone && Frames.RendererFrame != null)
-                VPSwitchFrame(Frames.RendererFrame);
-
+        }
+        finally
+        {
             if (wasRunning)
+            {
+                Monitor.Exit(lockRenderLoops);
                 VideoDecoder.Start();
+                Monitor.Enter(lockRenderLoops);
+            }
         }
     }
     void VPSwitchFrame(VideoFrame mFrame)
@@ -188,12 +275,17 @@ public unsafe partial class Renderer : IVP
             }
         }
     }
-    void VPConfigHelper(bool request = true)
+    void VPConfigHelper(bool request, AVFrame* frame)
     {
-        vpRequestsIn &= ~VPRequestType.ReConfigVP;
+        if (scfg == null)
+            return;
+
         var oldVP       = VideoProcessor;
-        var vpRequests  = VPRequestType.RotationFlip | VPRequestType.Crop | VPRequestType.UpdatePS; // TBR: we should set them all here as we don't compare with previous states
+        var vpRequests  = VPRequestType.RotationFlip | VPRequestType.Crop | VPRequestType.UpdatePS | VPRequestType.UpdateSwapChain; // TBR: we should set them all here as we don't compare with previous states
         VideoProcessor = VPSelection();
+        isPQSpline = false;
+        isDovi = false;
+        DynamicRange = "SDR";
 
         if (CanTrace)
             Log.Trace($"Preparing planes for {scfg.PixelFormatStr} with {VideoProcessor}");
@@ -207,7 +299,7 @@ public unsafe partial class Renderer : IVP
                 D3FiltersSync();
             }
 
-            D3Config();
+            D3Config(frame);
         }
         else
         {
@@ -217,7 +309,7 @@ public unsafe partial class Renderer : IVP
 
                 if (oldVP == VideoProcessors.D3D11)
                 {
-                    SwapChain.VPOV?.Dispose();
+                    SwapChain.SwapChainVPOV?.Dispose();
 
                     if (psCase == PSCase.SWD3) // prev
                     {
@@ -235,20 +327,19 @@ public unsafe partial class Renderer : IVP
                 }
             }
 
-            FLSwsConfig();
+            FLSwsConfig(frame);
         }
 
         if (player != null)
         {
-            if (request)
-                VPRequest(vpRequests);
-            else
-                vpRequestsIn |= vpRequests;
+            RaiseUI(nameof(DynamicRange));
+
+            VPRequest(vpRequests, execute: request);
         }
         else // TBR: Extractor
         {
-            vpRequestsIn |= vpRequests;
-            vpRequestsIn &= ~VPRequestType.Resize; // No SwapChain
+            VPRequest(vpRequests & ~VPRequestType.Resize, execute: false);
+            Interlocked.And(ref pendingVPRequests, ~(int)VPRequestType.Resize); // No SwapChain
 
             if (VideoProcessor == VideoProcessors.D3D11)
                 D3ProcessRequests();
@@ -256,18 +347,152 @@ public unsafe partial class Renderer : IVP
                 FLProcessRequests();
         }
 
+        NotifyFiltersChanged();
         if (CanDebug)
             Log.Debug($"Prepared planes for {scfg.PixelFormatStr} with {VideoProcessor} [{psCase}]");
     }
 
-    void IVP.MonitorChanged(GPUOutput monitor)
+    internal void UpdateDisplay()
     {
-        ucfg.MaxVerticalResolutionAuto = monitor.Height;
-        ucfg.SDRDisplayNitsAuto = monitor.MaxLuminance;
-        // currently not used (int accurate instead of double)
-        //refreshRateTicks = (int)((1.0 / monitor.RefreshRate) * 1000 * 10000);
+        var output = GetCurrentOutput();
+        if (output == null)
+            return;
+
+        bool    updated         = false;
+        bool    hdrStateUpdated = false;
+        float   sdrMinNits      = 0.203f;
+        float   sdrPeakNits     = 203.0f;
+        float   hdrMinNits      = 0.0f;
+        float   hdrPeakNits     = 1000.0f;
+        bool    hdrEnabled      = false;
+
+        try
+        {
+            var desc = output.Description;
+
+            DisplayConfig.TryGetHDRInfo(desc.DeviceName, out var hdr);
+            hdrEnabled = hdr.Enabled;
+
+            IDXGIOutput6 output6;
+            try
+            { output6 = output.QueryInterfaceOrNull<IDXGIOutput6>(); }
+            finally { }
+
+            if (output6 != null)
+            {
+                var desc1 = output6.Description1;
+
+                sdrMinNits = desc1.MinLuminance;
+                if (!hdr.Supported)
+                    sdrPeakNits = desc1.MaxLuminance;
+
+                if (hdr.Supported)
+                {
+                    hdrMinNits = MathF.Max(desc1.MinLuminance, 0.0f);
+                    if (desc1.MaxLuminance > 0)
+                        hdrPeakNits = desc1.MaxLuminance;
+                }
+
+                var coord = desc1.DesktopCoordinates;
+                if (ucfg.MaxVerticalResolutionAuto != coord.Bottom - coord.Top)
+                {
+                    updated = true;
+                    ucfg.MaxVerticalResolutionAuto = coord.Bottom - coord.Top;
+                }
+
+                output6.Dispose();
+            }
+
+            // When Windows HDR is enabled, this is the white level used for SDR
+            // content on the HDR desktop. It remains our SDR-swapchain target.
+            if (hdr.Enabled && hdr.SDRWhiteNits is float sdrWhite)
+                sdrPeakNits = sdrWhite;
+        }
+        catch { }
+        finally
+        {
+            output.Dispose();
+        }
+
+        if (autoSDRMinNits != sdrMinNits)
+        {
+            autoSDRMinNits = sdrMinNits;
+            updated = true;
+        }
+
+        if (autoSDRPeakNits != sdrPeakNits)
+        {
+            autoSDRPeakNits = sdrPeakNits;
+            updated = true;
+        }
+
+        if (autoHDRMinNits != hdrMinNits)
+        {
+            autoHDRMinNits = hdrMinNits;
+            updated = true;
+        }
+
+        if (autoHDRPeakNits != hdrPeakNits)
+        {
+            autoHDRPeakNits = hdrPeakNits;
+            updated = true;
+        }
+
+        if (displayHDREnabled != hdrEnabled)
+        {
+            displayHDREnabled = hdrEnabled;
+            hdrStateUpdated = true;
+        }
+
+        if (hdrStateUpdated)
+            VPRequest(VPRequestType.UpdateSwapChain, execute: false);
+
+        if (updated)
+            FLUpdateTargetNits();
+
+        if (updated || hdrStateUpdated)
+            RenderRequest();
     }
-    void IVP.UpdateSize(int width, int height)
+
+    void UpdateHDRSwapchain()
+    {
+        bool enabled = CanHDRDisplay;
+
+        if (SwapChain.Disposed)
+            enabled = false;
+        else
+        {
+            if (SwapChain.HDR != enabled)
+                SwapChain.SetHDR(enabled);
+
+            enabled = SwapChain.HDR;
+        }
+
+        if (hdrSwapchain != enabled)
+        {
+            hdrSwapchain = enabled;
+            FLUpdateTargetNits();
+
+            if (VideoProcessor == VideoProcessors.D3D11)
+                vpRequests |= VPRequestType.Resize;
+        }
+    }
+
+    IDXGIOutput GetCurrentOutput()
+    {
+        nint monitor = MonitorFromWindow(SwapChain.ControlHwnd, MonitorOptions.MONITOR_DEFAULTTONEAREST);
+
+        for (uint i = 0; DXGIAdapter.EnumOutputs(i, out var output).Success; i++)
+        {
+            if (output.Description.Monitor == monitor)
+                return output;
+
+            output.Dispose();
+        }
+
+        return null;
+    }
+    internal void UpdateSize(int width, int height)
     {
         ControlWidth = width;
         ControlHeight = height;
@@ -277,75 +502,83 @@ public unsafe partial class Renderer : IVP
         SwapChain.SetSize();
 
         fillRatio = ControlWidth / (double)ControlHeight;
-        if (ucfg.AspectRatio == AspectRatio.Fill)
+        if (AspectRatio == AspectRatio.Fill)
             curRatio = fillRatio;
 
-        vpRequests &= ~VPRequestType.Resize;
         vpRequests |= VPRequestType.Viewport;
     }
     void SetViewport(int width, int height)
     {
-        int x, y, newWidth, newHeight, xZoomPixels, yZoomPixels;
-
-        var shouldFill = player?.Host?.Player_HandlesRatioResize(width, height);
-
-        if (curRatio < fillRatio)
+        int newWidth, newHeight;
+        if (OriginalSize && VisibleHeight > 0 && keepRatio > 0)
         {
-            newHeight = (int)(height * ucfg.zoom);
-            newWidth = (shouldFill.HasValue && shouldFill.Value) ? (int)(width * ucfg.zoom) : (int)(newHeight * curRatio);
+            // Correct non-square source pixels using the display ratio before rotation.
+            // Both the swap-chain surface and the resulting viewport use physical pixels.
+            int sourceHeight = (int)VisibleHeight;
+            int sourceWidth = Math.Max(1, (int)Math.Round(sourceHeight * keepRatio));
+            if (rotation is 90 or 270)
+                (sourceWidth, sourceHeight) = (sourceHeight, sourceWidth);
 
-            sideXPixels = ((int)(width - (height * curRatio))) & ~1;
-            sideYPixels = 0;
-
-            y = (int)(height * ucfg.panYOffset);
-            x = (int)(width * ucfg.panXOffset) + (sideXPixels / 2);
-
-            yZoomPixels = newHeight - height;
-            xZoomPixels = newWidth - (width - sideXPixels);
+            sideXPixels = width - sourceWidth;
+            sideYPixels = height - sourceHeight;
+            newWidth = (int)(sourceWidth * zoom);
+            newHeight = (int)(sourceHeight * zoom);
         }
         else
         {
-            newWidth = (int)(width * ucfg.zoom);
-            newHeight = (shouldFill.HasValue && shouldFill.Value) || curRatio == fillRatio ? (int)(height * ucfg.zoom) : (int)(newWidth / curRatio);
+            bool shouldFill = player?.Host?.Player_HandlesRatioResize(width, height) == true;
 
-            sideYPixels = ((int)(height - (width / curRatio))) & ~1;
-            sideXPixels = 0;
-
-            x = (int)(width * ucfg.panXOffset);
-            y = (int)(height * ucfg.panYOffset) + (sideYPixels / 2);
-
-            xZoomPixels = newWidth - width;
-            yZoomPixels = newHeight - (height - sideYPixels);
+            // A subpixel fit at the surface edge can become a full uncovered pixel
+            // when the fitted viewport is truncated to integer dimensions.
+            if (curRatio < fillRatio)
+            {
+                double unusedWidth = width - height * curRatio;
+                newHeight = (int)(height * zoom);
+                newWidth = shouldFill || unusedWidth < 1 ? (int)(width * zoom) : (int)(newHeight * curRatio);
+                sideXPixels = (int)unusedWidth & ~1;
+                sideYPixels = 0;
+            }
+            else
+            {
+                double unusedHeight = height - width / curRatio;
+                newWidth = (int)(width * zoom);
+                newHeight = shouldFill || unusedHeight < 1 ? (int)(height * zoom) : (int)(newWidth / curRatio);
+                sideXPixels = 0;
+                sideYPixels = (int)unusedHeight & ~1;
+            }
         }
 
-        Viewport = new((int)(x - xZoomPixels * (float)ucfg.zoomCenter.X), (int)(y - yZoomPixels * (float)ucfg.zoomCenter.Y), newWidth, newHeight);
+        int x = (int)(width * panXOffset) + sideXPixels / 2;
+        int y = (int)(height * panYOffset) + sideYPixels / 2;
+        int xZoomPixels = newWidth - (width - sideXPixels);
+        int yZoomPixels = newHeight - (height - sideYPixels);
+        Viewport = new((int)(x - xZoomPixels * (float)zoomCenter.X), (int)(y - yZoomPixels * (float)zoomCenter.Y), newWidth, newHeight);
         ViewportChanged?.Invoke(this, new());
     }
     void SetRotation()
     {
         bool was0_180   = rotation == 0 || rotation == 180;
-        rotation = (ucfg.rotation + scfg.Rotation) % 360;
+        rotation = (userRotation + scfg.Rotation) % 360;
         bool is0_180    = rotation == 0 || rotation == 180;
 
         if (was0_180 != is0_180 && !vpRequests.HasFlag(VPRequestType.Crop)) // TBR: Crop / AspectRatio will check too
         {
             curRatio = 1 / curRatio;
-            if (ucfg.AspectRatio == AspectRatio.Keep)
+            if (AspectRatio == AspectRatio.Keep)
                 player?.Host?.Player_RatioChanged(curRatio);
         }
 
-        vpRequests &= ~VPRequestType.RotationFlip;
         vpRequests |= VPRequestType.Viewport;
     }
     void SetAspectRatio()
     {
-        bool isKeep = ucfg.AspectRatio == AspectRatio.Keep;
+        bool isKeep = AspectRatio == AspectRatio.Keep;
         if (isKeep)
             curRatio = keepRatio;
-        else if (ucfg.AspectRatio == AspectRatio.Fill)
+        else if (AspectRatio == AspectRatio.Fill)
             curRatio = fillRatio;
         else
-            curRatio = ucfg.AspectRatio == AspectRatio.Custom ? ucfg.AspectRatioCustom.Value : ucfg.AspectRatio.Value;
+            curRatio = AspectRatio == AspectRatio.Custom ? AspectRatioCustom.Value : AspectRatio.Value;
 
         if (rotation == 90 || rotation == 270)
             curRatio = 1 / curRatio;
@@ -353,13 +586,11 @@ public unsafe partial class Renderer : IVP
         if (isKeep)
             player?.Host?.Player_RatioChanged(curRatio); // return handled and avoid SetViewport?*
 
-        vpRequests &= ~VPRequestType.AspectRatio;
         vpRequests |= VPRequestType.Viewport;
     }
     void SetBackColor()
     {
         vc?.VideoProcessorSetOutputBackgroundColor(vp, false, ucfg.d3BackColor);
-        vpRequests &= ~VPRequestType.BackColor;
         vpRequests |= VPRequestType.Viewport;
     }
 
@@ -372,7 +603,7 @@ public unsafe partial class Renderer : IVP
 
         player?.Video.SetUISize((int)VisibleWidth, (int)VisibleHeight, DAR);
 
-        if (ucfg.AspectRatio == AspectRatio.Keep)
+        if (AspectRatio == AspectRatio.Keep)
         {
             curRatio = rotation == 0 || rotation == 180 ? keepRatio : 1 / keepRatio;
             player?.Host?.Player_RatioChanged(curRatio);
@@ -409,200 +640,9 @@ enum VPRequestType
     Viewport        = 1 << 6,
 
     Deinterlace     = 1 << 7,   // D3D11
-    HDRtoSDR        = 1 << 8,   // Flyleaf
-    UpdatePS        = 1 << 9,   // Flyleaf
-    UpdateVS        = 1 << 10,  // Flyleaf
-}
-
-public class VPConfig : NotifyPropertyChanged
-{
-    internal IVP vp;
-
-    // === VP / Swap Chain ===
-
-    public CornerRadius CornerRadius { get => cornerRadius; internal set { if (Set(ref cornerRadius, value)) vp?.SwapChain.SetClip(); } }
-    internal CornerRadius cornerRadius;
-
-    public SwapChainFormat SwapChainFormat { get; set; } = SwapChainFormat.BGRA;
-
-    /// <summary>
-    /// Whether VSync should be enabled (0: Disabled, 1: Enabled)
-    /// </summary>
-    public uint VSync { get; set; } = 1;
-
-    /// <summary>
-    /// Background color of the player's control
-    /// </summary>
-    public System.Windows.Media.Color
-                            BackColor
-    { get => VorticeToWPFColor(flBackColor); set { if (Set(ref flBackColor, WPFToVorticeColor(value))) { d3BackColor = WPFToVideoColor(value); vp?.VPRequest(VPRequestType.BackColor); } } }
-    internal Color flBackColor = new(0, 0, 0, 255);
-    internal VideoColor d3BackColor = new() { Rgba = new() { R = 0, G = 0, B = 0, A = 1 } };
-
-    // === Viewport ===
-
-    /// <summary>
-    /// Video aspect ratio
-    /// </summary>
-    public AspectRatio AspectRatio { get => aspectRatio; set { if (Set(ref aspectRatio, value)) vp?.VPRequest(VPRequestType.AspectRatio); } }
-    AspectRatio aspectRatio = AspectRatio.Keep;
-    public void ToggleKeepRatio()
-    {
-        if (AspectRatio == AspectRatio.Keep)
-            AspectRatio = AspectRatio.Fill;
-        else if (AspectRatio == AspectRatio.Fill)
-            AspectRatio = AspectRatio.Keep;
-    }
-
-    /// <summary>
-    /// Custom aspect ratio (AspectRatio must be set to Custom to have an effect)
-    /// </summary>
-    public AspectRatio AspectRatioCustom { get => aspectRatioCustom; set { if (Set(ref aspectRatioCustom, value) && AspectRatio == AspectRatio.Custom) { aspectRatio = AspectRatio.Fill; AspectRatio = AspectRatio.Custom; } } }
-    AspectRatio aspectRatioCustom = new(16, 9);
-
-    /// <summary>
-    /// Cropping rectagle to crop the output frame (based on frame size)
-    /// </summary>
-    [JsonIgnore]
-    public CropRect Crop { get => crop; set { if (!Set(ref crop, value)) return; HasUserCrop = crop != CropRect.Empty; vp?.VPRequest(VPRequestType.Crop); } }
-    internal CropRect crop = CropRect.Empty;
-    internal bool HasUserCrop = false;
-
-    // TODO: if we clamp to -0.5 / +0.5 for example it will not work properly with zoom point
-
-    /// <summary>
-    /// Pan X Offset to change the X location
-    /// </summary>
-    [JsonIgnore]
-    public double PanXOffset { get => panXOffset; set { if (Set(ref panXOffset, Math.Clamp(value, -10, 10))) vp?.VPRequest(VPRequestType.Viewport); } }
-    internal double panXOffset;
-
-    /// <summary>
-    /// Pan Y Offset to change the Y location
-    /// </summary>
-    [JsonIgnore]
-    public double PanYOffset { get => panYOffset; set { if (Set(ref panYOffset, Math.Clamp(value, -10, 10))) vp?.VPRequest(VPRequestType.Viewport); } }
-    internal double panYOffset;
-
-    /// <summary>
-    /// Pan rotation angle (for D3D11 VP allowed values are 0, 90, 180, 270 only)
-    /// </summary>
-    [JsonIgnore]
-    public uint Rotation { get => rotation; set { if (Set(ref rotation, value)) vp?.VPRequest(VPRequestType.RotationFlip); } }
-    internal uint rotation;
-
-    [JsonIgnore]
-    public bool HFlip { get => hflip; set { if (Set(ref hflip, value)) vp?.VPRequest(VPRequestType.RotationFlip); } }
-    internal bool hflip;
-
-    [JsonIgnore]
-    public bool VFlip { get => vflip; set { if (Set(ref vflip, value)) vp?.VPRequest(VPRequestType.RotationFlip); } }
-    internal bool vflip;
-
-    [JsonIgnore]
-    public double Zoom { get => SnapToInt(zoom * 100); set { if (Set(ref zoom, SnapToInt(value / 100))) vp?.VPRequest(VPRequestType.Viewport); } }
-    internal double zoom = 1;
-
-    [JsonIgnore]
-    public WPoint
-                            ZoomCenter
-    { get => zoomCenter; set { if (Set(ref zoomCenter, value)) vp?.VPRequest(VPRequestType.Viewport); } }
-    internal WPoint zoomCenter = new(0.5, 0.5);
-
-    public int ZoomOffset { get => zoomOffset; set { Set(ref zoomOffset, value); } }
-    int zoomOffset = 10;
-
-    public void ResetViewport()
-        => SetViewport(0, 0, 0, 100, new(0.5, 0.5), CropRect.Empty, AspectRatio.Keep, false, false);
-
-    public void SetViewport(int panX, int panY, uint rotation, double zoom, WPoint p, CropRect crop, AspectRatio ratio, bool hflip, bool vflip)
-    {
-        AspectRatio = ratio;
-        Zoom = zoom;
-        ZoomCenter = p;
-        PanXOffset = panX;
-        PanYOffset = panY;
-        Crop = crop;
-        Rotation = rotation;
-        HFlip = hflip;
-        VFlip = vflip;
-
-        vp?.VPRequest(VPRequestType.Crop | VPRequestType.RotationFlip);
-    }
-
-    public void RotateRight() => Rotation = (rotation + 90) % 360;
-    public void RotateLeft() => Rotation = rotation < 90 ? 360 + rotation - 90 : rotation - 90;
-
-    public void ZoomIn() => Zoom += ZoomOffset;
-    public void ZoomOut() => Zoom = Math.Max(Zoom - ZoomOffset, 0);
-    public void ZoomIn(WPoint p) { if (vp == null) return; SetZoomWithCenterPoint(p, zoom + ZoomOffset / 100.0); }
-    public void ZoomOut(WPoint p) { if (vp == null) return; double zoom = this.zoom - ZoomOffset / 100.0; if (zoom < 0.001) return; SetZoomWithCenterPoint(p, zoom); }
-    public void SetZoomAndCenter(double zoom, WPoint p)
-    {
-        Zoom = zoom;
-        ZoomCenter = p;
-        vp?.VPRequest(VPRequestType.Viewport);
-    }
-    internal void SetZoomWithCenterPoint(Point p, double zoom)
-    {
-        /* Notes
-         * Zooms in a way that the specified point before zoom will be at the same position after zoom
-         * 
-         * Zoomed Point (ZP)    // the current point in a -possible- zoomed viewport
-         * Zoom (Z)
-         * Unzoomed Point (UP)  // the actual pixel of the current point
-         * Viewport Point (VP)
-         * Center Point (CP)
-         *
-         * UP = (VP + ZP) / Z =>
-         * ZP = (UP * Z) - VP
-         * CP = VP / (ZP - 1) (when UP = ZP)
-         */
-
-        zoom = SnapToInt(zoom);
-        Viewport view = vp.Viewport;
-
-        if (!(p.X >= view.X && p.X < view.X + view.Width && p.Y >= view.Y && p.Y < view.Y + view.Height)) // Point out of view
-        {
-            Zoom = zoom * 100;
-            return;
-        }
-
-        Point viewport = new(view.X, view.Y);
-        RemoveViewportOffsets(ref viewport);
-        RemoveViewportOffsets(ref p);
-
-        // Finds the required center point so that p will have the same pixel after zoom
-        Point zoomCenter = new(
-            GetCenterPoint(zoom, ((p.X - viewport.X) / (this.zoom / zoom)) - p.X) / (view.Width  / this.zoom),
-            GetCenterPoint(zoom, ((p.Y - viewport.Y) / (this.zoom / zoom)) - p.Y) / (view.Height / this.zoom));
-
-        // TBR: bug
-        //if (zoomCenter.X > 10 || zoomCenter.X < -10)
-
-        SetZoomAndCenter(zoom * 100, zoomCenter);
-
-        void RemoveViewportOffsets(ref Point p)
-        {
-            p.X -= (vp.SideXPixels / 2 + (panXOffset * vp.ControlWidth));
-            p.Y -= (vp.SideYPixels / 2 + (panYOffset * vp.ControlHeight));
-        }
-
-        double GetCenterPoint(double zoom, double offset)
-            => zoom == 1 ? offset : offset / SnapToInt(zoom - 1); // possible bug when zoom = 1 (noticed in out of bounds zoom out)
-    }
-}
-
-internal interface IVP
-{   // TODO: To use different VPs (such as Child / Extractor etc.)
-    public int ControlWidth { get; }
-    public int ControlHeight { get; }
-    public int SideXPixels { get; }
-    public int SideYPixels { get; }
-    public SwapChain SwapChain { get; }
-    public Viewport Viewport { get; }
-
-    void VPRequest(VPRequestType request);
-    void UpdateSize(int width, int height);
-    void MonitorChanged(GPUOutput monitor);
+    UpdatePS        = 1 << 8,   // Flyleaf
+    UpdateVS        = 1 << 9,   // Flyleaf
+    UpdateHDR       = 1 << 10,
+    UpdatePano      = 1 << 11,  // Flyleaf - 360 Panoramic params update
+    UpdateSwapChain = 1 << 12,  // SDR <-> HDR/scRGB output
 }

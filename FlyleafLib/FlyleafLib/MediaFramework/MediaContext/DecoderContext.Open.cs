@@ -388,8 +388,16 @@ public partial class DecoderContext
             else if (session.SubtitlesStream != -1)
                 Open(VideoDemuxer.AVStreamToStream[session.SubtitlesStream]);
 
-            Config.Audio.SetDelay(session.AudioDelay);
-            Config.Subtitles.SetDelay(session.SubtitlesDelay);
+            if (player != null)
+            {
+                player.Audio.SetDelay(session.AudioDelay);
+                player.Subtitles.SetDelay(session.SubtitlesDelay);
+            }
+            else
+            {
+                AudioDecoder.Delay = session.AudioDelay;
+                SubtitlesDecoder.Delay = session.SubtitlesDelay;
+            }
 
             if (session.CurTime > 1 * (long)1000 * 10000)
                 Seek(session.CurTime / 10000);
@@ -461,9 +469,9 @@ public partial class DecoderContext
             if (!args.Success)
                 return args;
 
-            if (defaultVideo && Config.Video.Enabled)
+            if (defaultVideo && VideoEnabled)
                 args.Error = OpenSuggestedVideo(defaultAudio);
-            else if (defaultAudio && Config.Audio.Enabled)
+            else if (defaultAudio && AudioEnabled)
                 args.Error = OpenSuggestedAudio();
 
             if ((defaultVideo || defaultAudio) && AudioStream == null && VideoStream == null)
@@ -473,7 +481,7 @@ public partial class DecoderContext
                 return args;
             }
 
-            if (defaultSubtitles && Config.Subtitles.Enabled)
+            if (defaultSubtitles && SubtitlesEnabled)
             {
                 if (Playlist.Selected.ExternalSubtitlesStream != null)
                     Open(Playlist.Selected.ExternalSubtitlesStream);
@@ -481,7 +489,7 @@ public partial class DecoderContext
                     OpenSuggestedSubtitles();
             }
 
-            if (Config.Data.Enabled)
+            if (DataEnabled)
                 OpenSuggestedData();
 
             return args;
@@ -639,108 +647,111 @@ public partial class DecoderContext
 
         try
         {
-            lock (stream.Demuxer.lockActions)
-                lock (stream.Demuxer.lockFmtCtx)
+            // Decoder actions precede demuxer locks, as in Seek().
+            lock (GetDecoderPtr(stream.Type).lockActions)
+            {
+                if (stream.Type == MediaType.Video && VideoStream != null)
+                    VideoDecoder.Renderer?.ClearScreen();
+
+                var oldStream = stream.Type == MediaType.Video ? VideoStream : (stream.Type == MediaType.Audio ? AudioStream : (stream.Type == MediaType.Subs ? SubtitlesStream : (StreamBase)DataStream));
+
+                // Close external demuxers when opening embedded
+                if (stream.Demuxer.Type == MediaType.Video)
                 {
-                    if (stream.Type == MediaType.Video && VideoStream != null)
-                        VideoDecoder.Renderer?.ClearScreen();
-
-                    var oldStream = stream.Type == MediaType.Video ? VideoStream : (stream.Type == MediaType.Audio ? AudioStream : (stream.Type == MediaType.Subs ? SubtitlesStream : (StreamBase)DataStream));
-
-                    // Close external demuxers when opening embedded
-                    if (stream.Demuxer.Type == MediaType.Video)
+                    // TBR: if (stream.Type == MediaType.Video) | We consider that we can't have Embedded and External Video Streams at the same time
+                    if (stream.Type == MediaType.Audio) // TBR: && VideoStream != null)
                     {
-                        // TBR: if (stream.Type == MediaType.Video) | We consider that we can't have Embedded and External Video Streams at the same time
-                        if (stream.Type == MediaType.Audio) // TBR: && VideoStream != null)
+                        if (!EnableDecoding)
+                            AudioDemuxer.Dispose();
+                        if (Playlist.Selected.ExternalAudioStream != null)
                         {
-                            if (!EnableDecoding)
-                                AudioDemuxer.Dispose();
-                            if (Playlist.Selected.ExternalAudioStream != null)
-                            {
-                                Playlist.Selected.ExternalAudioStream.Enabled = false;
-                                Playlist.Selected.ExternalAudioStream = null;
-                            }
-                        }
-                        else if (stream.Type == MediaType.Subs)
-                        {
-                            if (!EnableDecoding)
-                                SubtitlesDemuxer.Dispose();
-                            if (Playlist.Selected.ExternalSubtitlesStream != null)
-                            {
-                                Playlist.Selected.ExternalSubtitlesStream.Enabled = false;
-                                Playlist.Selected.ExternalSubtitlesStream = null;
-                            }
-                        }
-                        else if (stream.Type == MediaType.Data)
-                        {
-                            if (!EnableDecoding)
-                                DataDemuxer.Dispose();
+                            Playlist.Selected.ExternalAudioStream.Enabled = false;
+                            Playlist.Selected.ExternalAudioStream = null;
                         }
                     }
-                    else if (!EnableDecoding)
+                    else if (stream.Type == MediaType.Subs)
                     {
-                        // Disable embeded audio when enabling external audio (TBR)
-                        if (stream.Demuxer.Type == MediaType.Audio && stream.Type == MediaType.Audio && AudioStream != null && AudioStream.Demuxer.Type == MediaType.Video)
+                        if (!EnableDecoding)
+                            SubtitlesDemuxer.Dispose();
+                        if (Playlist.Selected.ExternalSubtitlesStream != null)
                         {
-                            foreach (var aStream in VideoDemuxer.AudioStreams)
-                                VideoDemuxer.DisableStream(aStream);
+                            Playlist.Selected.ExternalSubtitlesStream.Enabled = false;
+                            Playlist.Selected.ExternalSubtitlesStream = null;
                         }
                     }
-
-                    // Open Codec / Enable on demuxer
-                    if (!EnableDecoding)
-                        stream.Demuxer.EnableStream(stream);
-                    else if (!GetDecoderPtr(stream.Type).Open(stream))
+                    else if (stream.Type == MediaType.Data)
                     {
-                        return stream.Type == MediaType.Video
-                        ? (args = new OpenVideoStreamCompletedArgs((VideoStream)stream, (VideoStream)oldStream, $"Failed to open video stream #{stream.StreamIndex}"))
-                        : stream.Type == MediaType.Audio
-                        ? (args = new OpenAudioStreamCompletedArgs((AudioStream)stream, (AudioStream)oldStream, $"Failed to open audio stream #{stream.StreamIndex}"))
-                        : stream.Type == MediaType.Subs
-                        ? (args = new OpenSubtitlesStreamCompletedArgs((SubtitlesStream)stream, (SubtitlesStream)oldStream, $"Failed to open subtitles stream #{stream.StreamIndex}"))
-                        : (args = new OpenDataStreamCompletedArgs((DataStream)stream, (DataStream)oldStream, $"Failed to open data stream #{stream.StreamIndex}"));
+                        if (!EnableDecoding)
+                            DataDemuxer.Dispose();
                     }
-
-                    // Open Audio based on new Video Stream (if not the same suggestion)
-                    if (defaultAudio && stream.Type == MediaType.Video && Config.Audio.Enabled)
-                    {
-                        bool requiresChange = true;
-                        SuggestAudio(out var aStream, out var aExtStream, VideoDemuxer.AudioStreams);
-
-                        if (AudioStream != null)
-                        {
-                            // External audio streams comparison
-                            if (Playlist.Selected.ExternalAudioStream != null && aExtStream != null && aExtStream.Index == Playlist.Selected.ExternalAudioStream.Index)
-                                requiresChange = false;
-                            // Embedded audio streams comparison
-                            else if (Playlist.Selected.ExternalAudioStream == null && aStream != null && aStream.StreamIndex == AudioStream.StreamIndex)
-                                requiresChange = false;
-                        }
-
-                        if (!requiresChange)
-                        {
-                            if (CanDebug)
-                                Log.Debug($"Audio no need to follow video");
-                        }
-                        else
-                        {
-                            if (aStream != null)
-                                Open(aStream);
-                            else if (aExtStream != null)
-                                Open(aExtStream);
-
-                            //RequiresResync = true;
-                        }
-                    }
-
-                    return stream.Type == MediaType.Video
-                        ? (args = new OpenVideoStreamCompletedArgs((VideoStream)stream, (VideoStream)oldStream))
-                        : stream.Type == MediaType.Audio
-                        ? (args = new OpenAudioStreamCompletedArgs((AudioStream)stream, (AudioStream)oldStream))
-                        : stream.Type == MediaType.Subs
-                        ? (args = new OpenSubtitlesStreamCompletedArgs((SubtitlesStream)stream, (SubtitlesStream)oldStream))
-                        : (args = new OpenDataStreamCompletedArgs((DataStream)stream, (DataStream)oldStream));
                 }
+                else if (!EnableDecoding)
+                {
+                    // Disable embeded audio when enabling external audio (TBR)
+                    if (stream.Demuxer.Type == MediaType.Audio && stream.Type == MediaType.Audio && AudioStream != null && AudioStream.Demuxer.Type == MediaType.Video)
+                    {
+                        foreach (var aStream in VideoDemuxer.AudioStreams)
+                            VideoDemuxer.DisableStream(aStream);
+                    }
+                }
+
+                // Open Codec / Enable on demuxer
+                if (!EnableDecoding)
+                {
+                    lock (stream.Demuxer.lockActions)
+                        stream.Demuxer.EnableStream(stream);
+                }
+                else if (!GetDecoderPtr(stream.Type).Open(stream))
+                {
+                    return stream.Type == MediaType.Video
+                    ? (args = new OpenVideoStreamCompletedArgs((VideoStream)stream, (VideoStream)oldStream, $"Failed to open video stream #{stream.StreamIndex}"))
+                    : stream.Type == MediaType.Audio
+                    ? (args = new OpenAudioStreamCompletedArgs((AudioStream)stream, (AudioStream)oldStream, $"Failed to open audio stream #{stream.StreamIndex}"))
+                    : stream.Type == MediaType.Subs
+                    ? (args = new OpenSubtitlesStreamCompletedArgs((SubtitlesStream)stream, (SubtitlesStream)oldStream, $"Failed to open subtitles stream #{stream.StreamIndex}"))
+                    : (args = new OpenDataStreamCompletedArgs((DataStream)stream, (DataStream)oldStream, $"Failed to open data stream #{stream.StreamIndex}"));
+                }
+
+                // Open Audio based on new Video Stream (if not the same suggestion)
+                if (defaultAudio && stream.Type == MediaType.Video && AudioEnabled)
+                {
+                    bool requiresChange = true;
+                    SuggestAudio(out var aStream, out var aExtStream, VideoDemuxer.AudioStreams);
+
+                    if (AudioStream != null)
+                    {
+                        // External audio streams comparison
+                        if (Playlist.Selected.ExternalAudioStream != null && aExtStream != null && aExtStream.Index == Playlist.Selected.ExternalAudioStream.Index)
+                            requiresChange = false;
+                        // Embedded audio streams comparison
+                        else if (Playlist.Selected.ExternalAudioStream == null && aStream != null && aStream.StreamIndex == AudioStream.StreamIndex)
+                            requiresChange = false;
+                    }
+
+                    if (!requiresChange)
+                    {
+                        if (CanDebug)
+                            Log.Debug($"Audio no need to follow video");
+                    }
+                    else
+                    {
+                        if (aStream != null)
+                            Open(aStream);
+                        else if (aExtStream != null)
+                            Open(aExtStream);
+
+                        //RequiresResync = true;
+                    }
+                }
+
+                return stream.Type == MediaType.Video
+                    ? (args = new OpenVideoStreamCompletedArgs((VideoStream)stream, (VideoStream)oldStream))
+                    : stream.Type == MediaType.Audio
+                    ? (args = new OpenAudioStreamCompletedArgs((AudioStream)stream, (AudioStream)oldStream))
+                    : stream.Type == MediaType.Subs
+                    ? (args = new OpenSubtitlesStreamCompletedArgs((SubtitlesStream)stream, (SubtitlesStream)oldStream))
+                    : (args = new OpenDataStreamCompletedArgs((DataStream)stream, (DataStream)oldStream));
+            }
         }
         catch (Exception e)
         {
@@ -782,7 +793,7 @@ public partial class DecoderContext
             error = Open(stream, defaultAudio).Error;
         else if (extStream != null)
             error = Open(extStream, defaultAudio).Error;
-        else if (defaultAudio && Config.Audio.Enabled)
+        else if (defaultAudio && AudioEnabled)
             error = OpenSuggestedAudio(); // We still need audio if no video exists
 
         return error;
@@ -972,31 +983,64 @@ public partial class DecoderContext
 
         try
         {
-            // Set HTTP Config
             if (Playlist.InputType == InputType.Web)
-            {
-                formatOpt = Config.Demuxer.GetFormatOptPtr(demuxer.Type);
-                copied = new Dictionary<string, string>();
+            {   // Set HTTP Config
+                formatOpt = demuxer.Config.GetFormatOptPtr(demuxer.Type); // NOTE: Downloader clones main config to demuxer.Config
+                copied = [];
 
                 foreach (var opt in formatOpt)
                     copied.Add(opt.Key, opt.Value);
 
-                if (demuxerInput.UserAgent != null)
-                    formatOpt["user_agent"] = demuxerInput.UserAgent;
+                if (demuxerInput.FormatOpt != null)
+                    foreach (var opt in demuxerInput.FormatOpt)
+                        formatOpt[opt.Key] = opt.Value;
+
+                if (demuxerInput.Cookies != null)
+                    SetCookies(formatOpt, demuxerInput.Cookies);
 
                 if (demuxerInput.Referrer != null)
                     formatOpt["referer"] = demuxerInput.Referrer;
 
-                // this can cause issues
-                //else if (!formatOpt.ContainsKey("referer") && Playlist.Url != null)
-                //    formatOpt["referer"] = Playlist.Url;
+                var headers = new StringBuilder();
+
+                // User-Agent anti-bot (make sure last in ffmpeg headers) | when using user_agent option ffmpeg will put it first so pass in headers instead
+                string userAgent = null;
+                string appUserAgent = null;
+
+                // Fork: keep headers the application already put in FormatOpt (e.g. Cookie/Origin for site CDNs)
+                if (formatOpt.TryGetValue("headers", out string appHeaders) && !string.IsNullOrEmpty(appHeaders))
+                {
+                    foreach (string line in appHeaders.Split("\r\n", StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        if (line.StartsWith("User-Agent:", StringComparison.OrdinalIgnoreCase))
+                            appUserAgent = line["User-Agent:".Length..].Trim();
+                        else
+                            headers.Append(line).Append("\r\n");
+                    }
+                }
 
                 if (demuxerInput.HTTPHeaders != null)
                 {
-                    formatOpt["headers"] = "";
                     foreach (var header in demuxerInput.HTTPHeaders)
-                        formatOpt["headers"] += header.Key + ": " + header.Value + "\r\n";
+                    {
+                        if (header.Key.Equals("User-Agent", StringComparison.OrdinalIgnoreCase))
+                            userAgent = header.Value;
+                        else
+                            headers.Append(header.Key).Append(": ").Append(header.Value).Append("\r\n");
+                    }
                 }
+
+                if (string.IsNullOrEmpty(userAgent))
+                    userAgent = appUserAgent;
+
+                if (string.IsNullOrEmpty(userAgent))
+                    formatOpt.TryGetValue("user_agent", out userAgent);
+
+                if (!string.IsNullOrEmpty(userAgent))
+                    headers.Append("User-Agent: ").Append(userAgent).Append("\r\n");
+
+                if (headers.Length > 0)
+                    formatOpt["headers"] = headers.ToString();
             }
 
             // Open Demuxer Input
@@ -1007,6 +1051,10 @@ public partial class DecoderContext
                 if (error != null && !string.IsNullOrEmpty(demuxerInput.UrlFallback))
                 {
                     Log.Warn($"Fallback to {demuxerInput.UrlFallback}");
+
+                    if (demuxerInput.CookiesFallback != null)
+                        SetCookies(formatOpt, demuxerInput.CookiesFallback);
+
                     error = demuxer.Open(demuxerInput.UrlFallback);
                 }
             }
@@ -1017,9 +1065,8 @@ public partial class DecoderContext
         }
         finally
         {
-            // Restore HTTP Config
             if (Playlist.InputType == InputType.Web)
-            {
+            {   // Restore HTTP Config
                 formatOpt.Clear();
                 foreach (var opt in copied)
                     formatOpt.Add(opt.Key, opt.Value);
@@ -1027,6 +1074,14 @@ public partial class DecoderContext
 
             OpenedPlugin?.OnBufferingCompleted();
         }
+    }
+
+    static void SetCookies(Dictionary<string, string> options, string cookies)
+    {
+        options.Remove("cookies");
+
+        if (!string.IsNullOrEmpty(cookies))
+            options["cookies"] = cookies;
     }
     #endregion
 

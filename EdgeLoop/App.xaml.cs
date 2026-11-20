@@ -127,7 +127,7 @@ namespace EdgeLoop
                     // our Logger.Debug() routes them to diagnostics.log only (not the main log)
                     LogLevel = resolvedLogLevel == Classes.LogLevel.Debug ? FlyleafLib.LogLevel.Debug : FlyleafLib.LogLevel.Info,
                     LogOutput = ":custom",
-                    FFmpegLogLevel = resolvedLogLevel == Classes.LogLevel.Debug ? Flyleaf.FFmpeg.LogLevel.Info : Flyleaf.FFmpeg.LogLevel.Warn
+                    FFmpegLogLevel = resolvedLogLevel == Classes.LogLevel.Debug ? Flyleaf.FFmpeg.LogLevel.Info : Flyleaf.FFmpeg.LogLevel.Warning
                 });
             }
             catch (Exception ex)

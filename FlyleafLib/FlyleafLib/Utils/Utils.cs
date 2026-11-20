@@ -6,6 +6,7 @@ using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using System.Windows;
+using System.Windows.Threading;
 using Vortice.Direct3D11;
 
 namespace FlyleafLib;
@@ -15,65 +16,22 @@ public static partial class Utils
     public static readonly Rect         RectZero            = new(); // Rect.Empty has infinity values
     public static readonly Point        PointEmpty          = new();
     public static readonly CornerRadius CornerRadiusEmpty   = new();
+    // Keep the original list APIs backed by the shared catalog.
+    public static readonly List<string> ExtensionsAudio = MediaExtensions.AudioList;
+    public static readonly List<string> ExtensionsPictures = MediaExtensions.ImageList;
+    public static readonly List<string> ExtensionsSubtitlesText = MediaExtensions.SubtitlesTextList;
+    public static readonly List<string> ExtensionsSubtitlesBitmap = MediaExtensions.SubtitlesBitmapList;
+    public static readonly List<string> ExtensionsSubtitles = MediaExtensions.SubtitlesList;
+    public static readonly List<string> ExtensionsVideo = MediaExtensions.VideoList;
 
-
-    // VLC : https://github.com/videolan/vlc/blob/master/modules/gui/qt/dialogs/preferences/simple_preferences.cpp
-    // Kodi: https://github.com/xbmc/xbmc/blob/master/xbmc/settings/AdvancedSettings.cpp
-
-    public static readonly List<string> ExtensionsAudio =
-    [
-        // VLC
-          "3ga" , "669" , "a52" , "aac" , "ac3"
-        , "adt" , "adts", "aif" , "aifc", "aiff"
-        , "au"  , "amr" , "aob" , "ape" , "caf"
-        , "cda" , "dts" , "flac", "it"  , "m4a"
-        , "m4p" , "mid" , "mka" , "mlp" , "mod"
-        , "mp1" , "mp2" , "mp3" , "mpc" , "mpga"
-        , "oga" , "oma" , "opus", "qcp" , "ra"
-        , "rmi" , "snd" , "s3m" , "spx" , "tta"
-        , "voc" , "vqf" , "w64" , "wav" , "wma"
-        , "wv"  , "xa"  , "xm"
-    ];
-
-    public static readonly List<string> ExtensionsPictures =
-    [
-        "apng", "bmp", "gif", "jpg", "jpeg", "png", "ico", "tif", "tiff", "tga","jfif"
-    ];
-
-    public static readonly List<string> ExtensionsSubtitlesText =
-    [
-        "ass", "ssa", "srt", "text", "vtt"
-    ];
-
-    public static readonly List<string> ExtensionsSubtitlesBitmap =
-    [
-        "sub", "sup"
-    ];
-
-    public static readonly List<string> ExtensionsSubtitles = [..ExtensionsSubtitlesText, ..ExtensionsSubtitlesBitmap];
-
-    public static readonly List<string> ExtensionsVideo =
-    [
-        // VLC
-          "3g2" , "3gp" , "3gp2", "3gpp", "amrec"
-        , "amv" , "asf" , "avi" , "bik" , "divx"
-        , "drc" , "dv"  , "f4v" , "flv" , "gvi"
-        , "gxf" , "m1v" , "m2t" , "m2v" , "m2ts"
-        , "m4v" , "mkv" , "mov" , "mp2v", "mp4"
-        , "mp4v", "mpa" , "mpe" , "mpeg", "mpeg1"
-        , "mpeg2","mpeg4","mpg" , "mpv2", "mts"
-        , "mtv" , "mxf" , "nsv" , "nuv" , "ogg"
-        , "ogm" , "ogx" , "ogv" , "rec" , "rm"
-        , "rmvb", "rpl" , "thp" , "tod" , "ts"
-        , "tts" , "vob" , "vro" , "webm", "wmv"
-        , "xesc"
-
-        // Additional
-        , "dav"
-    ];
 
     private static int uniqueId;
     public static int GetUniqueId() { Interlocked.Increment(ref uniqueId); return uniqueId; }
+
+    internal static Dispatcher uiDispatcher;
+
+    // Fork: without a WPF Application (e.g. headless tests) there is no UI thread, so actions run inline.
+    static Dispatcher UIDispatcher => uiDispatcher ??= Application.Current?.Dispatcher;
 
     /// <summary>
     /// Begin invokes the UI thread if required to execute the specified action
@@ -81,13 +39,14 @@ public static partial class Utils
     /// <param name="action"></param>
     public static void UI(Action action)
     {
-        if (Application.Current?.Dispatcher == null)
+        var dispatcher = UIDispatcher;
+        if (dispatcher == null)
         {
             action();
             return;
         }
 
-        Application.Current.Dispatcher.BeginInvoke(action, System.Windows.Threading.DispatcherPriority.DataBind);
+        dispatcher.BeginInvoke(action, DispatcherPriority.DataBind);
     }
 
     /// <summary>
@@ -96,12 +55,14 @@ public static partial class Utils
     /// <param name="action"></param>
     public static void UIInvoke(Action action)
     {
-        if (Application.Current?.Dispatcher == null)
+        var dispatcher = UIDispatcher;
+        if (dispatcher == null)
         {
             action();
             return;
         }
-        Application.Current.Dispatcher.Invoke(action, System.Windows.Threading.DispatcherPriority.DataBind);
+
+        dispatcher.Invoke(action, DispatcherPriority.DataBind);
     }
 
     /// <summary>
@@ -110,16 +71,11 @@ public static partial class Utils
     /// <param name="action"></param>
     public static void UIInvokeIfRequired(Action action)
     {
-        if (Application.Current?.Dispatcher == null)
-        {
-            action();
-            return;
-        }
-
-        if (Environment.CurrentManagedThreadId == Application.Current.Dispatcher.Thread.ManagedThreadId)
+        var dispatcher = UIDispatcher;
+        if (dispatcher == null || Environment.CurrentManagedThreadId == dispatcher.Thread.ManagedThreadId)
             action();
         else
-            Application.Current.Dispatcher.Invoke(action, System.Windows.Threading.DispatcherPriority.DataBind);
+            dispatcher.Invoke(action, DispatcherPriority.DataBind);
     }
 
     public static Thread STA(Action action)
@@ -143,15 +99,6 @@ public static partial class Utils
         return mod == 0 ? num : num + (align - mod);
     }
 
-    /// <summary>
-    /// Works only for power of 2
-    /// </summary>
-    /// <param name="num"></param>
-    /// <param name="align"></param>
-    /// <returns></returns>
-    public static int FFALIGN(int num, int align)
-        => (num + align - 1) & ~(align - 1);
-
     public static float Scale(float value, float inMin, float inMax, float outMin, float outMax)
         => ((value - inMin) * (outMax - outMin) / (inMax - inMin)) + outMin;
 
@@ -159,6 +106,18 @@ public static partial class Utils
     {
         double nearest = Math.Round(value);
         return Math.Abs(value - nearest) < epsilon ? nearest : value;
+    }
+
+    public static double SmoothStep(double edge0, double edge1, double x)
+    {
+        x = Math.Clamp((x - edge0) / (edge1 - edge0), 0.0, 1.0);
+        return x * x * (3.0 - 2.0 * x);
+    }
+
+    public static float SmoothStep(float edge0, float edge1, float x)
+    {
+        x = Math.Clamp((x - edge0) / (edge1 - edge0), 0, 1);
+        return x * x * (3.0f - 2.0f * x);
     }
 
     /// <summary>
@@ -224,15 +183,6 @@ public static partial class Utils
             catch { }
         });
     }
-
-    // We can't trust those
-    //public static private bool    IsDesignMode=> (bool) DesignerProperties.IsInDesignModeProperty.GetMetadata(typeof(DependencyObject)).DefaultValue;
-    //public static bool            IsDesignMode    = LicenseManager.UsageMode == LicenseUsageMode.Designtime; // Will not work properly (need to be called from non-static class constructor)
-
-    //public static bool          IsWin11         = Regex.IsMatch(Registry.GetValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion", "ProductName", "").ToString(), "Windows 11");
-    //public static bool          IsWin10         = Regex.IsMatch(Registry.GetValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion", "ProductName", "").ToString(), "Windows 10");
-    //public static bool          IsWin8          = Regex.IsMatch(Registry.GetValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion", "ProductName", "").ToString(), "Windows 8");
-    //public static bool          IsWin7          = Regex.IsMatch(Registry.GetValue(@"HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows NT\CurrentVersion", "ProductName", "").ToString(), "Windows 7");
 
     public static List<string> GetMoviesSorted(List<string> movies)
     {
@@ -680,6 +630,25 @@ public static partial class Utils
         };
     }
 
+    public static string GetChannelLayoutStr(ulong mask)
+    {
+        AVChannelLayout layout = new()
+        {
+            order   = AVChannelOrder.Native,
+            u       = new() { mask = mask }
+        };
+
+        return GetChannelLayoutStr(layout);
+    }
+    public unsafe static string GetChannelLayoutStr(AVChannelLayout layout)
+    {
+        byte[] buf = new byte[20];
+        fixed (byte* bufPtr = buf)
+        {
+            _ = av_channel_layout_describe(&layout, bufPtr, (nuint)buf.Length);
+            return BytePtrToStringUTF8(bufPtr);
+        }
+    }
 
     public static readonly double SWFREQ_TO_TICKS = 10000000.0 / Stopwatch.Frequency;
     public static string ToHexadecimal(byte[] bytes)

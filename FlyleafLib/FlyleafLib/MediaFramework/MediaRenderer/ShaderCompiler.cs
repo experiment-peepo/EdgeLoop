@@ -1,5 +1,7 @@
 ﻿using System.Buffers;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
+using System.Text.RegularExpressions;
 
 using Vortice.D3DCompiler;
 using Vortice.Direct3D;
@@ -11,6 +13,7 @@ namespace FlyleafLib.MediaFramework.MediaRenderer;
 
 internal static partial class ShaderCompiler
 {
+    const int               BUFFER_SIZE     = 38 * 1024;
     const int               MAX_CACHE_SIZE  = 64;
     const string            MAIN            = "main";
     const string            LOG_PREFIX      = "[Shader] ";
@@ -20,7 +23,7 @@ internal static partial class ShaderCompiler
     internal static Blob    VSBlob          = Compile(VS, false);
     internal static Blob    VSSimpleBlob    = Compile(VSSimple, false);
 
-    class BlobWrapper { public Blob blob; } // For locking per Blob (before creation)
+    class BlobWrapper { public Blob blob; }
     static Dictionary<string, BlobWrapper> cache = [];
 
     internal static ID3D11PixelShader CompilePS(ID3D11Device device, string uniqueId, ReadOnlySpan<char> hlslSample, List<string> defines = null)
@@ -29,48 +32,94 @@ internal static partial class ShaderCompiler
 
         lock (cache)
         {
-            if (cache.Count > MAX_CACHE_SIZE)
+            if (!cache.TryGetValue(uniqueId, out bw))
             {
-                LogInfo("Clearing Cache");
+                if (cache.Count >= MAX_CACHE_SIZE)
+                {
+                    LogInfo("Clearing Cache");
 
-                foreach (var bw1 in cache.Values)
-                    bw1.blob.Dispose();
+                    foreach (var cached in cache.Values)
+                    {
+                        lock (cached)
+                        {
+                            cached.blob?.Dispose();
+                            cached.blob = null;
+                        }
+                    }
 
-                cache.Clear();
+                    cache.Clear();
+                }
+
+                bw = new();
+                cache.Add(uniqueId, bw);
             }
-            else if (cache.TryGetValue(uniqueId, out var bw2))
-            {
-                if (CanDebug)
-                    LogDebug($"Using from Cache '{uniqueId}'");
-
-                lock (bw2)
-                    return device.CreatePixelShader(bw2.blob);
-            }
-
-            bw = new();
-            Monitor.Enter(bw);
-            cache.Add(uniqueId, bw);
         }
 
-        if (CanDebug)
-            LogDebug($"Compiling '{uniqueId}'");
+        lock (bw)
+        {
+            if (bw.blob == null)
+            {
+                if (CanDebug)
+                    LogDebug($"Compiling '{uniqueId}'");
 
-        // PS_HEADER + hlslSample + PS_FOOTER (Max 10KB)
-        Debug.Assert(PS_HEADER.Length + PS_FOOTER.Length + Encoding.UTF8.GetMaxByteCount(hlslSample.Length) < 12_000);
-        byte[] bufferPool   = ArrayPool<byte>.Shared.Rent(12 * 1024);
-        Span<byte> buffer   = bufferPool;
-        PS_HEADER.CopyTo(buffer);
-        int offset          = PS_HEADER.Length;
-        offset += Encoding.UTF8.GetBytes(hlslSample, buffer[offset..]);
-        PS_FOOTER.CopyTo(buffer[offset..]);
-        offset += PS_FOOTER.Length;
-        bw.blob = Compile(buffer[..offset], true, defines);
-        ArrayPool<byte>.Shared.Return(bufferPool);
+                // Wrap only panorama image sampling. HDR detection remains in source space.
+                if (defines?.Contains(Renderer.dPanoWrap) == true && !defines.Contains(Renderer.dHDRDetect))
+                {
+                    string sample = hlslSample.ToString();
+                    for (int texture = 1; texture <= 4; texture++)
+                        sample = sample.Replace($"Texture{texture}.Sample(Sampler,", $"PanoSample(Texture{texture},");
+                    hlslSample = sample;
+                }
 
-        var ps = device.CreatePixelShader(bw.blob);
-        Monitor.Exit(bw);
+                Debug.Assert(PS_HEADER.Length + PS_BT2020.Length + PS_PQSpline.Length + PS_DOVI.Length + PS_MAIN.Length + PS_FOOTER.Length + Encoding.UTF8.GetMaxByteCount(hlslSample.Length) < BUFFER_SIZE);
 
-        return ps;
+                byte[] bufferPool = ArrayPool<byte>.Shared.Rent(BUFFER_SIZE);
+
+                try
+                {
+                    Span<byte> buffer = bufferPool;
+                    int offset = 0;
+
+                    PS_HEADER.CopyTo(buffer[offset..]);
+                    offset += PS_HEADER.Length;
+
+                    if (defines != null)
+                        if (defines.Contains(Renderer.dBT2020))
+                        {
+                            PS_BT2020.CopyTo(buffer[offset..]);
+                            offset += PS_BT2020.Length;
+
+                            if (defines.Contains(Renderer.dPQSpline))
+                            {
+                                PS_PQSpline.CopyTo(buffer[offset..]);
+                                offset += PS_PQSpline.Length;
+
+                                if (defines.Contains(Renderer.dDovi))
+                                {
+                                    PS_DOVI.CopyTo(buffer[offset..]);
+                                    offset += PS_DOVI.Length;
+                                }
+                            }
+                        }
+
+                    PS_MAIN.CopyTo(buffer[offset..]);
+                    offset += PS_MAIN.Length;
+                    offset += Encoding.UTF8.GetBytes(hlslSample, buffer[offset..]);
+                    PS_FOOTER.CopyTo(buffer[offset..]);
+                    offset += PS_FOOTER.Length;
+
+                    bw.blob = Compile(buffer[..offset], true, defines);
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(bufferPool);
+                }
+            }
+            else if (CanDebug)
+                LogDebug($"Using from Cache '{uniqueId}'");
+
+            return device.CreatePixelShader(bw.blob);
+        }
     }
 
     internal static unsafe Blob Compile(ReadOnlySpan<byte> bytes, bool isPS = true, List<string> defines = null)
@@ -90,25 +139,51 @@ internal static partial class ShaderCompiler
         //fixed (byte* hlslPtr = bytes)
         //{
         //    Compiler.Preprocess((nint)hlslPtr, new((uint)bytes.Length), null, definesMacro, null, out var debugBlob, out var debugError);
-        //    Engine.Log.Error(debugBlob.AsString());
+        //    Engine.Log.Error(CleanHLSL(debugBlob.AsString()));
         //}
 
         // NOTE: Optimization could actually cause issues (mainly with literals) | Use SkipOptimization instead when debugging HLSL
         Compiler.Compile(bytes, definesMacro, null, MAIN, null, isPS ? PSVER : VSVER, ShaderFlags.OptimizationLevel3, out var shaderBlob, out var psError);
 
-        if (psError != null && psError.BufferPointer != IntPtr.Zero)
+        if (psError != null)
         {
-            string[] errors = BytePtrToStringUTF8((byte*)psError.BufferPointer).Split('\n');
+#if DEBUG
+            if (psError.BufferPointer != IntPtr.Zero)
+            {
+                string[] errors = BytePtrToStringUTF8((byte*)psError.BufferPointer).Split('\n');
 
-            foreach (string line in errors)
-                LogError($"{line}");
+                foreach (string line in errors)
+                    LogError($"{line}");
+            }
+#else
+            LogError("Pixel shader compilation failed");
+#endif
+
+            psError.Dispose();
         }
 
         return shaderBlob;
     }
 
-    static void LogError(string msg) { if (Engine.Log != null) Engine.Log.Error($"{LOG_PREFIX}{msg}"); }
-    static void LogInfo(string msg) { if (Engine.Log != null) Engine.Log.Info($"{LOG_PREFIX}{msg}"); }
-    static void LogDebug(string msg) { if (Engine.Log != null) Engine.Log.Debug($"{LOG_PREFIX}{msg}"); }
-    static void LogTrace(string msg) { if (Engine.Log != null) Engine.Log.Trace($"{LOG_PREFIX}{msg}"); }
+    [SuppressMessage("Performance", "SYSLIB1045:Convert to 'GeneratedRegexAttribute'.", Justification = "DebugOnly")]
+    static string CleanHLSL(string text)
+    {
+        text = Regex.Replace(text, @"\s*\[\s*", "[");
+        text = Regex.Replace(text, @"\s*\]\s*", "]");
+        text = Regex.Replace(text, @"(?m)^\s*#line.*(?:\r?\n)?", "");
+        text = Regex.Replace(text, @"\s*\.\s*", ".");
+        text = Regex.Replace(text, @"\s+([,;)])", "$1");
+        text = Regex.Replace(text, @"\(\s+", "(");
+        text = Regex.Replace(text, @"(\w)\s+\(", "$1(");
+        text = Regex.Replace(text, @"(?m)^[ \t]+$", "");
+        text = Regex.Replace(text, @"(\r?\n){3,}", "$1$1");
+
+        return text.Trim();
+    }
+
+    // Fork: shaders can compile before the engine's logger exists
+    static void LogError(string msg) => Engine.Log?.Error($"{LOG_PREFIX}{msg}");
+    static void LogInfo(string msg) => Engine.Log?.Info($"{LOG_PREFIX}{msg}");
+    static void LogDebug(string msg) => Engine.Log?.Debug($"{LOG_PREFIX}{msg}");
+    static void LogTrace(string msg) => Engine.Log?.Trace($"{LOG_PREFIX}{msg}");
 }

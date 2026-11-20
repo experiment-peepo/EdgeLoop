@@ -205,7 +205,7 @@ namespace EdgeLoop.ViewModels
                     Player.ExternalClock = value;
                     if (value != null)
                     {
-                        Player.Config.Player.MasterClock = FlyleafLib.MediaPlayer.MasterClock.External;
+                        Player.Config.Playback.MasterClock = FlyleafLib.MediaPlayer.MasterClock.External;
                     }
                 }
             }
@@ -213,12 +213,12 @@ namespace EdgeLoop.ViewModels
 
         public long SyncTolerance
         {
-            get => Player?.Config.Player.SyncTolerance ?? 160000;
+            get => Player?.Config.Playback.SyncTolerance ?? 160000;
             set
             {
                 if (Player != null)
                 {
-                    Player.Config.Player.SyncTolerance = value;
+                    Player.Config.Playback.SyncTolerance = value;
                     OnPropertyChanged(nameof(SyncTolerance));
                 }
             }
@@ -542,13 +542,9 @@ namespace EdgeLoop.ViewModels
             _opacity = 0.9; // Safe default to ensure window is visible during initial load
             Config = new Config();
 
-            Config.Player.AutoPlay = false;
-            Config.Player.MasterClock = MasterClock.Video;
-            // Telemetry stats drive the on-screen drift/D3D-latency overlay, which
-            // re-evaluates its bindings at video framerate on every player window.
-            // Only pay for it when verbose logging is actually on.
-            Config.Player.Stats = App.Settings?.EnableDiagnosticMode ?? false;
-            Config.Player.SeekAccurate = true; // Ensure precise resumption to the exact tick
+            Config.Playback.AutoPlay = false;
+            Config.Playback.MasterClock = MasterClock.Video;
+            Config.Playback.SeekAccurate = true; // Ensure precise resumption to the exact tick
 
             // Increase buffering to prevent stutters on high-resolution/high-bitrate videos
             // 1 second = 10,000,000 ticks (100ns units)
@@ -574,15 +570,22 @@ namespace EdgeLoop.ViewModels
             Config.Demuxer.FormatOpt["http_persistent"] = "0"; // Disabled for HLS stability (PMVHaven CDN rotates endpoints between segments)
 
             // Re-enabling Video Acceleration as requested
-            Config.Video.VideoAcceleration = true;
+            Config.Video.HWAcceleration = true;
 
             // Fix for "Audio Only" / Black Screen with HW Acceleration ON:
             // 1. Allow decoding even if profile doesn't perfectly match capabilities (bypasses some strict checks)
-            Config.Decoder.AllowProfileMismatch = true;
-            // 2. Use D3D11 Video Processor directly (often more stable for HLS/Web streams than internal VP)
-            Config.Video.VideoProcessor = VideoProcessors.D3D11;
+            Config.Video.AllowProfileMismatch = true;
 
             Player = new Player(Config);
+
+            // 2. Use D3D11 Video Processor directly (often more stable for HLS/Web streams than internal VP)
+            if (Player.Renderer != null)
+                Player.Renderer.PreferredVideoProcessor = VideoProcessors.D3D11;
+
+            // Telemetry stats drive the on-screen drift/D3D-latency overlay, which
+            // re-evaluates its bindings at video framerate on every player window.
+            // Only pay for it when verbose logging is actually on.
+            Player.Stats = App.Settings?.EnableDiagnosticMode ?? false;
 
             // Map Flyleaf events (Named handlers for safe unsubscription)
             Player.OpenCompleted += Player_OpenCompleted;

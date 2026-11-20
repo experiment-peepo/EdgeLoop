@@ -9,7 +9,22 @@ namespace FlyleafLib.MediaPlayer;
 
 public class Audio : NotifyPropertyChanged
 {
-    // TODO: Add Volume/Mute to Config.Audio (consider allowing saving and separate config field (flags) whether to load those?)
+    /// <summary>Whether audio processing is enabled for this player.</summary>
+    public bool Enabled
+    {
+        get => decoder.audioEnabled;
+        set
+        {
+            if (!Set(ref decoder.audioEnabled, value))
+                return;
+            if (value)
+                Enable();
+            else
+                Disable();
+        }
+    }
+    internal void SetEnabled(bool enabled) => Set(ref decoder.audioEnabled, enabled, true, nameof(Enabled));
+    public void Toggle() => Enabled = !Enabled;
 
     public event EventHandler<AudioFrame> SamplesAdded;
 
@@ -71,6 +86,22 @@ public class Audio : NotifyPropertyChanged
     internal int    _SampleRate, sampleRate;
 
     /// <summary>
+    /// Audio delay in ticks; reset to zero when opening an audio stream.
+    /// </summary>
+    public long Delay
+    {
+        get => player.AudioDecoder.Delay;
+        set
+        {
+            if (!IsOpened)
+                return;
+            if (Set(ref player.AudioDecoder.Delay, value))
+                player.ReSync(player.decoder.AudioStream);
+        }
+    }
+    internal void SetDelay(long delay) => Set(ref player.AudioDecoder.Delay, delay, true, nameof(Delay));
+
+    /// <summary>
     /// Audio player's volume / amplifier (valid values 0 - no upper limit)
     /// </summary>
     public int Volume
@@ -113,10 +144,8 @@ public class Audio : NotifyPropertyChanged
         {
             lock (locker)
             {
-                if (sourceVoice == null)
-                    return;
-
-                sourceVoice.Volume = value ? 0 : _Volume / 100.0f;
+                if (sourceVoice != null)
+                    sourceVoice.Volume = value ? 0 : _Volume / 100.0f;
             }
 
             Set(ref mute, value, false);
@@ -146,8 +175,9 @@ public class Audio : NotifyPropertyChanged
                 _Device = value;
             }
 
-            Initialize();
             RaiseUI(nameof(Device));
+
+            Task.Run(() => Initialize(false)); // TBR: might cause deadlock in UI #693
         }
     }
     internal AudioEngine.AudioEndpoint _Device = Engine.Audio?.DefaultDevice;
@@ -169,12 +199,49 @@ public class Audio : NotifyPropertyChanged
                             masteringVoice;
     internal IXAudio2SourceVoice
                             sourceVoice;
-    WaveFormat              waveFormat  = new(48000, 16, 2); // Output Audio Device
+    WaveFormatExtensible    waveFormat  = new(0, 16, 2);
     AudioBuffer             audioBuffer = new();
-    internal double         Timebase;
-    internal ulong          submittedSamples;
-    int                     curSampleRate = -1;
+    double                  sourceSampleRateTb;
+    double                  masterSampleRateTb;
+    ulong                   submittedSamples;
     #endregion
+
+    public void DelayAdd() => Delay += Config.Audio.DelayOffset;
+    public void DelayRemove() => Delay -= Config.Audio.DelayOffset;
+    public void DelayAdd2() => Delay += Config.Audio.DelayOffset2;
+    public void DelayRemove2() => Delay -= Config.Audio.DelayOffset2;
+
+    public void ToggleMute() => Mute = !Mute;
+    public void VolumeUp()
+    {
+        if (Volume == Config.Audio.VolumeMax)
+            return;
+        Volume = Math.Min(Volume + Config.Audio.VolumeOffset, Config.Audio.VolumeMax);
+    }
+    public void VolumeDown()
+    {
+        if (Volume == 0)
+            return;
+        Volume = Math.Max(Volume - Config.Audio.VolumeOffset, 0);
+    }
+
+    /// <summary>
+    /// Reloads filters from Config.Audio.Filters (experimental)
+    /// </summary>
+    /// <returns>0 on success</returns>
+    public int ReloadFilters() => player.AudioDecoder.ReloadFilters();
+
+    /// <summary>
+    /// <para>
+    /// Updates filter's property (experimental)
+    /// Note: This will not update the property value in Config.Audio.Filters
+    /// </para>
+    /// </summary>
+    /// <param name="filterId">Filter's unique id specified in Config.Audio.Filters</param>
+    /// <param name="key">Filter's property to change</param>
+    /// <param name="value">Filter's property value</param>
+    /// <returns>0 on success</returns>
+    public int UpdateFilter(string filterId, string key, string value) => player.AudioDecoder.UpdateFilter(filterId, key, value);
 
     public Audio(Player player)
     {
@@ -199,26 +266,45 @@ public class Audio : NotifyPropertyChanged
         Volume = Config.Audio.VolumeMax / 2;
     }
 
-    internal void Initialize()
+    internal void Initialize(bool fromFormatChanged = false)
     {
         lock (locker)
         {
             if (Engine.Audio == null || Engine.Audio.Failed)
             {
-                Config.Audio.Enabled = false;
+                Task.Run(() => { Enabled = false; }); // Deadlock during Stop (same thread with RunThread)
                 return;
             }
 
-            if (!isOpened || sampleRate <= 0)
+            if (!isOpened)
                 return;
 
-            player.Log.Info($"Initialiazing audio at {sampleRate}Hz ({Device.Id}:{Device.Name})");
+            if (fromFormatChanged)
+            {
+                waveFormat = new(decoder.AudioDecoder.SampleRate, av_get_bytes_per_sample(decoder.AudioDecoder.SampleFormat) * 8, decoder.AudioDecoder.ChannelLayout.nb_channels)
+                {
+                    ChannelMask = (int)decoder.AudioDecoder.ChannelLayout.u.mask,
+                    GuidSubFormat = decoder.AudioDecoder.SampleFormat == AVSampleFormat.Flt ? SubTypeIeeeFloat : SubTypePcm
+                };
+            }
+
+            if (waveFormat.SampleRate <= 0)
+            {   // Possible with AllowFindStreamInfo = false
+                player.Log.Error($"Audio initialization failed");
+                Task.Run(Disable);
+                return;
+            }
 
             Dispose();
 
             try
             {
                 xaudio2 = XAudio2Create();
+                if (xaudio2 == null)
+                {
+                    Engine.Audio.Failed = true;
+                    return;
+                }
 
                 try
                 {
@@ -230,19 +316,25 @@ public class Audio : NotifyPropertyChanged
                 }
 
                 sourceVoice = xaudio2.CreateSourceVoice(waveFormat, false);
-                sourceVoice.SetSourceSampleRate((uint)sampleRate);
                 sourceVoice.Start();
 
+                var masterDetails = masteringVoice.VoiceDetails;
+
+                if (CanInfo)
+                    player.Log.Info("Audio initialized" +
+                    $"\r\nMaster Voice: {masterDetails.InputSampleRate / 1000.0:g} kHz / {GetChannelLayoutStr((ulong)masteringVoice.ChannelMask)} | {Device.Id}:{Device.Name}" +
+                    $"\r\nSource Voice: {waveFormat.SampleRate / 1000.0:g} kHz / {decoder.AudioDecoder.ChannelLayoutStr} / {waveFormat.BitsPerSample}-bit ({decoder.AudioDecoder.SampleFormat.ToString().ToLower()})");
+
                 submittedSamples = 0;
-                Timebase = 1000 * 10000.0 / sampleRate;
+                sourceSampleRateTb = 1000 * 10000.0 / waveFormat.SampleRate;
+                masterSampleRateTb = 1000 * 10000.0 / masterDetails.InputSampleRate;
                 masteringVoice.Volume = Config.Audio.VolumeMax / 100.0f;
                 sourceVoice.Volume = mute ? 0 : Math.Max(0, _Volume / 100.0f);
-                curSampleRate = sampleRate;
             }
             catch (Exception e)
             {
-                player.Log.Info($"Audio initialization failed ({e.Message})");
-                Config.Audio.Enabled = false;
+                player.Log.Error($"Audio initialization failed ({e.Message})");
+                Enabled = false;
             }
         }
     }
@@ -276,7 +368,7 @@ public class Audio : NotifyPropertyChanged
 
                 framesDisplayed++;
 
-                submittedSamples += (ulong)(aFrame.dataLen / 4); // ASampleBytes
+                submittedSamples += (ulong)(aFrame.dataLen / decoder.AudioDecoder.SampleBytes);
                 SamplesAdded?.Invoke(this, aFrame);
 
                 audioBuffer.AudioDataPointer = aFrame.dataPtr;
@@ -292,7 +384,7 @@ public class Audio : NotifyPropertyChanged
             }
         }
     }
-    internal long GetBufferedDuration() { lock (locker) { return (long)((submittedSamples - sourceVoice.State.SamplesPlayed) * Timebase); } }
+    internal long GetBufferedDuration() { lock (locker) { return (long)((submittedSamples - sourceVoice.State.SamplesPlayed) * sourceSampleRateTb); } }
     internal long GetDeviceDelay()
     {
         /* TODO
@@ -302,7 +394,7 @@ public class Audio : NotifyPropertyChanged
          */
         lock (locker)
         {
-            var latency = (long) ((xaudio2.PerformanceData.CurrentLatencyInSamples * Timebase) - 8_0000);
+            var latency = (long) ((xaudio2.PerformanceData.CurrentLatencyInSamples * masterSampleRateTb) - 8_0000);
             if (latency > TimeSpan.FromMilliseconds(500).Ticks)
             {
 #if DEBUG
@@ -342,7 +434,7 @@ public class Audio : NotifyPropertyChanged
         ClearBuffer();
         player.UIAdd(uiAction);
     }
-    internal void Refresh(bool fromCodec = false)
+    internal void Refresh()
     {
         if (decoder.AudioStream == null)
         {
@@ -362,20 +454,9 @@ public class Audio : NotifyPropertyChanged
         framesDisplayed = 0;
         framesDropped = 0;
 
-        if (fromCodec)
-        {
-            if (sampleRate <= 0)
-            {   // Possible with AllowFindStreamInfo = false
-                Disable();
-                return;
-            }
-
-            if (sampleRate != curSampleRate)
-                Initialize();
-        }
-
         player.UIAdd(uiAction);
     }
+
     internal void Enable()
     {
         bool wasPlaying = player.IsPlaying;
@@ -387,7 +468,7 @@ public class Audio : NotifyPropertyChanged
         Refresh();
         player.UIAll();
 
-        if (wasPlaying || Config.Player.AutoPlay)
+        if (wasPlaying || Config.Playback.AutoPlay)
             player.Play();
     }
     internal void Disable()
@@ -406,4 +487,9 @@ public class Audio : NotifyPropertyChanged
         Reset();
         player.UIAll();
     }
+
+    // KSDATAFORMAT_SUBTYPE_PCM | Integer PCM: U8, S16, S32
+    static readonly Guid SubTypePcm = new("00000001-0000-0010-8000-00AA00389B71");
+    // KSDATAFORMAT_SUBTYPE_IEEE_FLOAT | IEEE 32-bit float: FLT
+    static readonly Guid SubTypeIeeeFloat = new("00000003-0000-0010-8000-00AA00389B71");
 }

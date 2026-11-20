@@ -5,6 +5,10 @@ namespace FlyleafLib.MediaFramework.MediaDecoder;
 
 public unsafe class SubtitlesDecoder : DecoderBase
 {
+    // Runtime timestamp adjustment in ticks; also used by standalone decoder sessions.
+    internal long Delay;
+    internal Action<SubtitlesFrame> Parser = ParseSubtitles.Parse;
+
     public SubtitlesStream SubtitlesStream => (SubtitlesStream)Stream;
 
     public ConcurrentQueue<SubtitlesFrame>
@@ -15,15 +19,15 @@ public unsafe class SubtitlesDecoder : DecoderBase
 
     protected override unsafe bool Setup()
     {
-        AVCodec* codec = string.IsNullOrEmpty(Config.Decoder._SubtitlesCodec) ? avcodec_find_decoder(Stream.CodecID) : avcodec_find_decoder_by_name(Config.Decoder._SubtitlesCodec);
+        AVCodec* codec = string.IsNullOrEmpty(Config.Subtitles._Codec) ? avcodec_find_decoder(Stream.CodecID) : avcodec_find_decoder_by_name(Config.Subtitles._Codec);
         if (codec == null)
         {
-            Log.Error($"Codec not found ({(string.IsNullOrEmpty(Config.Decoder._SubtitlesCodec) ? Stream.CodecID : Config.Decoder._SubtitlesCodec)})");
+            Log.Error($"Codec not found ({(string.IsNullOrEmpty(Config.Subtitles._Codec) ? Stream.CodecID : Config.Subtitles._Codec)})");
             return false;
         }
 
         if (CanDebug)
-            Log.Debug($"Using {avcodec_get_name(codec->id)} codec");
+            Log.Debug($"Using {avcodec_get_name_str(codec->id)} codec");
 
         codecCtx = avcodec_alloc_context3(codec); // Pass codec to use default settings
         if (codecCtx == null)
@@ -42,10 +46,10 @@ public unsafe class SubtitlesDecoder : DecoderBase
         codecCtx->pkt_timebase = Stream.AVStream->time_base;
         codecCtx->codec_id = codec->id; // avcodec_parameters_to_context will change this we need to set Stream's Codec Id (eg we change mp2 to mp3)
 
-        var codecOpts = Config.Decoder.SubtitlesCodecOpt;
+        var codecOpts = Config.Subtitles.CodecOpt;
         AVDictionary* avopt = null;
         foreach (var optKV in codecOpts)
-            _ = av_dict_set(&avopt, optKV.Key, optKV.Value, 0);
+            _ = av_dict_set(ref avopt, optKV.Key, optKV.Value, 0);
 
         ret = avcodec_open2(codecCtx, null, avopt == null ? null : &avopt);
         if (ret < 0)
@@ -91,19 +95,19 @@ public unsafe class SubtitlesDecoder : DecoderBase
     protected override void RunInternal()
     {
         int ret = 0;
-        int allowedErrors = Config.Decoder.MaxErrors;
+        int allowedErrors = Config.Subtitles.MaxErrors;
         AVPacket *packet;
 
         do
         {
             // Wait until Queue not Full or Stopped
-            if (Frames.Count >= Config.Decoder.MaxSubsFrames)
+            if (Frames.Count >= Config.Subtitles.MaxFrames)
             {
                 lock (lockStatus)
                     if (Status == Status.Running)
                         Status = Status.QueueFull;
 
-                while (Frames.Count >= Config.Decoder.MaxSubsFrames && Status == Status.QueueFull)
+                while (Frames.Count >= Config.Subtitles.MaxFrames && Status == Status.QueueFull)
                     Thread.Sleep(20);
 
                 lock (lockStatus)
@@ -148,6 +152,9 @@ public unsafe class SubtitlesDecoder : DecoderBase
                         lock (demuxer.lockStatus)
                             lock (lockStatus)
                             {
+                                if (demuxer.IsRunning)
+                                    continue;
+
                                 if (demuxer.Status == Status.Pausing || demuxer.Status == Status.Paused)
                                     Status = Status.Pausing;
                                 else if (demuxer.Status != Status.Ended)
@@ -210,7 +217,7 @@ public unsafe class SubtitlesDecoder : DecoderBase
                 pts += subFrame.sub.start_display_time /*ms*/ * 10000L;
 
                 if (!filledFromCodec) // TODO: CodecChanged? And when findstreaminfo is disabled as it is an external demuxer will not know the main demuxer's start time
-                {
+                {   // should update also the subs renderer (w/h & other?*)
                     filledFromCodec = true;
                     SubtitlesStream.Refresh(this);
                     CodecChanged?.Invoke(this);
@@ -221,7 +228,7 @@ public unsafe class SubtitlesDecoder : DecoderBase
                     if (SubtitlesStream.IsBitmap) // clear prev subs frame
                     {
                         subFrame.duration = uint.MaxValue;
-                        subFrame.Timestamp = pts - demuxer.StartTime + Config.Subtitles.Delay;
+                        subFrame.Timestamp = pts - demuxer.StartTime + Delay;
                         Frames.Enqueue(subFrame);
                     }
 
@@ -232,12 +239,12 @@ public unsafe class SubtitlesDecoder : DecoderBase
                 }
 
                 subFrame.duration = subFrame.sub.end_display_time;
-                subFrame.Timestamp = pts - demuxer.StartTime + Config.Subtitles.Delay;
+                subFrame.Timestamp = pts - demuxer.StartTime + Delay;
 
                 if (subFrame.sub.rects[0]->type == AVSubtitleType.Ass)
                 {
                     subFrame.text = BytePtrToStringUTF8(subFrame.sub.rects[0]->ass);
-                    Config.Subtitles.Parser(subFrame);
+                    Parser(subFrame);
 
                     fixed (AVSubtitle* subPtr = &subFrame.sub)
                         avsubtitle_free(subPtr);

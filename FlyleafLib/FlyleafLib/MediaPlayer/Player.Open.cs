@@ -29,7 +29,10 @@ unsafe partial class Player
     {
         public Player Player { get; set; }
         public VideoStream VideoStream { get; set; }
-        public bool VideoAcceleration { get; set; }
+        public bool HWAcceleration { get; set; }
+
+        /// <summary>Preferred decoder for this open when the player config has no explicit decoder.</summary>
+        public string PreferredDecoder { get; set; }
     }
 
     private void OnOpening(OpeningArgs args = null)
@@ -64,9 +67,11 @@ unsafe partial class Player
     #region Decoder Events
     private void Decoder_AudioCodecChanged(DecoderBase x)
     {
-        Audio.Refresh(true);
+        Audio.Refresh();
         UIAll();
     }
+    private void Decoder_AudioFormatChanged(AudioDecoder x)
+        => Audio.Initialize(true);
     private void Decoder_VideoCodecChanged(DecoderBase x)
     {
         Video.Refresh();
@@ -75,7 +80,7 @@ unsafe partial class Player
 
     private void Decoder_OpenAudioStreamCompleted(object sender, OpenAudioStreamCompletedArgs e)
     {
-        Config.Audio.SetDelay(0);
+        Audio.SetDelay(0);
         Audio.Refresh();
         canPlay = Video.IsOpened || Audio.IsOpened;
         UpdateMainDemuxer();
@@ -108,11 +113,11 @@ unsafe partial class Player
     }
     private void Decoder_OpenSubtitlesStreamCompleted(object sender, OpenSubtitlesStreamCompletedArgs e)
     {
-        Config.Subtitles.SetDelay(0);
+        Subtitles.SetDelay(0);
         Subtitles.Refresh();
         UIAll();
 
-        if (IsPlaying && Subtitles.isOpened && Config.Subtitles.Enabled) // TBR (First run mainly with -from DecoderContext->OpenSuggestedSubtitles-> Task.Run causes late open, possible resync?)
+        if (IsPlaying && Subtitles.isOpened && Subtitles.Enabled) // TBR (First run mainly with -from DecoderContext->OpenSuggestedSubtitles-> Task.Run causes late open, possible resync?)
         {
             lock (lockSubtitles)
                 if (SubtitlesDecoder.OnVideoDemuxer)
@@ -129,7 +134,7 @@ unsafe partial class Player
     {
         Data.Refresh();
         UIAll();
-        if (Config.Data.Enabled)
+        if (Data.Enabled)
         {
             lock (lockSubtitles)
                 if (DataDecoder.OnVideoDemuxer)
@@ -200,7 +205,7 @@ unsafe partial class Player
             {
                 status = Status.Paused;
 
-                if (Config.Player.AutoPlay)
+                if (Config.Playback.AutoPlay)
                     Play();
             }
             else if (!defaultVideo && !defaultAudio && MainDemuxer != null)
@@ -250,7 +255,7 @@ unsafe partial class Player
                 return args;
             }
 
-            Config.Subtitles.SetEnabled(true);
+            Subtitles.SetEnabled(true);
             args.Error = decoder.OpenSubtitles(url).Error;
 
             if (args.Success)
@@ -303,8 +308,9 @@ unsafe partial class Player
     /// <param name="defaultVideo">Whether to open the default video stream from plugin suggestions</param>
     /// <param name="defaultAudio">Whether to open the default audio stream from plugin suggestions</param>
     /// <param name="defaultSubtitles">Whether to open the default subtitles stream from plugin suggestions</param>
-    public void OpenAsync(string url, bool defaultPlaylistItem = true, bool defaultVideo = true, bool defaultAudio = true, bool defaultSubtitles = true)
-        => OpenAsyncPush(url, defaultPlaylistItem, defaultVideo, defaultAudio, defaultSubtitles);
+    /// <param name="forceSubtitles">Queues the URL as subtitles regardless of its extension, preserving the current main input.</param>
+    public void OpenAsync(string url, bool defaultPlaylistItem = true, bool defaultVideo = true, bool defaultAudio = true, bool defaultSubtitles = true, bool forceSubtitles = false)
+        => OpenAsyncPush(url, defaultPlaylistItem, defaultVideo, defaultAudio, defaultSubtitles, forceSubtitles);
 
     /// <summary>
     /// Opens a new media I/O stream (audio/video) without blocking
@@ -358,7 +364,7 @@ unsafe partial class Player
             {
                 status = Status.Paused;
 
-                if (Config.Player.AutoPlay)
+                if (Config.Playback.AutoPlay)
                     Play();
             }
 
@@ -407,7 +413,7 @@ unsafe partial class Player
 
             Initialize(Status.Opening, true, true);
 
-            // TODO: Config.Player.Reopen? to reopen session if (item.OpenedCounter > 0)
+            // TODO: Config.Playback.Reopen? to reopen session if (item.OpenedCounter > 0)
             args = decoder.Open(item, defaultVideo, defaultAudio, defaultSubtitles);
 
             if (!args.Success)
@@ -419,7 +425,7 @@ unsafe partial class Player
             {
                 status = Status.Paused;
 
-                if (Config.Player.AutoPlay)
+                if (Config.Playback.AutoPlay)
                     Play();
                 // TODO: else Show on frame?
             }
@@ -504,7 +510,7 @@ unsafe partial class Player
                     requiresBuffering = true;
 
                 isAudioSwitch = true;
-                Config.Audio.SetEnabled(true);
+                Audio.SetEnabled(true);
                 args = decoder.Open(extStream, false, streamIndex);
 
                 if (!args.Success)
@@ -542,6 +548,7 @@ unsafe partial class Player
                 if (!args.Success || !CanPlay)
                     return args;
 
+                decoder.PauseDecoders();
                 decoder.Seek(syncMs, false, false);
                 decoder.GetVideoFrame(syncMs * (long)10000);
                 VideoDemuxer.Start();
@@ -567,7 +574,7 @@ unsafe partial class Player
                     return args;
                 }
 
-                Config.Subtitles.SetEnabled(true);
+                Subtitles.SetEnabled(true);
                 args = decoder.Open(extStream, false, streamIndex);
             }
 
@@ -609,6 +616,16 @@ unsafe partial class Player
     /// <returns></returns>
     public StreamOpenedArgs Open(StreamBase stream, bool resync = true, bool defaultAudio = true)
     {
+        if (stream is VideoStream)
+        {
+            lock (stepSeekLock)
+                return OpenStreamInternal(stream, resync, defaultAudio);
+        }
+
+        return OpenStreamInternal(stream, resync, defaultAudio);
+    }
+    public StreamOpenedArgs OpenStreamInternal(StreamBase stream, bool resync = true, bool defaultAudio = true)
+    {
         // TBR: There is no logic of Initiliaze (at least as a switch?*) or close of the current stream
 
         StreamOpenedArgs args = new();
@@ -626,19 +643,19 @@ unsafe partial class Player
 
             if (stream is AudioStream astream)
             {
-                Config.Audio.SetEnabled(true);
+                Audio.SetEnabled(true);
                 args = decoder.OpenAudioStream(astream);
             }
             else if (stream is VideoStream vstream)
                 args = decoder.OpenVideoStream(vstream, defaultAudio);
             else if (stream is SubtitlesStream sstream)
             {
-                Config.Subtitles.SetEnabled(true);
+                Subtitles.SetEnabled(true);
                 args = decoder.OpenSubtitlesStream(sstream);
             }
             else if (stream is DataStream dstream)
             {
-                Config.Data.SetEnabled(true);
+                Data.SetEnabled(true);
                 args = decoder.OpenDataStream(dstream);
             }
 
@@ -728,10 +745,39 @@ unsafe partial class Player
             session.VideoStream = decoder.VideoStream.StreamIndex;
 
         session.CurTime = CurTime;
-        session.AudioDelay = Config.Audio.Delay;
-        session.SubtitlesDelay = Config.Subtitles.Delay;
+        session.AudioDelay = Audio.Delay;
+        session.SubtitlesDelay = Subtitles.Delay;
 
         return session;
+    }
+
+    public void OpenNextItem()
+        => OpenNextPrevItem(Playlist.NextItem);
+
+    public void OpenPrevItem()
+        => OpenNextPrevItem(Playlist.PrevItem);
+
+    internal void OpenNextPrevItem(PlaylistItem item)
+    {
+        if (item == null)
+            return;
+
+        if (item.OpenedCounter > 0)
+        {
+            var session = GetSession(item);
+            session.isReopen = true;
+            session.CurTime = 0;
+
+            // TBR: in case of disabled audio/video/subs it will save the session with them to be disabled
+
+            // TBR: This can cause issues and it might not useful either
+            //if (session.CurTime < 60 * (long)1000 * 10000)
+            //    session.CurTime = 0;
+
+            OpenAsync(session);
+        }
+        else
+            OpenAsync(item);
     }
 
     internal void ReSync(StreamBase stream, int syncMs = -1, bool accurate = false)
@@ -753,9 +799,9 @@ unsafe partial class Player
             isDataSwitch = true;
             requiresBuffering = true;
 
+            decoder.PauseDecoders();
             if (accurate && Video.IsOpened)
             {
-                decoder.PauseDecoders();
                 decoder.Seek(syncMs, false, false);
                 decoder.GetVideoFrame(syncMs * (long)10000); // TBR: syncMs should not be -1 here
             }
@@ -789,7 +835,7 @@ unsafe partial class Player
                 StopScreamerVASDAudio();
 
                 isAudioSwitch = true;
-                decoder.SeekAudio();
+                decoder.SeekAudio((!VideoDemuxer.Disposed && VideoDemuxer.hlsCtx != null) ? VideoDemuxer.CurPackets.FirstTimestamp / 10000 : -1);
                 isAudioSwitch = false;
 
                 if (status == Status.Playing && !requiresBuffering && shouldStartAudioScreamerForVideo)
@@ -897,7 +943,7 @@ unsafe partial class Player
         });
     }
 
-    private void OpenAsyncPush(object url_iostream, bool defaultPlaylistItem = true, bool defaultVideo = true, bool defaultAudio = true, bool defaultSubtitles = true)
+    private void OpenAsyncPush(object url_iostream, bool defaultPlaylistItem = true, bool defaultVideo = true, bool defaultAudio = true, bool defaultSubtitles = true, bool forceSubtitles = false)
     {
         lock (lockActions)
         {
@@ -912,7 +958,7 @@ unsafe partial class Player
                 }
             }
 
-            if ((url_iostream is string) && ExtensionsSubtitles.Contains(GetUrlExtention(url_iostream.ToString())))
+            if ((url_iostream is string) && (forceSubtitles || ExtensionsSubtitles.Contains(GetUrlExtention(url_iostream.ToString()))))
             {
                 OnOpening(new() { Url = url_iostream.ToString(), IsSubtitles = true });
                 openSubtitles.Push(new OpenAsyncData(url_iostream));

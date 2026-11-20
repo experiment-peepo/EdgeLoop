@@ -64,11 +64,11 @@
         <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="10" Padding="5" IsHitTestVisible="False" Opacity="0.5">
             <StackPanel Orientation="Vertical">
                 <TextBlock Text="{Binding Player.Video.ClockDriftMs, StringFormat='Drift: {0}ms'}" FontSize="10" Foreground="White" 
-                           Visibility="{Binding Player.Config.Player.Stats, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                           Visibility="{Binding Player.Stats, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                 <TextBlock Text="{Binding Player.Video.D3DImageLatencyMs, StringFormat='D3D: {0:F1}ms'}" FontSize="10" Foreground="White"
-                           Visibility="{Binding Player.Config.Player.Stats, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                           Visibility="{Binding Player.Stats, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                 <TextBlock Text="{Binding Resolution, StringFormat='Res: {0}'}" FontSize="10" Foreground="White"
-                           Visibility="{Binding Player.Config.Player.Stats, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                           Visibility="{Binding Player.Stats, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                 <TextBlock Text="✦ AI Enhanced" FontSize="11" FontWeight="SemiBold" Foreground="#00FF99" 
                            Visibility="{Binding Player.Renderer.SuperResolution, Converter={StaticResource BooleanToVisibilityConverter}}"
                            Margin="0,2,0,0">

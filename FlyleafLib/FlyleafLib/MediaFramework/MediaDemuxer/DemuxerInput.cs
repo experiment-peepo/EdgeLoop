@@ -20,10 +20,15 @@ public class DemuxerInput : NotifyPropertyChanged
     public Stream IOStream { get; set; }
 
     public Dictionary<string, string>
+                    FormatOpt
+    { get; set; }
+
+    public Dictionary<string, string>
                     HTTPHeaders
     { get; set; }
 
-    public string UserAgent { get; set; }
-
     public string Referrer { get; set; }
+
+    public string Cookies { get; set; }
+    public string CookiesFallback { get; set; }
 }

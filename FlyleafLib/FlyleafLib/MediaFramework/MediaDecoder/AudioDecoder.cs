@@ -27,11 +27,21 @@ namespace FlyleafLib.MediaFramework.MediaDecoder;
 
 public unsafe partial class AudioDecoder : DecoderBase
 {
-    static readonly AVSampleFormat   AOutSampleFormat    = AVSampleFormat.S16;
-    static readonly string           AOutSampleFormatStr = av_get_sample_fmt_name(AOutSampleFormat);
-    static readonly AVChannelLayout  AOutChannelLayout   = AV_CHANNEL_LAYOUT_STEREO;
-    static readonly int              AOutChannels        = AOutChannelLayout.nb_channels;
-    static readonly int              ASampleBytes        = av_get_bytes_per_sample(AOutSampleFormat) * AOutChannels;
+    // Runtime timestamp adjustment in ticks; also used by standalone decoder sessions.
+    internal long Delay;
+
+    // Sink's Format (after Decoder + Filter)
+    public AVChannelLayout ChannelLayout { get => channelLayout; private set { channelLayout = value; } }
+    AVChannelLayout channelLayout;
+    public string ChannelLayoutStr { get; private set; }
+    public AVSampleFormat SampleFormat { get; private set; } = AVSampleFormat.None;
+    public int SampleRate { get; private set; }
+    public int SampleBytes { get; private set; }
+    public double SampleRateTimebase { get; private set; } // Ticks
+
+    public Action<AudioDecoder>
+                            FormatChanged
+    { get; set; }
 
     public AudioStream AudioStream => (AudioStream)Stream;
     public readonly
@@ -46,25 +56,21 @@ public unsafe partial class AudioDecoder : DecoderBase
     int                     cBufPos;
     int                     cBufSamples;
     internal bool           resyncWithVideoRequired;
-    SwrContext*             swrCtx;
-
-    internal long           nextPts;
-    double                  sampleRateTimebase;
 
     public AudioDecoder(Config config, int uniqueId = -1, VideoDecoder syncDecoder = null) : base(config, uniqueId)
         => VideoDecoder = syncDecoder;
 
     protected override bool Setup()
     {
-        AVCodec* codec = string.IsNullOrEmpty(Config.Decoder._AudioCodec) ? avcodec_find_decoder(Stream.CodecID) : avcodec_find_decoder_by_name(Config.Decoder._AudioCodec);
+        AVCodec* codec = string.IsNullOrEmpty(Config.Audio._Codec) ? avcodec_find_decoder(Stream.CodecID) : avcodec_find_decoder_by_name(Config.Audio._Codec);
         if (codec == null)
         {
-            Log.Error($"Codec not found ({(string.IsNullOrEmpty(Config.Decoder._AudioCodec) ? Stream.CodecID : Config.Decoder._AudioCodec)})");
+            Log.Error($"Codec not found ({(string.IsNullOrEmpty(Config.Audio._Codec) ? Stream.CodecID : Config.Audio._Codec)})");
             return false;
         }
 
         if (CanDebug)
-            Log.Debug($"Using {avcodec_get_name(codec->id)} codec");
+            Log.Debug($"Using {avcodec_get_name_str(codec->id)} codec");
 
         codecCtx = avcodec_alloc_context3(codec); // Pass codec to use default settings
         if (codecCtx == null)
@@ -83,10 +89,10 @@ public unsafe partial class AudioDecoder : DecoderBase
         codecCtx->pkt_timebase = Stream.AVStream->time_base;
         codecCtx->codec_id = codec->id; // avcodec_parameters_to_context will change this we need to set Stream's Codec Id (eg we change mp2 to mp3)
 
-        var codecOpts = Config.Decoder.AudioCodecOpt;
+        var codecOpts = Config.Audio.CodecOpt;
         AVDictionary* avopt = null;
         foreach (var optKV in codecOpts)
-            _ = av_dict_set(&avopt, optKV.Key, optKV.Value, 0);
+            _ = av_dict_set(ref avopt, optKV.Key, optKV.Value, 0);
 
         ret = avcodec_open2(codecCtx, null, avopt == null ? null : &avopt);
         if (ret < 0)
@@ -108,49 +114,14 @@ public unsafe partial class AudioDecoder : DecoderBase
 
         return true;
     }
-    private int SetupSwr()
-    {
-        int ret;
-
-        DisposeSwr();
-        swrCtx = swr_alloc();
-
-        _ = av_opt_set_chlayout(swrCtx, "in_chlayout", &codecCtx->ch_layout, 0);
-        _ = av_opt_set_int(swrCtx, "in_sample_rate", codecCtx->sample_rate, 0);
-        _ = av_opt_set_sample_fmt(swrCtx, "in_sample_fmt", codecCtx->sample_fmt, 0);
-
-        fixed (AVChannelLayout* ptr = &AOutChannelLayout)
-            _ = av_opt_set_chlayout(swrCtx, "out_chlayout", ptr, 0);
-        _ = av_opt_set_int(swrCtx, "out_sample_rate", codecCtx->sample_rate, 0);
-        _ = av_opt_set_sample_fmt(swrCtx, "out_sample_fmt", AOutSampleFormat, 0);
-
-        ret = swr_init(swrCtx);
-        if (ret < 0)
-            Log.Error($"Swr setup failed {FFmpegEngine.ErrorCodeToMsg(ret)} ({ret})");
-
-        return ret;
-    }
-    private void DisposeSwr()
-    {
-        if (swrCtx == null)
-            return;
-
-        swr_close(swrCtx);
-
-        fixed (SwrContext** ptr = &swrCtx)
-            swr_free(ptr);
-
-        swrCtx = null;
-    }
 
     protected override void DisposeInternal()
     {
         DisposeFrames();
-        DisposeSwr();
         DisposeFilters();
 
         filledFromCodec = false;
-        nextPts = AV_NOPTS_VALUE;
+        expectingPts = AV_NOPTS_VALUE;
     }
     public void DisposeFrames() => Frames = new();
     public void Flush()
@@ -167,7 +138,7 @@ public unsafe partial class AudioDecoder : DecoderBase
                     Status = Status.Stopping;
 
                 resyncWithVideoRequired = !VideoDecoder.Disposed;
-                nextPts = AV_NOPTS_VALUE;
+                expectingPts = AV_NOPTS_VALUE;
                 DisposeFrames();
                 avcodec_flush_buffers(codecCtx);
                 if (filterGraph != null)
@@ -177,21 +148,21 @@ public unsafe partial class AudioDecoder : DecoderBase
 
     protected override void RunInternal()
     {
-        int allowedErrors   = Config.Decoder.MaxErrors;
-        int sleepMs         = Config.Decoder.MaxAudioFrames > 5 && Config.Player.MaxLatency == 0 ? 10 : 4;
+        int allowedErrors   = Config.Audio.MaxErrors;
+        int sleepMs         = Config.Audio.MaxFrames > 5 && Config.Playback.MaxLatency == 0 ? 10 : 4;
         int ret;
         AVPacket *packet;
 
         do
         {
             // Wait until Queue not Full or Stopped
-            if (Frames.Count >= Config.Decoder.MaxAudioFrames)
+            if (Frames.Count >= Config.Audio.MaxFrames)
             {
                 lock (lockStatus)
                     if (Status == Status.Running)
                         Status = Status.QueueFull;
 
-                while (Frames.Count >= Config.Decoder.MaxAudioFrames && Status == Status.QueueFull)
+                while (Frames.Count >= Config.Audio.MaxFrames && Status == Status.QueueFull)
                     Thread.Sleep(sleepMs);
 
                 lock (lockStatus)
@@ -247,6 +218,9 @@ public unsafe partial class AudioDecoder : DecoderBase
                         lock (demuxer.lockStatus)
                             lock (lockStatus)
                             {
+                                if (demuxer.IsRunning)
+                                    continue;
+
                                 if (demuxer.Status == Status.Pausing || demuxer.Status == Status.Paused)
                                     Status = Status.Pausing;
                                 else if (demuxer.Status != Status.Ended)
@@ -271,16 +245,15 @@ public unsafe partial class AudioDecoder : DecoderBase
                 }
             }
 
-            Monitor.Enter(lockCodecCtx); // restore the old lock / add interrupters similar to the demuxer
+            Monitor.Enter(lockCodecCtx);
             try
             {
                 if (Status == Status.Stopped)
-                { Monitor.Exit(lockCodecCtx); continue; }
+                    continue;
 
                 packet = demuxer.AudioPackets.Dequeue();
-
                 if (packet == null)
-                { Monitor.Exit(lockCodecCtx); continue; }
+                    continue;
 
                 if (isRecording)
                 {
@@ -310,7 +283,6 @@ public unsafe partial class AudioDecoder : DecoderBase
                         if (allowedErrors == 0)
                         { Log.Error("Too many errors!"); Status = Status.Stopping; break; }
 
-                        Monitor.Exit(lockCodecCtx);
                         continue;
                     }
                 }
@@ -338,49 +310,36 @@ public unsafe partial class AudioDecoder : DecoderBase
                         frame->pts = frame->best_effort_timestamp;
                     else if (frame->pts == AV_NOPTS_VALUE)
                     {
-                        if (nextPts == AV_NOPTS_VALUE && filledFromCodec) // Possible after seek (maybe set based on pkt_pos?)
+                        if (expectingPts == AV_NOPTS_VALUE)
                         {
                             av_frame_unref(frame);
                             continue;
                         }
 
-                        frame->pts = nextPts;
+                        frame->pts = expectingPts;
                     }
 
-                    // We could fix it down to the demuxer based on size?
-                    if (frame->duration <= 0)
-                        frame->duration = av_rescale_q((long)(frame->nb_samples * sampleRateTimebase), Engine.FFmpeg.AV_TIMEBASE_Q, Stream.AVStream->time_base);
-
-                    codecChanged = AudioStream.SampleFormat != codecCtx->sample_fmt || AudioStream.SampleRate != codecCtx->sample_rate || AudioStream.ChannelLayout != codecCtx->ch_layout.u.mask;
+                    codecChanged = AudioStream.SampleFormat != codecCtx->sample_fmt || AudioStream.SampleRate != codecCtx->sample_rate || AudioStream.ChannelLayout.u.mask != codecCtx->ch_layout.u.mask;
 
                     if (!filledFromCodec || codecChanged)
                     {
                         if (codecChanged && filledFromCodec)
                         {
-                            byte[] buf = new byte[50];
-                            fixed (byte* bufPtr = buf)
-                            {
-                                _ = av_channel_layout_describe(&codecCtx->ch_layout, bufPtr, (nuint)buf.Length);
-                                Log.Warn($"Codec changed {AudioStream.CodecIDOrig} {AudioStream.SampleFormat} {AudioStream.SampleRate} {AudioStream.ChannelLayoutStr} => {codecCtx->codec_id} {codecCtx->sample_fmt} {codecCtx->sample_rate} {BytePtrToStringUTF8(bufPtr)}");
-                            }
+                            Log.Warn($"Codec changed {AudioStream.SampleRate / 1000:g} kHz / {AudioStream.ChannelLayoutStr} / {AudioStream.SampleFormat.ToString().ToLower()} => {codecCtx->sample_rate / 1000:g} kHz / {GetChannelLayoutStr(codecCtx->ch_layout)} / {codecCtx->sample_fmt.ToString().ToLower()}");
+                            DisposeFrames();    // as we reset XAudio we need to avoid feeding those
                         }
 
-                        // Dispose (mini)
-                        //DisposeFrames();
-                        DisposeSwr();
                         DisposeFilters();
 
                         filledFromCodec = true;
                         AudioStream.Refresh(this, frame);
                         codecChanged = false;
                         resyncWithVideoRequired = !VideoDecoder.Disposed;
-                        sampleRateTimebase = 1000 * 1000.0 / codecCtx->sample_rate;
-                        nextPts = AudioStream.StartTimePts;
+                        streamSampleRateTimebase = new() { Num = 1, Den = codecCtx->sample_rate };
+                        gapOffsetTb = av_rescale_q((long)TimeSpan.FromMilliseconds(40).TotalMicroseconds, TIME_BASE_Q, AudioStream.AVStream->time_base);
 
-                        if (frame->pts == AV_NOPTS_VALUE)
-                            frame->pts = nextPts;
-
-                        ret = SetupFiltersOrSwr();
+                        lock (lockSpeed)
+                            ret = SetupFilters();
 
                         CodecChanged?.Invoke(this);
 
@@ -390,21 +349,17 @@ public unsafe partial class AudioDecoder : DecoderBase
                             av_frame_unref(frame);
                             break;
                         }
-
-                        if (nextPts == AV_NOPTS_VALUE)
-                        {
-                            av_frame_unref(frame);
-                            continue;
-                        }
                     }
 
                     if (resyncWithVideoRequired)
                     {
+                        Monitor.Exit(lockCodecCtx);
                         // TODO: in case of long distance will spin (CPU issue), possible reseek?
                         while (VideoDecoder.StartTime == AV_NOPTS_VALUE && VideoDecoder.IsRunning && resyncWithVideoRequired)
                             Thread.Sleep(10);
+                        Monitor.Enter(lockCodecCtx);
 
-                        long ts = (long)((frame->pts + frame->duration) * AudioStream.Timebase) - demuxer.StartTime + Config.Audio.Delay;
+                        long ts = (long)((frame->pts + frame->duration) * AudioStream.Timebase) - demuxer.StartTime + Delay;
 
                         if (ts < VideoDecoder.StartTime)
                         {
@@ -418,20 +373,19 @@ public unsafe partial class AudioDecoder : DecoderBase
                     }
 
                     lock (lockSpeed)
-                    {
-                        if (filterGraph != null)
-                            ProcessFilters();
-                        else
-                            Process();
+                        ProcessFilters();
 
-                        av_frame_unref(frame);
-                    }
+                    av_frame_unref(frame);
                 }
             }
-            catch { }
-
-            Monitor.Exit(lockCodecCtx);
-
+            catch (Exception ex)
+            {
+                Log.Debug(ex.ToString());
+            }
+            finally
+            {
+                Monitor.Exit(lockCodecCtx);
+            }
         } while (Status == Status.Running);
 
         if (isRecording)
@@ -440,73 +394,6 @@ public unsafe partial class AudioDecoder : DecoderBase
         if (Status == Status.Draining)
             Status = Status.Ended;
     }
-    private void Process()
-    {
-        try
-        {
-            nextPts = frame->pts + frame->duration;
-
-            var dataLen     = frame->nb_samples * ASampleBytes;
-            var speedDataLen= Align((int)(dataLen / speed), ASampleBytes);
-
-            AudioFrame mFrame = new()
-            {
-                Timestamp   = (long)(frame->pts * AudioStream.Timebase) - demuxer.StartTime + Config.Audio.Delay,
-                dataLen     = speedDataLen,
-                speed       = speed
-            };
-            if (CanTrace)
-                Log.Trace($"Processes {TicksToTime(mFrame.Timestamp)}");
-
-            if (frame->nb_samples > cBufSamples)
-                AllocateCircularBuffer(frame->nb_samples);
-            else if (cBufPos + Math.Max(dataLen, speedDataLen) >= cBuf.Length)
-                cBufPos = 0;
-
-            fixed (byte* circularBufferPosPtr = &cBuf[cBufPos])
-            {
-                int ret = swr_convert(swrCtx, &circularBufferPosPtr, frame->nb_samples, (byte**)&frame->data, frame->nb_samples);
-                if (ret < 0)
-                    return;
-
-                mFrame.dataPtr = (IntPtr)circularBufferPosPtr;
-            }
-
-            // Fill silence
-            if (speed < 1)
-                for (int p = dataLen; p < speedDataLen; p++)
-                    cBuf[cBufPos + p] = 0;
-
-            cBufPos += Math.Max(dataLen, speedDataLen);
-            Frames.Enqueue(mFrame);
-
-            // Wait until Queue not Full or Stopped
-            if (Frames.Count >= Config.Decoder.MaxAudioFrames * cBufTimesCur)
-            {
-                Monitor.Exit(lockCodecCtx);
-                lock (lockStatus)
-                    if (Status == Status.Running)
-                        Status = Status.QueueFull;
-
-                while (Frames.Count >= Config.Decoder.MaxAudioFrames * cBufTimesCur && Status == Status.QueueFull)
-                    Thread.Sleep(20);
-
-                Monitor.Enter(lockCodecCtx);
-
-                lock (lockStatus)
-                {
-                    if (Status != Status.QueueFull)
-                        return;
-
-                    Status = Status.Running;
-                }
-            }
-        }
-        catch (Exception e)
-        {
-            Log.Error($"Failed to process frame ({e.Message})");
-        }
-    }
 
     Queue<byte[]> cBufHistory = [];
     private void AllocateCircularBuffer(int samples)
@@ -514,12 +401,12 @@ public unsafe partial class AudioDecoder : DecoderBase
         /* TBR
         * 1. If we change to different in/out sample rates we need to calculate delay
         * 2. By destorying the cBuf can create critical issues while the audio decoder reads the data? (add lock) | we need to copy the lost data and change the pointers
-        * 3. Recalculate on Config.Decoder.MaxAudioFrames change (greater)
+        * 3. Recalculate on Config.Audio.MaxFrames change (greater)
         * 4. cBufTimesSize cause filters can pass the limit when we need to use lockSpeed
         */
 
         samples = Math.Max(10000, samples); // 10K samples to ensure that currently we will not re-allocate?
-        int size    = Config.Decoder.MaxAudioFrames * samples * ASampleBytes * cBufTimesSize;
+        int size    = Config.Audio.MaxFrames * samples * SampleBytes * cBufTimesSize;
 
         if (cBuf != null)
         {

@@ -4,10 +4,8 @@ public class FFmpegEngine
 {
     public string Folder { get; private set; }
     public string Version { get; private set; }
-    public bool Ver8OrGreater { get; private set; }
 
-    const int           AV_LOG_BUFFER_SIZE = 5 * 1024;
-    internal AVRational AV_TIMEBASE_Q;
+    const int AV_LOG_BUFFER_SIZE = 5 * 1024;
 
     internal FFmpegEngine()
     {
@@ -17,11 +15,9 @@ public class FFmpegEngine
             Folder = GetFolderPath(Engine.Config.FFmpegPath);
             LoadLibraries(Folder, Engine.Config.FFmpegLoadProfile);
 
-            uint ver        = avformat_version();
+            uint ver    = avformat_version();
             Version = $"{ver >> 16}.{(ver >> 8) & 255}.{ver & 255}";
-            Ver8OrGreater = ver >> 16 > 61;
             SetLogLevel();
-            AV_TIMEBASE_Q = av_get_time_base_q();
             Engine.Log.Info($"FFmpeg Loaded (Profile: {Engine.Config.FFmpegLoadProfile}, Location: {Folder}, FmtVer: {Version})");
         }
         catch (Exception e)
@@ -33,15 +29,15 @@ public class FFmpegEngine
 
     internal static void SetLogLevel()
     {
-        if (Engine.Config.FFmpegLogLevel != Flyleaf.FFmpeg.LogLevel.Quiet)
+        if (Engine.Config.FFmpegLogLevel != FF.LogLevel.Quiet)
         {
             av_log_set_level(Engine.Config.FFmpegLogLevel);
             av_log_set_callback(LogFFmpeg);
         }
         else
         {
-            av_log_set_level(Flyleaf.FFmpeg.LogLevel.Quiet);
-            av_log_set_callback(null);
+            av_log_set_level(FF.LogLevel.Quiet);
+            av_log_set_callback((av_log_set_callback_callback)null);
         }
     }
 

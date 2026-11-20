@@ -61,10 +61,15 @@ public abstract class RunThreadBase : NotifyPropertyChanged
             {
                 PauseOnQueueFull = false;
 
-                if (Disposed || thread == null || !thread.IsAlive || Status == Status.Stopping || Status == Status.Stopped || Status == Status.Ended || Status == Status.Pausing || Status == Status.Paused)
+                if (Disposed || thread == null || !thread.IsAlive ||
+                    Status == Status.Stopping || Status == Status.Stopped ||
+                    Status == Status.Ended || Status == Status.Paused)
                     return;
-                Status = Status.Pausing;
+
+                if (Status != Status.Pausing)
+                    Status = Status.Pausing;
             }
+
             while (Status == Status.Pausing)
                 Thread.Sleep(5);
         }
@@ -77,6 +82,7 @@ public abstract class RunThreadBase : NotifyPropertyChanged
             while (thread != null && thread.IsAlive && CriticalArea)
             {
                 Thread.Sleep(5); // use small steps to re-check CriticalArea (demuxer can have 0 packets again after processing the received ones)
+
                 retries++;
                 if (retries > 16)
                 {
@@ -94,11 +100,11 @@ public abstract class RunThreadBase : NotifyPropertyChanged
                 PauseOnQueueFull = false;
 
                 while (Status == Status.Draining)
-                    Thread.Sleep(3);
+                    Monitor.Wait(lockStatus, 3);
                 while (Status == Status.Stopping)
-                    Thread.Sleep(3);
+                    Monitor.Wait(lockStatus, 3);
                 while (Status == Status.Pausing)
-                    Thread.Sleep(3);
+                    Monitor.Wait(lockStatus, 3);
 
                 if (Status == Status.Ended)
                     return;
@@ -107,7 +113,7 @@ public abstract class RunThreadBase : NotifyPropertyChanged
                 {
                     threadARE.Set();
                     while (Status == Status.Paused)
-                        Thread.Sleep(3);
+                        Monitor.Wait(lockStatus, 3);
                     return;
                 }
 
@@ -123,8 +129,13 @@ public abstract class RunThreadBase : NotifyPropertyChanged
                 };
                 Status = Status.Running;
                 thread.Start();
+
                 while (!thread.IsAlive)
-                { if (CanTrace) Log.Trace("Waiting thread to come up"); Thread.Sleep(3); }
+                {
+                    if (CanTrace)
+                        Log.Trace("Waiting thread to come up");
+                    Thread.Sleep(3);
+                }
             }
         }
     }
@@ -136,11 +147,10 @@ public abstract class RunThreadBase : NotifyPropertyChanged
             {
                 PauseOnQueueFull = false;
 
-                if (Disposed || thread == null || !thread.IsAlive || Status == Status.Stopping || Status == Status.Stopped || Status == Status.Ended)
+                if (Disposed || thread == null || !thread.IsAlive ||
+                    Status == Status.Stopping || Status == Status.Stopped || Status == Status.Ended)
                     return;
-                if (Status == Status.Pausing)
-                    while (Status != Status.Pausing)
-                        Thread.Sleep(3);
+
                 Status = Status.Stopping;
                 threadARE.Set();
             }

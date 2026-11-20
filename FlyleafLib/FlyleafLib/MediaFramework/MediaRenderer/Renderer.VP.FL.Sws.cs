@@ -8,26 +8,59 @@ public unsafe partial class Renderer
 {
     AVFrame*        swsFrame;
     SwsContext*     swsCtx;
+    uint            swsWidth;
+    uint            swsHeight;
+    CropRect        swsCrop;
 
-    bool SwsConfig()
-    {   // Sws Color Convert (no scalling) | Visible dimensions (still needs manual user's + stream's crop)
+    bool SwsConfig(AVFrame* frame)
+    {   // Sws Color Convert (no scalling)
         SwsDispose();
 
-        var codecCtx = VideoDecoder.CodecCtx;
+        var codecCtx= VideoDecoder.CodecCtx;
+
+        int ret, width, height;
+        AVPixelFormat format;
+
+        if (frame != null && frame->width > 0 && frame->height > 0)
+        {
+            width = frame->width;
+            height = frame->height;
+            format = frame->hw_frames_ctx != null ? ((AVHWFramesContext*)frame->hw_frames_ctx->data)->sw_format : (AVPixelFormat)frame->format;
+        }
+        else
+        {
+            width = codecCtx->coded_width > 0 ? codecCtx->coded_width : codecCtx->width;
+            height = codecCtx->coded_height > 0 ? codecCtx->coded_height : codecCtx->height;
+            format = VideoDecoder.HWAccelerated ? ((AVHWFramesContext*)ffFrames->data)->sw_format : codecCtx->pix_fmt;
+        }
+
+        swsWidth = (uint)width;
+        swsHeight = (uint)height;
+        swsCrop = scfg.Crop;
+
+        // The transferred SW frame does not contain HW texture allocation padding
+        if (scfg.Cropping.HasFlag(Cropping.Texture))
+        {
+            uint padRight   = scfg.txtWidth  > swsWidth   ? scfg.txtWidth  - swsWidth  : 0;
+            uint padBottom  = scfg.txtHeight > swsHeight  ? scfg.txtHeight - swsHeight : 0;
+            swsCrop.Right = swsCrop.Right >= padRight ? swsCrop.Right - padRight : 0;
+            swsCrop.Bottom = swsCrop.Bottom >= padBottom ? swsCrop.Bottom - padBottom : 0;
+        }
 
         swsFrame = av_frame_alloc();
-        swsFrame->format = (int)AVPixelFormat.Rgba;
-        swsFrame->width = codecCtx->width;
-        swsFrame->height = codecCtx->height;
-        _ = av_frame_get_buffer(swsFrame, 0);
+        swsFrame->format = (int)AVPixelFormat.RGBA;
+        swsFrame->width = width;
+        swsFrame->height = height;
 
-        swsCtx = sws_getContext(
-            swsFrame->width,
-            swsFrame->height,
-            VideoDecoder.VideoAccelerated ? ((AVHWFramesContext*)ffFrames->data)->sw_format : codecCtx->pix_fmt,
-            swsFrame->width,
-            swsFrame->height,
-            AVPixelFormat.Rgba, SwsFlags.None, null, null, null);
+        ret = av_frame_get_buffer(swsFrame, 0);
+        if (ret < 0)
+        {
+            Log.Error($"Failed to allocate Sws frame buffer [{ret}]");
+            SwsDispose();
+            return false;
+        }
+
+        swsCtx = sws_getContext(width, height, format, width, height, AVPixelFormat.RGBA, SwsFlags.None, null, null, null);
 
         if (swsCtx == null)
         {
@@ -43,7 +76,38 @@ public unsafe partial class Renderer
             return false;
         }
 
-        FillPlanes = VideoDecoder.VideoAccelerated ? SwsHWFillPlanes : SwsSWFillPlanes;
+        const int SWS_CS_ITU709 = 1;
+        const int SWS_CS_ITU601 = 5;
+        const int SWS_CS_BT2020 = 9;
+
+        int swsColorSpace = scfg.ColorSpace switch
+        {
+            ColorSpace.BT2020 => SWS_CS_BT2020,
+            ColorSpace.BT709  => SWS_CS_ITU709,
+            _                 => SWS_CS_ITU601,
+        };
+
+        int* coeffs = sws_getCoefficients(swsColorSpace);
+
+        ret = sws_setColorspaceDetails(
+            swsCtx,
+            coeffs,
+            scfg.ColorRange == ColorRange.Full ? 1 : 0, // srcRange
+            coeffs,
+            1,                                          // dstRange: RGBA full
+            0,                                          // brightness
+            1 << 16,                                    // contrast = 1.0
+            1 << 16);                                   // saturation = 1.0
+
+        if (ret < 0)
+        {
+            Log.Error($"sws_setColorspaceDetails failed [{ret}]");
+            SwsDispose();
+
+            return false;
+        }
+
+        FillPlanes = VideoDecoder.HWAccelerated ? SwsHWFillPlanes : SwsSWFillPlanes;
         psCase = PSCase.SwsScale;
 
         txtDesc[0].Width = (uint)swsFrame->width;
@@ -56,15 +120,15 @@ public unsafe partial class Renderer
 
         psId += "rgb";
 
-        if (ucfg._SplitFrameAlphaPosition == SplitFrameAlphaPosition.None || scfg.ColorType != ColorType.YUV || scfg.PixelPlanes > 3)
-            SetPS(psId, @"color = Texture1.Sample(Sampler, input.Texture);", defines);
+        if (splitFrameAlphaPosition == SplitFrameAlphaPosition.None || scfg.ColorType != ColorType.YUV || scfg.PixelPlanes > 3)
+            SetPS(@"color = Texture1.Sample(Sampler, input.Texture);", defines);
         else
         {   // Split Frame Alpha: Ensure we have YUV (w/o Alpha) | SwsScale will do the YUVtoRGB for embedded alpha
-            switch (ucfg._SplitFrameAlphaPosition)
+            switch (splitFrameAlphaPosition)
             {
                 case SplitFrameAlphaPosition.Left:
                     psId += "l";
-                    SetPS(psId, @"
+                    SetPS(@"
 color = float4(
 Texture1.Sample(Sampler, float2(0.5 + (input.Texture.x / 2), input.Texture.y)).rgb,
 Texture1.Sample(Sampler, float2(input.Texture.x / 2, input.Texture.y)).r);
@@ -72,7 +136,7 @@ Texture1.Sample(Sampler, float2(input.Texture.x / 2, input.Texture.y)).r);
                     break;
                 case SplitFrameAlphaPosition.Right:
                     psId += "r";
-                    SetPS(psId, @"
+                    SetPS(@"
 color = float4(
 Texture1.Sample(Sampler, float2(input.Texture.x / 2, input.Texture.y)).rgb,
 Texture1.Sample(Sampler, float2(0.5 + (input.Texture.x / 2), input.Texture.y)).r);
@@ -80,7 +144,7 @@ Texture1.Sample(Sampler, float2(0.5 + (input.Texture.x / 2), input.Texture.y)).r
                     break;
                 case SplitFrameAlphaPosition.Top:
                     psId += "t";
-                    SetPS(psId, @"
+                    SetPS(@"
 color = float4(
 Texture1.Sample(Sampler, float2(input.Texture.x, 0.5 + (input.Texture.y / 2))).rgb,
 Texture1.Sample(Sampler, float2(input.Texture.x, input.Texture.y / 2)).r);
@@ -88,7 +152,7 @@ Texture1.Sample(Sampler, float2(input.Texture.x, input.Texture.y / 2)).r);
                     break;
                 case SplitFrameAlphaPosition.Bottom:
                     psId += "b";
-                    SetPS(psId, @"
+                    SetPS(@"
 color = float4(
 Texture1.Sample(Sampler, float2(input.Texture.x, input.Texture.y / 2)).rgb,
 Texture1.Sample(Sampler, float2(input.Texture.x, 0.5 + (input.Texture.y / 2))).r);
@@ -129,7 +193,7 @@ Texture1.Sample(Sampler, float2(input.Texture.x, 0.5 + (input.Texture.y / 2))).r
     {
         VideoFrame mFrame = new()
         {
-            Timestamp   = (long)(frame->pts * scfg.Timebase) - VideoDecoder.Demuxer.StartTime
+            Timestamp = (long)(frame->pts * scfg.Timebase) - VideoDecoder.Demuxer.StartTime
         };
 
         SwsFillPlanesHelper(mFrame, frame);
@@ -139,12 +203,18 @@ Texture1.Sample(Sampler, float2(input.Texture.x, 0.5 + (input.Texture.y / 2))).r
     VideoFrame SwsFillPlanesHelper(VideoFrame mFrame, AVFrame* frame)
     {
         int ret = sws_scale(swsCtx,
-            frame->data.        ToRawArray(),
-            frame->linesize.    ToArray(),
+            (byte**)&frame->data,
+            (int*)&frame->linesize,
             0,
-            swsFrame->height,
-            swsFrame->data.     ToRawArray(),
-            swsFrame->linesize. ToArray());
+            frame->height,
+            (byte**)&swsFrame->data,
+            (int*)&swsFrame->linesize);
+
+        if (ret != swsFrame->height)
+        {
+            Log.Error($"Sws conversion failed or incomplete [{ret}]");
+            return null;
+        }
 
         subData[0].DataPointer = swsFrame->data[0];
         subData[0].RowPitch = (uint)swsFrame->linesize[0];

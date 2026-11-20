@@ -1,7 +1,8 @@
 # FlyleafLib Fork Changes Documentation
 
-> **Base Version**: Flyleaf v3.10.3 (upgraded April 2026)  
-> **Last Upstream Sync**: April 2026 (v3.10.3)  
+> **Base Version**: Flyleaf v3.12 (ported November 2026, see section 6)  
+> **FFmpeg**: 9 (`avcodec-63`, build N-126175 from upstream's `FFmpeg/` folder) via `Flyleaf.FFmpeg.ABI` 9.0.0  
+> **Previous base**: v3.10.3 (April 2026)  
 > **Purpose**: Custom modifications to support EdgeLoop application's unique requirements
 
 ---
@@ -216,6 +217,22 @@ Key features:
 
 ---
 
+### 6. v3.12 Port (November 2026)
+
+Upstream v3.12 renamed `Config.Player` to `Config.Playback`, moved decoder and statistics settings to their runtime owners, reworked the renderer (post-processing, HDR, Dolby Vision) and moved to FFmpeg 9. The fork changes above were carried over as follows:
+
+- **External clock**: `MasterClock` and `SyncTolerance` now live on `Config.Playback`. The screamer logic is unchanged apart from that rename.
+- **D3DImage targets**: `SwapChain.BackBuffer`, `BackBufferRtv` and `VPOV` return the D3DImage shared texture's targets while D3DImage mode is active, so every upstream draw path (VP, HDR, post-processing, subtitles, snapshots) renders into it without per-call changes. `SwapChainBackBuffer`/`SwapChainVPOV` give the real swap chain's targets for creating and releasing them. `Renderer.CurrentRtv`/`CurrentVpov` remain as aliases.
+- **D3DImage without a swap chain**: `SwapChain.CanPresent` is also true when D3DImage is enabled with a non-zero size; `Present()`/`SetSize()` return early when there is no swap chain. `D3DImageManager.EnsureVpov()` creates the shared output view when the D3D11 VP becomes available after the texture.
+- **Headless use** (`Utils.UI`/`UIInvoke`/`UIInvokeIfRequired`, `Engine.StartInternal`): without a WPF `Application` actions run inline instead of throwing on a null dispatcher.
+- **Early logging**: `Logger.SetOutput()` and `ShaderCompiler` logging tolerate a not-yet-started engine.
+- **HTTP headers** (`DecoderContext.OpenDemuxerInput`): upstream rebuilds `FormatOpt["headers"]` from the input's own headers plus the User-Agent. The fork keeps headers the application already set (EdgeLoop's Cookie/Origin for site CDNs) and still appends the User-Agent last.
+- **HLS start time** (`DecoderContext.GetVideoFrame`): now uses upstream's `Demuxer.HLSFirstTimestamp` instead of dereferencing the HLS context.
+- **Renderer.VP**: frame selection avoids `?.` on `AVFrame*` fields so it builds with .NET SDK 10.0.1xx.
+- **Dropped**: the fork's `ChildRenderer` fixes (upstream removed `ChildRenderer`) and its `LibraryImport` conversions in `NativeMethods` (upstream's file was taken as is).
+
+`FFmpegPlaybackTests` in EdgeLoop.Tests starts the engine, checks that the bundled FFmpeg loads and plays a small H.264/AAC clip end to end.
+
 ### 5. Test Files
 
 #### `Tests/FlyleafLib.Tests/ClockSyncTests.cs` (NEW FILE)
@@ -234,6 +251,7 @@ Tests included:
 ### When Merging Upstream Changes
 
 1. **Always backup first**: `git stash` or create a branch before merging
+   - Run `dotnet format whitespace --folder` with this folder's `.editorconfig` over both the old and new upstream versions before a 3-way merge. The fork is formatted with it, so otherwise nearly every upstream change conflicts with formatting-only differences.
 2. **Check these files for conflicts**:
    - `Player.Screamers.VASD.cs` (most likely to conflict)
    - `Renderer.Present.cs` (second most likely)

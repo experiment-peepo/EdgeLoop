@@ -10,6 +10,7 @@ global using System.Threading.Tasks;
 global using static Flyleaf.FFmpeg.Raw;
 global using static FlyleafLib.Logger;
 global using static FlyleafLib.Utils;
+global using FF = Flyleaf.FFmpeg;
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
@@ -27,18 +28,18 @@ public enum MediaType
 }
 public enum InputType
 {
-    File    = 0,
-    UNC     = 1,
-    Torrent = 2,
-    Web     = 3,
-    Unknown = 4
+    File,
+    UNC,
+    Torrent,
+    Web,
+    Unknown
 }
-public enum HDRtoSDRMethod : int
+public enum HDRtoSDRMethod // Must match pixel shader
 {
-    None        = 0,
-    Aces        = 1,
-    Hable       = 2,
-    Reinhard    = 3
+    None,
+    HLG,
+    PQ,
+    PQSpline
 }
 
 public enum DeInterlace // Must match with VideoFrameFormat
@@ -71,18 +72,18 @@ public enum Cropping
     Codec   = 1 << 1,
     Texture = 1 << 2
 }
-public enum ColorSpace : int
+public enum ColorSpace
 {
-    None        = 0,
-    Bt601       = 1,
-    Bt709       = 2,
-    Bt2020      = 3
+    None,
+    BT601,
+    BT709,
+    BT2020
 }
-public enum ColorRange : int
+public enum ColorRange
 {
-    None        = 0,
-    Full        = 1,
-    Limited     = 2
+    None,
+    Full,
+    Limited
 }
 public enum ColorType
 {
@@ -90,14 +91,11 @@ public enum ColorType
     RGB,
     Gray
 }
-public enum HDRFormat : int
+public enum HDRFormat
 {
-    None        = 0,
-    DolbyVision = 1,
-    HDR         = 2,
-    HDRPlus     = 3,
-    HLG         = 4,
-
+    None,
+    HDR10,
+    HLG
 }
 public enum UIRefreshType
 {
@@ -135,6 +133,7 @@ public class GPUOutput
     public bool IsAttached { get; internal set; }
     public ModeRotation Rotation { get; internal set; }
     public float MaxLuminance { get; internal set; }
+    public float MinLuminance { get; internal set; }
     //public int              RefreshRate     { get; internal set; } // Currently not used
 
     public override string ToString()
@@ -157,7 +156,7 @@ public class GPUAdapter
 
     internal IDXGIAdapter   dxgiAdapter;
 
-    public List<GPUOutput> GetGPUOutputs() => Engine.Video.GetGPUOutputs(dxgiAdapter);
+    public List<GPUOutput> GetGPUOutputs() => VideoEngine.GetGPUOutputs(dxgiAdapter);
 
     public override string ToString()
         => (Vendor + " " + Description).PadRight(40) + $"[ID: {Id,-6}, LUID: {Luid,-6}, DVM: {GetBytesReadable(VideoMemory),-8}, DSM: {GetBytesReadable(SystemMemory),-8}, SSM: {GetBytesReadable(SharedMemory)}]";
@@ -171,7 +170,7 @@ public enum GPUVendor : uint
     Nvidia      = 0x10DE,
     Qualcomm    = 0x4D4F4351,
     S3Graphics  = 0x5333,
-    VIA         = 0x1106,
+    VIA         = 0x1106
 }
 
 public struct AspectRatio : IEquatable<AspectRatio>
@@ -190,7 +189,7 @@ public struct AspectRatio : IEquatable<AspectRatio>
         new(4,      3),
         new(16,     9),
         new(16,     10),
-        new(2.35f,  1),
+        new(2.35,   1)
     ];
 
     public static implicit operator AspectRatio(string value) => new(value);

@@ -81,6 +81,14 @@ public unsafe partial class Renderer
 
     void SubsScale()
     {
+        if (subsSize.Width < 1 || subsSize.Height < 1)
+        {   // Maybe should be re-filled from decoder (filledFromCodec) when not properly analysed (#688)
+            subsSize = new(player.decoder.SubtitlesDecoder.CodecCtx->width, player.decoder.SubtitlesDecoder.CodecCtx->height);
+
+            if (subsSize.Width < 1 || subsSize.Height < 1)
+                return;
+        }
+
         AVFrame*    swsFrame;
         SwsContext* swsCtx;
         Viewport    view = Viewport;
@@ -95,7 +103,7 @@ public unsafe partial class Renderer
         subsViewport = new(view.X + subsRect.X * subsRatioX, view.Y + subsRect.Y * subsRatioY, subsTxtDesc.Width, subsTxtDesc.Height);
 
         swsFrame = av_frame_alloc();
-        swsFrame->format = (int)AVPixelFormat.Rgba;
+        swsFrame->format = (int)AVPixelFormat.RGBA;
         swsFrame->width = (int)subsTxtDesc.Width;
         swsFrame->height = (int)subsTxtDesc.Height;
         _ = av_frame_get_buffer(swsFrame, 0);
@@ -106,15 +114,23 @@ public unsafe partial class Renderer
             AVPixelFormat.Pal8,
             (int)subsTxtDesc.Width,
             (int)subsTxtDesc.Height,
-            AVPixelFormat.Rgba, ucfg.BitmapSubsScaleQuality, null, null, null);
+            AVPixelFormat.RGBA, ucfg.BitmapSubsScaleQuality, null, null, null);
 
         int ret = sws_scale(swsCtx,
-            rect->data.         ToRawArray(),
-            rect->linesize.     ToArray(),
+            (byte**)&rect->data,
+            (int*)&rect->linesize,
             0,
             rect->h,
-            swsFrame->data.     ToRawArray(),
-            swsFrame->linesize. ToArray());
+            (byte**)&swsFrame->data,
+            (int*)&swsFrame->linesize);
+
+        if (subsTxt != null)
+        {
+            subsSRV[0]?.Dispose();
+            subsSRV[0] = null;
+            subsTxt.Dispose();
+            subsTxt = null;
+        }
 
         subsTxt = device.CreateTexture2D(subsTxtDesc, [new SubresourceData() { DataPointer = swsFrame->data[0], RowPitch = (uint)swsFrame->linesize[0] }]);
         subsSRV[0] = device.CreateShaderResourceView(subsTxt);

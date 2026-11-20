@@ -3,22 +3,35 @@ using FlyleafLib.MediaFramework.MediaFrame;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
 using Vortice.DXGI;
+using static FlyleafLib.Utils.NativeMethods;
 using ID3D11Texture2D = Vortice.Direct3D11.ID3D11Texture2D;
 
 namespace FlyleafLib.MediaFramework.MediaRenderer;
 
 public unsafe partial class Renderer
 {
+    public string DynamicRange { get; private set; }
+    public string TargetDynamicRange { get; private set; }
+
     static string[] pixelOffsets = ["r", "g", "b", "a"];
 
-    // TODO: PSCase flags / enum?*
-    const string dYUVLimited    = "dYUVLimited";
-    const string dYUVFull       = "dYUVFull";
-    const string dBT2020        = "dBT2020";
-    const string dPQToLinear    = "dPQToLinear";
-    const string dHLGToLinear   = "dHLGToLinear";
-    const string dTone          = "dTone";
-    const string dFilters       = "dFilters";
+    internal const string dYUVLimited       = "dYUVLimited";
+    internal const string dYUVFull          = "dYUVFull";
+    internal const string dYUV16            = "dYUV16";
+
+    internal const string dBT1886ToLinear   = "dBT1886ToLinear";
+    internal const string dBT2020           = "dBT2020";
+    internal const string dHLG              = "dHLG";
+    internal const string dPQSpline         = "dPQSpline";
+    internal const string dDovi             = "dDovi";
+    internal const string dDoviMSDetail     = "dDoviMSDetail";
+    internal const string dDoviFEL          = "dDoviFEL";
+
+    internal const string dFilters          = "dFilters";
+    internal const string dPanoWrap         = "dPanoWrap";
+    internal const string dPano360          = "dPano360";
+    internal const string dICC              = "dICC";
+
     List<string> defines = [];
 
     static ReadOnlySpan<char> HWSAMPLE => @"
@@ -33,47 +46,123 @@ color = float4(
 
     PSCase  psCase;
     string  psId, psIdPrev;
+    nint    iccSrc;
+    bool    isPQSpline;
+    internal bool isDovi;
+    bool    felShaderEnabled;
 
-    bool FLSwsConfig()
+    bool UsesDisplayMapping => defines.Contains(dBT2020);
+    bool UsesNits => isPQSpline || defines.Contains(dHLG);
+    bool CanHDRDisplay => VideoProcessor == VideoProcessors.Flyleaf && ucfg.AllowHDRSwapchain && displayHDREnabled && UsesNits;
+
+    bool FLSwsConfig(AVFrame* frame)
     {
         psCase = PSCase.None;
         psId = "";
         defines = [];
 
-        if (ucfg.hasFLFilters) // TODO: fix vp switch when set filters or unset*
+        if (felShaderEnabled)
+        {   // Release the previous EL surfaces when leaving the P7 shader.
+            context.PSSetShaderResource(2, null);
+            context.PSSetShaderResource(3, null);
+            felShaderEnabled = false;
+        }
+
+        if (Pano360._enabled)
+        {
+            psId += "P";
+            defines.Add(dPano360);
+            // Split-alpha sampling uses subregions of the source; retain its existing sampler.
+            if (SplitFrameAlphaPosition == SplitFrameAlphaPosition.None)
+            {
+                psId += "W";
+                defines.Add(dPanoWrap);
+            }
+        }
+
+        if (hasFLFilters) // TODO: fix vp switch when set filters or unset*
         {
             psId += "-";
             defines.Add(dFilters);
         }
 
-        if (scfg.HDRFormat != HDRFormat.None)
-        {
-            if (scfg.HDRFormat == HDRFormat.HLG)
-            {
-                psId += "g";
-                defines.Add(dHLGToLinear);
-            }
-            else
-            {
-                psId += "p";
-                defines.Add(dPQToLinear);
-            }
+        isDovi = canFL && VideoProcessor != VideoProcessors.SwsScale && FLDoviSupported();
+        bool iccApplied = false;
 
-            defines.Add(dTone);
+        if (!isDovi && scfg.iccData != null && iccDst != 0 && (iccSrc = OpenColorProfile(scfg.iccData)) != 0)
+        {
+            var iccTransform = CreateTransform(iccSrc, iccDst);
+            if (iccTransform != 0)
+            {
+                var iccLut = CreateIccLut(iccTransform);
+                if (iccLut.Length > 0)
+                {
+                    try
+                    {
+                        psId += "i";
+                        defines.Add(dICC);
+                        fixed (ushort* ptr = iccLut)
+                            context.UpdateSubresource(iccTxt, 0, null, (nint)ptr, 33 * 33 * 4 * sizeof(ushort), 0);
+                        iccApplied = true;
+                        scfg.HDRFormat = HDRFormat.None; // should keep this local
+                    }
+                    catch { }
+                }
+                DeleteColorTransform(iccTransform);
+            }
+            CloseColorProfile(iccSrc);
         }
-        else if (scfg.ColorSpace == ColorSpace.Bt2020)
+
+        if (isDovi)
+        {
+            psId += "v";
+            defines.Add(dBT2020);
+            defines.Add(dDovi);
+            defines.Add(dPQSpline);
+            isPQSpline = true;
+            FLHDRDetectReset();
+            FLDoviReset(frame);
+            if (CanTrace)
+                Log.Trace(FLDoviDump(frame));
+
+            DynamicRange = $"DοVi{(scfg.DoviProfile != -1 ? $" {scfg.DoviProfile}.{scfg.DoviCompatibility}" : "")}";
+        }
+        else if (scfg.ColorSpace == ColorSpace.BT2020 && !iccApplied)
         {
             defines.Add(dBT2020);
-            psId += "b";
+
+            if (scfg.HDRFormat == HDRFormat.None)
+            {
+                psId += "b";
+                defines.Add(dBT1886ToLinear);
+            }
+            else if (scfg.HDRFormat == HDRFormat.HLG)
+            {
+                psId += "g";
+                defines.Add(dHLG);
+                DynamicRange = "HLG";
+            }
+            else // HDR10 / HDR10+
+            {
+                psId += "p";
+                defines.Add(dPQSpline);
+                isPQSpline = true;
+                FLHDRDetectReset();
+                DynamicRange = "HDR10";
+            }
         }
+
+        if (checkHDRConfig && UsesDisplayMapping)
+            FLUpdateTargetNits();
 
         if (canFL && VideoProcessor != VideoProcessors.SwsScale)
         {
-            if (VideoDecoder.VideoAccelerated) // VP can be D3D11 but never with VA*?
+            if (VideoDecoder.HWAccelerated) // VP can be D3D11 but never with VA*?
                 FLHWConfig();
             else
             {
                 FLSWConfig();
+
                 if (psCase == PSCase.None)
                 {
                     // TBR: Fallback (recursion for psId/defines mainly*?) | TBR: if enabled (maybe only for Y210? old GPUs?)
@@ -86,12 +175,12 @@ color = float4(
                     }
 
                     canFL = false;
-                    return FLSwsConfig();
+                    return FLSwsConfig(frame);
                 }
             }
         }
         else
-            SwsConfig();
+            SwsConfig(frame);
 
         return true;
     }
@@ -110,15 +199,17 @@ color = float4(
             defines.Add(dYUVFull);
         }
 
-        if (scfg.ColorSpace == ColorSpace.Bt709)
+        if (scfg.ColorSpace == ColorSpace.BT709)
             psData.CoeffsIndex = 1;
-        else if (scfg.ColorSpace == ColorSpace.Bt2020)
+        else if (scfg.ColorSpace == ColorSpace.BT2020)
             psData.CoeffsIndex = 0;
         else
             psData.CoeffsIndex = 2;
 
         if (scfg.PixelComp0Depth > 8)
         {
+            psId += "x";
+            defines.Add(dYUV16);
             srvDesc[0].Format = Format.R16_UNorm;
             srvDesc[1].Format = Format.R16G16_UNorm;
         }
@@ -130,15 +221,27 @@ color = float4(
 
         srvDesc[0].ViewDimension = srvDesc[1].ViewDimension = ShaderResourceViewDimension.Texture2DArray;
 
-        switch (ucfg._SplitFrameAlphaPosition)
+        switch (splitFrameAlphaPosition)
         {
             case SplitFrameAlphaPosition.None:
-                SetPS(psId, HWSAMPLE, defines);
+                // Spatial tone-detail sampling currently exists only on the unsplit HW Y/UV path.
+                if (isDovi)
+                {
+                    if (scfg.DoviProfile == 7)
+                    {
+                        felShaderEnabled = true;
+                        defines.Add(dDoviFEL);
+                        psId += "e";
+                    }
+                    defines.Add(dDoviMSDetail);
+                    psId += "m";
+                }
+                SetPS(HWSAMPLE, defines);
                 break;
 
             case SplitFrameAlphaPosition.Left:
                 psId += "l";
-                SetPS(psId, @"
+                SetPS(@"
 color.rgb = float3(
 Texture1.Sample(Sampler, float2(0.5 + (input.Texture.x / 2), input.Texture.y)).r,
 Texture2.Sample(Sampler, float2(0.5 + (input.Texture.x / 2), input.Texture.y)).rg);" +
@@ -147,7 +250,7 @@ SampleSplitFrameAlpha("input.Texture.x / 2", "input.Texture.y"), defines);
 
             case SplitFrameAlphaPosition.Right:
                 psId += "r";
-                SetPS(psId, @"
+                SetPS(@"
 color.rgb = float3(
 Texture1.Sample(Sampler, float2(input.Texture.x / 2, input.Texture.y)).r,
 Texture2.Sample(Sampler, float2(input.Texture.x / 2, input.Texture.y)).rg);" +
@@ -156,7 +259,7 @@ SampleSplitFrameAlpha("0.5 + (input.Texture.x / 2)", "input.Texture.y"), defines
 
             case SplitFrameAlphaPosition.Top:
                 psId += "t";
-                SetPS(psId, @"
+                SetPS(@"
 color.rgb = float3(
 Texture1.Sample(Sampler, float2(input.Texture.x, 0.5 + (input.Texture.y / 2))).r,
 Texture2.Sample(Sampler, float2(input.Texture.x, 0.5 + (input.Texture.y / 2))).rg);" +
@@ -165,7 +268,7 @@ SampleSplitFrameAlpha("input.Texture.x", "input.Texture.y / 2"), defines);
 
             case SplitFrameAlphaPosition.Bottom:
                 psId += "b";
-                SetPS(psId, @"
+                SetPS(@"
 color.rgb = float3(
 Texture1.Sample(Sampler, float2(input.Texture.x, input.Texture.y / 2)).r,
 Texture2.Sample(Sampler, float2(input.Texture.x, input.Texture.y / 2)).rg);" +
@@ -203,9 +306,9 @@ SampleSplitFrameAlpha("input.Texture.x", "0.5 + (input.Texture.y / 2)"), defines
             defines.Add(dYUVFull);
         }
 
-        if (scfg.ColorSpace == ColorSpace.Bt709)
+        if (scfg.ColorSpace == ColorSpace.BT709)
             psData.CoeffsIndex = 1;
-        else if (scfg.ColorSpace == ColorSpace.Bt2020)
+        else if (scfg.ColorSpace == ColorSpace.BT2020)
             psData.CoeffsIndex = 0;
         else
             psData.CoeffsIndex = 2;
@@ -249,7 +352,7 @@ float4 c2 = Texture1.Sample(Sampler, float2(pos2, input.Texture.y));
             {
                 psId += "a";
 
-                SetPS(psId, header + @"
+                SetPS(header + @"
 float  leftY    = lerp(c1.r, c1.b, fx * 2);
 float  rightY   = lerp(c1.b, c2.r, fx * 2 - 1);
 float2 outUV    = lerp(c1.ga, c2.ga, fx);
@@ -261,7 +364,7 @@ color = float4(outY, outUV, 1.0f);
             {
                 psId += "b";
 
-                SetPS(psId, header + @"
+                SetPS(header + @"
 float  leftY    = lerp(c1.r, c1.b, fx * 2);
 float  rightY   = lerp(c1.b, c2.r, fx * 2 - 1);
 float2 outUV    = lerp(c1.ag, c2.ag, fx);
@@ -273,7 +376,7 @@ color = float4(outY, outUV, 1.0f);
             {
                 psId += "c";
 
-                SetPS(psId, header + @"
+                SetPS(header + @"
 float  leftY    = lerp(c1.g, c1.a, fx * 2);
 float  rightY   = lerp(c1.a, c2.g, fx * 2 - 1);
 float2 outUV    = lerp(c1.rb, c2.rb, fx);
@@ -301,6 +404,7 @@ color = float4(outY, outUV, 1.0f);
             if (scfg.PixelComp0Depth > 8)
             {
                 psId += "x";
+                defines.Add(dYUV16);
                 txtDesc[0].Format = srvDesc[0].Format = Format.R16_UNorm;
                 txtDesc[1].Format = srvDesc[1].Format = Format.R16G16_UNorm;
             }
@@ -310,10 +414,10 @@ color = float4(outY, outUV, 1.0f);
                 txtDesc[1].Format = srvDesc[1].Format = Format.R8G8_UNorm;
             }
 
-            switch (ucfg._SplitFrameAlphaPosition)
+            switch (splitFrameAlphaPosition)
             {
                 case SplitFrameAlphaPosition.None:
-                    SetPS(psId, @"
+                    SetPS(@"
 color = float4(
 Texture1.Sample(Sampler, input.Texture).r,
 Texture2.Sample(Sampler, input.Texture)." + offsets + @",
@@ -322,7 +426,7 @@ Texture2.Sample(Sampler, input.Texture)." + offsets + @",
                     break;
                 case SplitFrameAlphaPosition.Left:
                     psId += "l";
-                    SetPS(psId, @"
+                    SetPS(@"
 color.rgb = float3(
 Texture1.Sample(Sampler, float2(0.5 + (input.Texture.x / 2), input.Texture.y)).r,
 Texture2.Sample(Sampler, float2(0.5 + (input.Texture.x / 2), input.Texture.y))." + offsets +
@@ -330,7 +434,7 @@ SampleSplitFrameAlpha("input.Texture.x / 2", "input.Texture.y"), defines);
                     break;
                 case SplitFrameAlphaPosition.Right:
                     psId += "r";
-                    SetPS(psId, @"
+                    SetPS(@"
 color.rgb = float3(
 Texture1.Sample(Sampler, float2(input.Texture.x / 2, input.Texture.y)).r,
 Texture2.Sample(Sampler, float2(input.Texture.x / 2, input.Texture.y))." + offsets +
@@ -338,7 +442,7 @@ SampleSplitFrameAlpha("0.5 + (input.Texture.x / 2)", "input.Texture.y"), defines
                     break;
                 case SplitFrameAlphaPosition.Top:
                     psId += "t";
-                    SetPS(psId, @"
+                    SetPS(@"
 color.rgb = float3(
 Texture1.Sample(Sampler, float2(input.Texture.x, 0.5 + (input.Texture.y / 2))).r,
 Texture2.Sample(Sampler, float2(input.Texture.x, 0.5 + (input.Texture.y / 2)))." + offsets +
@@ -346,7 +450,7 @@ SampleSplitFrameAlpha("input.Texture.x", "input.Texture.y / 2"), defines);
                     break;
                 case SplitFrameAlphaPosition.Bottom:
                     psId += "b";
-                    SetPS(psId, @"
+                    SetPS(@"
 color.rgb = float3(
 Texture1.Sample(Sampler, float2(input.Texture.x, input.Texture.y / 2)).r,
 Texture2.Sample(Sampler, float2(input.Texture.x, input.Texture.y / 2))." + offsets +
@@ -388,6 +492,7 @@ color.a = Texture4.Sample(Sampler, input.Texture).r;
             if (scfg.PixelComp0Depth > 8)
             {
                 psId += "a";
+                defines.Add(dYUV16);
                 curFormat = Format.R16_UNorm;
                 maxBits = 16;
             }
@@ -405,7 +510,7 @@ color *= pow(2, " + (maxBits - scfg.PixelComp0Depth) + @");
             }
 
             if (scfg.PixelPlanes < 4)
-                switch (ucfg._SplitFrameAlphaPosition)
+                switch (splitFrameAlphaPosition)
                 {
                     case SplitFrameAlphaPosition.None:
                         shader += @"
@@ -454,7 +559,7 @@ SampleSplitFrameAlpha("input.Texture.x", "0.5 + (input.Texture.y / 2)");
                         break;
                 }
 
-            SetPS(psId, shader, defines);
+            SetPS(shader, defines);
         }
 
         return true;
@@ -464,17 +569,17 @@ SampleSplitFrameAlpha("input.Texture.x", "0.5 + (input.Texture.y / 2)");
         // [RGB0]32 | [RGBA]32 | [RGBA]64
         if (scfg.PixelPlanes == 1 && ( // Possible Alpha
             scfg.PixelFormat == AVPixelFormat._0RGB ||
-            scfg.PixelFormat == AVPixelFormat.Rgb0 ||
+            scfg.PixelFormat == AVPixelFormat.RGB0 ||
             scfg.PixelFormat == AVPixelFormat._0BGR ||
-            scfg.PixelFormat == AVPixelFormat.Bgr0 ||
+            scfg.PixelFormat == AVPixelFormat.BGR0 ||
 
-            scfg.PixelFormat == AVPixelFormat.Argb ||
-            scfg.PixelFormat == AVPixelFormat.Rgba ||
-            scfg.PixelFormat == AVPixelFormat.Abgr ||
-            scfg.PixelFormat == AVPixelFormat.Bgra ||
+            scfg.PixelFormat == AVPixelFormat.ARGB ||
+            scfg.PixelFormat == AVPixelFormat.RGBA ||
+            scfg.PixelFormat == AVPixelFormat.ABGR ||
+            scfg.PixelFormat == AVPixelFormat.BGRA ||
 
-            scfg.PixelFormat == AVPixelFormat.Rgba64le ||
-            scfg.PixelFormat == AVPixelFormat.Bgra64le))
+            scfg.PixelFormat == AVPixelFormat.RGBA64LE ||
+            scfg.PixelFormat == AVPixelFormat.BGRA64LE))
         {
             psCase = PSCase.RGBPacked;
             psId += ((int)psCase).ToString();
@@ -520,13 +625,13 @@ color.rgb = (color.rgb - rgbOffset) * rgbScale;
 ";
             }
 
-            SetPS(psId, shader, defines);
+            SetPS(shader, defines);
         }
 
         // [BGR/RGB]16
         else if (scfg.PixelPlanes == 1 && (
-            scfg.PixelFormat == AVPixelFormat.Rgb444le ||
-            scfg.PixelFormat == AVPixelFormat.Bgr444le))
+            scfg.PixelFormat == AVPixelFormat.RGB444LE ||
+            scfg.PixelFormat == AVPixelFormat.BGR444LE))
         {
             psCase = PSCase.RGBPacked2;
             psId += ((int)psCase).ToString();
@@ -536,7 +641,7 @@ color.rgb = (color.rgb - rgbOffset) * rgbScale;
             txtDesc[0].Format = srvDesc[0].Format = Format.B4G4R4A4_UNorm;
 
             string shader;
-            if (scfg.PixelFormat == AVPixelFormat.Rgb444le)
+            if (scfg.PixelFormat == AVPixelFormat.RGB444LE)
             {
                 psId += "a";
                 shader = @"
@@ -556,7 +661,7 @@ color.rgb = (color.rgb - rgbOffset) * rgbScale;
 ";
             }
 
-            SetPS(psId, shader, defines);
+            SetPS(shader, defines);
         }
 
         // GBR(A)
@@ -629,7 +734,7 @@ color.rgb = (color.rgb - rgbOffset) * rgbScale;
                 shader += @"
 color.a = 1.0f;
 ";
-            SetPS(psId, shader, defines);
+            SetPS(shader, defines);
         }
 
         return true;
@@ -673,7 +778,7 @@ color.rgb = (color.rgb - rgbOffset) * rgbScale;
 ";
         }
 
-        SetPS(psId, shader, defines);
+        SetPS(shader, defines);
 
         return true;
     }
@@ -706,6 +811,9 @@ color.a = YUVToRGBFull(float3(Texture1.Sample(Sampler, float2({x}, {y})).r, floa
                 device.CreateShaderResourceView(ffTexture, srvDesc[1])],
         };
 
+        if (isDovi)
+            (mFrame.Dovi, mFrame.DoviL1Nits) = FLDoviPrepare(frame);
+
         frame = av_frame_alloc();
         return mFrame;
     }
@@ -717,6 +825,9 @@ color.a = YUVToRGBFull(float3(Texture1.Sample(Sampler, float2({x}, {y})).r, floa
             Texture     = new ID3D11Texture2D            [scfg.PixelPlanes],
             SRV         = new ID3D11ShaderResourceView   [scfg.PixelPlanes]
         };
+
+        if (isDovi)
+            (mFrame.Dovi, mFrame.DoviL1Nits) = FLDoviPrepare(frame);
 
         for (int i = 0; i < scfg.PixelPlanes; i++)
         {
@@ -746,10 +857,15 @@ color.a = YUVToRGBFull(float3(Texture1.Sample(Sampler, float2({x}, {y})).r, floa
             SRV         = new ID3D11ShaderResourceView   [scfg.PixelPlanes]
         };
 
+        if (isDovi)
+            (mFrame.Dovi, mFrame.DoviL1Nits) = FLDoviPrepare(frame);
+
         for (int i = 0; i < scfg.PixelPlanes; i++)
         {
-            subData[0].RowPitch = (uint)(-1 * frame->linesize[i]);
-            subData[0].DataPointer = frame->data[i] + (frame->linesize[i] * (frame->height - 1));
+            int stride = frame->linesize[i];
+
+            subData[0].RowPitch = (uint)Math.Abs(stride);
+            subData[0].DataPointer = stride < 0 ? frame->data[i] + stride * ((int)txtDesc[i].Height - 1) : frame->data[i];
 
             if (subData[0].RowPitch < txtDesc[i].Width)
             {   // Prevent reading more than the actual data (Access Violation #424)
@@ -766,7 +882,87 @@ color.a = YUVToRGBFull(float3(Texture1.Sample(Sampler, float2({x}, {y})).r, floa
         return mFrame;
     }
 
-    void SetPS(string uniqueId, ReadOnlySpan<char> sampleHLSL, List<string> defines = null)
+    // EL SRVs are lazy: the decoded EL arrives after the BL is cached.
+    // Called under the render/device lock; the AVFrame owns the surface.
+    bool FLBindFEL(VideoFrame frame)
+    {
+        bool ready = false;
+
+        if (frame.Dovi is { HasFEL: true } dovi && frame.AVFrame != null &&
+            frame.AVFrameFEL != null && ffTextureFEL != null &&
+            frame.AVFrameFEL->data[0] == ffTextureFEL.NativePointer &&
+            frame.AVFrameFEL->width > 0 && frame.AVFrameFEL->height > 0 &&
+            frame.AVFrame->width > 0 && frame.AVFrame->height > 0)
+        {
+            // The surface format determines the normalized -> integer-code scale.
+            // Unsupported layouts deliberately fall back to BL-only reconstruction.
+            float scale = ffTextureDescFEL.Format switch
+            {
+                Format.P010 when dovi.ELBitDepth == 10 => 65535.0f / 64.0f,
+                Format.P016 when dovi.ELBitDepth == 16 => 65535.0f,
+                Format.NV12 when dovi.ELBitDepth == 8  => 255.0f,
+                _ => 0.0f
+            };
+
+            if (scale > 0.0f && ffTextureDescFEL.Width > 0 && ffTextureDescFEL.Height > 0 &&
+                ffTextureDesc.Width > 0 && ffTextureDesc.Height > 0)
+            {
+                if (frame.SRVFEL == null)
+                {
+                    uint slice = (uint)frame.AVFrameFEL->data[1];
+                    if (slice >= ffTextureDescFEL.ArraySize)
+                    {
+                        Log.Warn("Invalid EL decoder surface index");
+                    }
+                    else
+                    {
+                        var descY = srvDesc[0];
+                        var descUV = srvDesc[1];
+                        descY.Format = dovi.ELBitDepth > 8 ? Format.R16_UNorm : Format.R8_UNorm;
+                        descUV.Format = dovi.ELBitDepth > 8 ? Format.R16G16_UNorm : Format.R8G8_UNorm;
+                        descY.Texture2DArray.FirstArraySlice = slice;
+                        descUV.Texture2DArray.FirstArraySlice = slice;
+
+                        // No partially created SRV pair escapes on failure.
+                        ID3D11ShaderResourceView y = null;
+                        try
+                        {
+                            y = device.CreateShaderResourceView(ffTextureFEL, descY);
+                            var uv = device.CreateShaderResourceView(ffTextureFEL, descUV);
+                            frame.SRVFEL = [y, uv];
+                        }
+                        catch (Exception ex)
+                        {
+                            y?.Dispose();
+                            Log.Warn($"Failed to create EL SRVs ({ex.Message})");
+                        }
+                    }
+                }
+
+                if (frame.SRVFEL != null)
+                {
+                    felInfo = new(1.0f, scale,
+                        ffTextureDesc.Width * (float)frame.AVFrameFEL->width /
+                            (frame.AVFrame->width * (float)ffTextureDescFEL.Width),
+                        ffTextureDesc.Height * (float)frame.AVFrameFEL->height /
+                            (frame.AVFrame->height * (float)ffTextureDescFEL.Height));
+                    context.PSSetShaderResources(2, frame.SRVFEL);
+                    ready = true;
+                }
+            }
+        }
+
+        if (!ready)
+        {
+            // A previous frame may have bound t2/t3. Never sample stale EL.
+            context.PSSetShaderResource(2, null);
+            context.PSSetShaderResource(3, null);
+        }
+
+        return ready;
+    }
+
+    void SetPS(ReadOnlySpan<char> sampleHLSL, List<string> defines = null)
     {
         // Already set with PSSetShader
         if (VideoProcessor == VideoProcessors.D3D11 || psId == psIdPrev)
@@ -775,13 +971,15 @@ color.a = YUVToRGBFull(float3(Texture1.Sample(Sampler, float2({x}, {y})).r, floa
         // Check local cache (TBR: might up limit?)
         if (!psShader.TryGetValue(psId, out var shader))
         {   // Check global/static cache for Blob
-            shader = ShaderCompiler.CompilePS(device, uniqueId, sampleHLSL, defines);
+            shader = ShaderCompiler.CompilePS(device, psId, sampleHLSL, defines);
             psShader[psId] = shader;
         }
 
         // Save CurShader so we can set it back again if we switch temporary?*
         context.PSSetShader(shader);
         psIdPrev = psId;
+
+        FLHDRSetPS(sampleHLSL, defines);
     }
 }
 

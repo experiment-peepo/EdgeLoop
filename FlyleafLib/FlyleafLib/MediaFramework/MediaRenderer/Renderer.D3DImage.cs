@@ -131,7 +131,7 @@ public class D3DImageManager : IDisposable
             if (device9 == null)
                 return;
 
-            ((IVP)renderer).UpdateSize(width, height);
+            renderer.UpdateSize(width, height);
             renderer.VPRequest(VPRequestType.Resize);
 
             try
@@ -202,6 +202,18 @@ public class D3DImageManager : IDisposable
                     renderer.Log.Error($"SharpGen Error: {sgEx.ResultCode.NativeApiCode} ({sgEx.ResultCode})");
                 DisposeTextures();
             }
+        }
+    }
+
+    /// <summary>Creates the shared texture's video processor output view if the D3D11 VP became available after the texture.</summary>
+    internal void EnsureVpov()
+    {
+        lock (lockD3D)
+        {
+            if (Disposed || SharedTexture11 == null || SharedVpov11 != null || renderer.vd == null || renderer.ve == null)
+                return;
+
+            SharedVpov11 = renderer.vd.CreateVideoProcessorOutputView(SharedTexture11, renderer.ve, vpovd);
         }
     }
 

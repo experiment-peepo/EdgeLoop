@@ -45,9 +45,12 @@ public class VideoEngine
 
             var devices = MediaFactory.MFEnumVideoDeviceSources();
             foreach (var device in devices)
-                try
-                { Engine.Video.CapDevices.Add(new(device.FriendlyName, device.SymbolicLink)); }
-                catch (Exception) { }
+            {
+                Engine.Video.CapDevices.Add(new(device.FriendlyName, device.SymbolicLink));
+                device.Dispose();
+            }
+
+            devices.Dispose();
         }
     }
 
@@ -69,7 +72,7 @@ public class VideoEngine
         return adapters;
     }
 
-    public GPUAdapter GetGPUAdapter(IDXGIAdapter adapter, AdapterDescription desc)
+    public static GPUAdapter GetGPUAdapter(IDXGIAdapter adapter, AdapterDescription desc)
         => new()
         {
             SystemMemory = desc.DedicatedSystemMemory.Value,
@@ -82,7 +85,7 @@ public class VideoEngine
             dxgiAdapter = adapter
         };
 
-    public List<GPUOutput> GetGPUOutputs(IDXGIAdapter adapter)
+    public static List<GPUOutput> GetGPUOutputs(IDXGIAdapter adapter)
     {
         List<GPUOutput> outputs = [];
         if (adapter == null)
@@ -93,8 +96,10 @@ public class VideoEngine
             IDXGIOutput6 output6 = null;
             GPUOutput gpuOutput;
 
-            if (Environment.OSVersion.Version.Major >= 10)
-                output6 = output.QueryInterfaceOrNull<IDXGIOutput6>();
+            try
+            { output6 = output.QueryInterfaceOrNull<IDXGIOutput6>(); }
+            finally { }
+
 
             if (output6 != null)
             {
@@ -110,7 +115,8 @@ public class VideoEngine
                     Bottom = outdesc.DesktopCoordinates.Bottom,
                     IsAttached = outdesc.AttachedToDesktop,
                     Rotation = outdesc.Rotation,
-                    MaxLuminance = outdesc.MaxLuminance
+                    MaxLuminance = outdesc.MaxLuminance,
+                    MinLuminance = outdesc.MinLuminance
                 };
 
                 output6.Dispose();
