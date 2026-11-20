@@ -26,8 +26,6 @@ namespace EdgeLoop.Tests
 
         public virtual void Dispose()
         {
-            // Signal logger to flush if possible (though background thread is tricky)
-            Thread.Sleep(500); // Give time to flush
             ServiceContainer.Clear();
         }
     }

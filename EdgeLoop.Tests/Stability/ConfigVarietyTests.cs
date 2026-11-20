@@ -87,25 +87,28 @@ namespace EdgeLoop.Tests.Stability
             // Mock the encrypted backing property — CookieProtector.Unprotect handles plaintext transparently
             MockSettings.Setup(s => s.HypnotubeCookiesEncrypted).Returns(cookieValue);
 
-            var mockFetcher = new Mock<IHtmlFetcher>();
-            mockFetcher.Setup(f => f.FetchHtmlAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync("<html></html>");
+            const string pageUrl = "https://hypnotube.com/video/some-video-123.html";
+            const string mediaUrl = "https://hypnotube.com/video/123.mp4";
+            MockExtractor.Setup(x => x.ExtractVideoUrlAsync(pageUrl, It.IsAny<CancellationToken>(), It.IsAny<IProgress<string>>()))
+                .ReturnsAsync(mediaUrl);
 
-            var extractor = new VideoUrlExtractor(mockFetcher.Object);
-
-            // Act
-            // This test is tricky because cookie injection happens in StandardHtmlFetcher
-            // which is usually hard to mock if it's newed up. 
-            // But we can check if VideoUrlExtractor passes correctly configured headers? No, it uses IHtmlFetcher.
-
-            // Let's check the logic in HypnoViewModel itself for Demuxer headers
             var vm = new HypnoViewModel(MockExtractor.Object);
-            var item = new VideoItem("https://hypnotube.com/video/123.mp4");
-            vm.SetQueue(new[] { item });
+            var item = new VideoItem(mediaUrl) { OriginalPageUrl = pageUrl };
 
-            // Mocking the behavior inside LoadCurrentVideo after opening
-            // We can't easily check Config.Demuxer.FormatOpt["headers"] without running LoadCurrentVideo
-            // but we have unit tests for the Extractor already.
+            // Act: LoadCurrentVideo builds the demuxer headers before opening the stream
+            vm.SetQueue(new[] { item });
+            string? headers = null;
+            var deadline = DateTime.UtcNow.AddSeconds(5);
+            while (DateTime.UtcNow < deadline &&
+                   !(vm.Config.Demuxer.FormatOpt.TryGetValue("headers", out headers) && headers!.Contains("Cookie:")))
+                await Task.Delay(25);
+
+            // Assert: the cookie must survive alongside the Referer (it used to be overwritten)
+            headers.Should().NotBeNull();
+            headers.Should().Contain($"Cookie: {cookieValue}");
+            headers.Should().Contain("Referer: https://hypnotube.com/video/some-video-123.html");
+
+            vm.Dispose();
         }
 
         [Fact]

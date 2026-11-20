@@ -83,7 +83,7 @@ namespace EdgeLoop.ViewModels
             get
             {
                 // Prefer Title if available and not empty/generic
-                if (!string.IsNullOrWhiteSpace(Title) && !IsIdLike(Title))
+                if (!string.IsNullOrWhiteSpace(Title) && !TitleSanitizer.IsIdLike(Title))
                 {
                     return Title;
                 }
@@ -299,33 +299,6 @@ namespace EdgeLoop.ViewModels
                     ValidationError = null;
                 }
             }
-        }
-        private bool IsIdLike(string text)
-        {
-            if (string.IsNullOrWhiteSpace(text)) return true;
-            if (text.Length < 4) return true;
-            if (text.Equals("NA", StringComparison.OrdinalIgnoreCase)) return true;
-            if (text.Equals("view", StringComparison.OrdinalIgnoreCase)) return true;
-            if (text.Equals("unknown", StringComparison.OrdinalIgnoreCase)) return true;
-            if (text.StartsWith("[NA]", StringComparison.OrdinalIgnoreCase)) return true;
-
-            // Alphanumeric IDs (10-20 chars, mixed case, numbers + letters, no spaces)
-            if (text.Length >= 10 && text.Length <= 20 && !text.Contains(" "))
-            {
-                if (Regex.IsMatch(text, @"^[a-zA-Z0-9_-]+$"))
-                {
-                    // If it contains at least one digit and one letter, it's very likely an ID
-                    if (Regex.IsMatch(text, @"\d") && Regex.IsMatch(text, @"[a-zA-Z]")) return true;
-                }
-            }
-
-            // UUID or Hash detection
-            if (Regex.IsMatch(text, @"^[a-f0-9\-]{24,}$", RegexOptions.IgnoreCase)) return true;
-            if (Regex.IsMatch(text, @"^[a-f0-9]{32}$", RegexOptions.IgnoreCase)) return true;
-            if (Regex.IsMatch(text, @"^[a-f0-9]{40}$", RegexOptions.IgnoreCase)) return true;
-            if (Regex.IsMatch(text, @"^[a-f0-9]{64}$", RegexOptions.IgnoreCase)) return true;
-
-            return false;
         }
     }
 }

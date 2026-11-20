@@ -73,14 +73,14 @@ namespace EdgeLoop.Classes
                 // Check if this is a single video page instead of a playlist
                 bool isSingleVideo = mode == ImportMode.SingleVideo || (mode == ImportMode.Auto && IsVideoPageUrl(playlistUrl));
 
-                bool isIwara = host.Contains("iwara.tv");
+                bool isIwara = SiteRules.Is(host, Site.Iwara);
 
                 if (isSingleVideo)
                 {
                     Logger.Debug($"[PlaylistImporter] Treating input as single video page: {playlistUrl}");
                     videoLinkInfos.Add(new VideoLinkInfo { Url = playlistUrl, Title = null });
                 }
-                else if (host.Contains("hypnotube.com"))
+                else if (SiteRules.Is(host, Site.Hypnotube))
                 {
                     var links = await ExtractHypnotubePlaylistAsync(playlistUrl, cancellationToken);
                     foreach (var kvp in links)
@@ -88,7 +88,7 @@ namespace EdgeLoop.Classes
                         videoLinkInfos.Add(new VideoLinkInfo { Url = kvp.Key, Title = kvp.Value });
                     }
                 }
-                else if (host.Contains("rule34video.com"))
+                else if (SiteRules.Is(host, Site.Rule34Video))
                 {
                     var links = await ExtractGenericPlaylistWithTitlesAsync(playlistUrl, cancellationToken);
                     foreach (var kvp in links)
@@ -96,7 +96,7 @@ namespace EdgeLoop.Classes
                         videoLinkInfos.Add(new VideoLinkInfo { Url = kvp.Key, Title = kvp.Value });
                     }
                 }
-                else if (host.Contains("pmvhaven.com"))
+                else if (SiteRules.Is(host, Site.PmvHaven))
                 {
                     var links = await ExtractPmvHavenPlaylistAsync(playlistUrl, cancellationToken);
                     foreach (var kvp in links)
@@ -204,14 +204,14 @@ namespace EdgeLoop.Classes
                         if (!string.IsNullOrWhiteSpace(info.Title))
                         {
                             // If the extracted title is generic (ID-like or empty), or if we are on a known site with good gallery titles
-                            bool isGeneric = string.IsNullOrWhiteSpace(title) || 
-                                           IsIdLike(title) || 
+                            bool isGeneric = string.IsNullOrWhiteSpace(title) ||
+                                           TitleSanitizer.IsIdLike(title) ||
                                            title.ToLowerInvariant() == "view" ||
                                            title.ToLowerInvariant() == "unknown";
 
-                            if (isGeneric || pageUrl.Contains("iwara.tv") || pageUrl.Contains("hypnotube.com") || pageUrl.Contains("rule34video.com"))
+                            if (isGeneric || SiteRules.Is(pageUrl, Site.Iwara) || SiteRules.Is(pageUrl, Site.Hypnotube) || SiteRules.Is(pageUrl, Site.Rule34Video))
                             {
-                                if (!string.IsNullOrWhiteSpace(info.Title) && !IsIdLike(info.Title))
+                                if (!string.IsNullOrWhiteSpace(info.Title) && !TitleSanitizer.IsIdLike(info.Title))
                                 {
                                     title = info.Title;
                                 }
@@ -219,10 +219,10 @@ namespace EdgeLoop.Classes
                         }
 
                         // Final fallback: If still ID-like, try to de-slugify the URL
-                        if (IsIdLike(title))
+                        if (TitleSanitizer.IsIdLike(title))
                         {
-                            var deSlugified = DeSlugifyUrl(pageUrl);
-                            if (!string.IsNullOrWhiteSpace(deSlugified) && !IsIdLike(deSlugified))
+                            var deSlugified = TitleSanitizer.FromUrlSlug(pageUrl);
+                            if (!string.IsNullOrWhiteSpace(deSlugified) && !TitleSanitizer.IsIdLike(deSlugified))
                             {
                                 title = deSlugified;
                             }
@@ -233,14 +233,14 @@ namespace EdgeLoop.Classes
                         if (string.IsNullOrEmpty(videoUrl))
                         {
                             string reason = "likely restricted or removed";
-                            if (pageUrl.Contains("hypnotube.com")) reason = "restricted, friends-only, or removed";
-                            else if (pageUrl.Contains("iwara.tv")) reason = "requires cookies or age-verification";
+                            if (SiteRules.Is(pageUrl, Site.Hypnotube)) reason = "restricted, friends-only, or removed";
+                            else if (SiteRules.Is(pageUrl, Site.Iwara)) reason = "requires cookies or age-verification";
 
                             Logger.Warning($"Extraction failed for {pageUrl} ({reason}). Adding as page URL for JIT resolution.");
                             videoUrl = pageUrl;
                         }
 
-                        if (string.IsNullOrWhiteSpace(title) || IsIdLike(title))
+                        if (string.IsNullOrWhiteSpace(title) || TitleSanitizer.IsIdLike(title))
                         {
                             // Extract title from URL slug as a high-quality fallback
                             try
@@ -403,7 +403,7 @@ namespace EdgeLoop.Classes
                     var apiUrl = $"https://api.iwara.tv/playlist/{playlistId}?page={page}";
 
                     string json = null;
-                    try 
+                    try
                     {
                         json = await FetchHtmlAsync(apiUrl, cancellationToken);
                     }
@@ -433,34 +433,34 @@ namespace EdgeLoop.Classes
                         if (videoElement.TryGetProperty("id", out var idProp))
                         {
                             var id = idProp.GetString();
-                            
+
                             // Try multiple fields for slug
                             string slug = string.Empty;
                             if (videoElement.TryGetProperty("slug", out var s)) slug = s.GetString();
-                            
+
                             // Try multiple fields for title
                             string title = string.Empty;
                             if (videoElement.TryGetProperty("title", out var t)) title = t.GetString();
                             else if (videoElement.TryGetProperty("name", out var n)) title = n.GetString();
 
                             // If title is missing or generic, use slug
-                            if (string.IsNullOrWhiteSpace(title) || title == id || IsIdLike(title))
+                            if (string.IsNullOrWhiteSpace(title) || title == id || TitleSanitizer.IsIdLike(title))
                             {
-                                if (!string.IsNullOrWhiteSpace(slug) && !IsIdLike(slug))
+                                if (!string.IsNullOrWhiteSpace(slug) && !TitleSanitizer.IsIdLike(slug))
                                 {
-                                    title = DeSlugify(slug);
+                                    title = TitleSanitizer.DeSlugify(slug);
                                 }
-                                else if (string.IsNullOrWhiteSpace(title) || IsIdLike(title))
+                                else if (string.IsNullOrWhiteSpace(title) || TitleSanitizer.IsIdLike(title))
                                 {
                                     title = id;
                                 }
                             }
 
                             // Final sanitization: If still ID-like or placeholder, try Search API fallback
-                            if (IsIdLike(title))
+                            if (TitleSanitizer.IsIdLike(title))
                             {
                                 var searchTitle = await FetchIwaraTitleFromSearchApiAsync(id, cancellationToken);
-                                if (!string.IsNullOrWhiteSpace(searchTitle) && !IsIdLike(searchTitle))
+                                if (!string.IsNullOrWhiteSpace(searchTitle) && !TitleSanitizer.IsIdLike(searchTitle))
                                 {
                                     title = searchTitle;
                                 }
@@ -633,7 +633,7 @@ namespace EdgeLoop.Classes
                 var videoUrls = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
                 // Use site-specific logic if available, otherwise generic extraction
-                if (host.Contains("hypnotube.com")) return ExtractHypnotubeLinksWithTitles(html, url);
+                if (SiteRules.Is(host, Site.Hypnotube)) return ExtractHypnotubeLinksWithTitles(html, url);
 
                 // Generic Title-Aware Extraction using HtmlAgilityPack
                 var doc = new HtmlDocument();
@@ -651,8 +651,8 @@ namespace EdgeLoop.Classes
 
                         // Check if this looks like a video link for the current site
                         bool isVideo = false;
-                        if (host.Contains("rule34video.com")) isVideo = resolvedUrl.Contains("/video/") || resolvedUrl.Contains("/videos/");
-                        else if (host.Contains("pmvhaven.com")) isVideo = resolvedUrl.Contains("/video/");
+                        if (SiteRules.Is(host, Site.Rule34Video)) isVideo = resolvedUrl.Contains("/video/") || resolvedUrl.Contains("/videos/");
+                        else if (SiteRules.Is(host, Site.PmvHaven)) isVideo = resolvedUrl.Contains("/video/");
                         else if (host.Contains("pornhub")) isVideo = resolvedUrl.Contains("view_video.php");
                         else isVideo = resolvedUrl.Contains("/video/") || resolvedUrl.Contains("/v/");
 
@@ -662,7 +662,7 @@ namespace EdgeLoop.Classes
                             var normalizedUrl = resolvedUrl.Split('#')[0];
                             // For tube sites, ?p= or ?playlist= are often important for context but not for identity
                             // but Rule34Video uses query params for pagination, not for single video identity.
-                            if (host.Contains("rule34video.com") || host.Contains("pornhub"))
+                            if (SiteRules.Is(host, Site.Rule34Video) || host.Contains("pornhub"))
                             {
                                 normalizedUrl = normalizedUrl.Split('?')[0];
                             }
@@ -1135,11 +1135,11 @@ namespace EdgeLoop.Classes
                 var host = uri.Host.ToLowerInvariant();
                 var path = uri.AbsolutePath.ToLowerInvariant();
 
-                if (host.Contains("hypnotube.com"))
+                if (SiteRules.Is(host, Site.Hypnotube))
                 {
                     return path.Contains("/video/") && path.EndsWith(".html");
                 }
-                if (host.Contains("rule34video.com"))
+                if (SiteRules.Is(host, Site.Rule34Video))
                 {
                     return path.Contains("/video/") || path.Contains("/videos/");
                 }
@@ -1147,84 +1147,23 @@ namespace EdgeLoop.Classes
                 {
                     return path.Contains("view_video.php");
                 }
-                if (host.Contains("pmvhaven.com"))
+                if (SiteRules.Is(host, Site.PmvHaven))
                 {
                     return path.Contains("/video/");
                 }
-                if (host.Contains("iwara.tv"))
+                if (SiteRules.Is(host, Site.Iwara))
                 {
                     return path.Contains("/video/");
                 }
-                if (host.Contains("youtube.com") || host.Contains("youtu.be"))
+                if (SiteRules.Is(host, Site.YouTube))
                 {
                     // watch?v=, shorts/, or youtu.be/ID
-                    return path.Contains("/watch") || path.Contains("/shorts/") || (host.Contains("youtu.be") && path.Length > 1);
+                    return path.Contains("/watch") || path.Contains("/shorts/") || (SiteRules.HostMatches(host, "youtu.be") && path.Length > 1);
                 }
 
                 return false;
             }
             catch { return false; }
-        }
-
-        private bool IsIdLike(string text)
-        {
-            if (string.IsNullOrWhiteSpace(text)) return true;
-            if (text.Length < 4) return true;
-            if (text.Equals("NA", StringComparison.OrdinalIgnoreCase)) return true;
-            if (text.Equals("view", StringComparison.OrdinalIgnoreCase)) return true;
-            if (text.Equals("unknown", StringComparison.OrdinalIgnoreCase)) return true;
-            if (text.StartsWith("[NA]", StringComparison.OrdinalIgnoreCase)) return true;
-
-            // UUID or Hash detection
-            if (Regex.IsMatch(text, @"^[a-f0-9\-]{24,}$", RegexOptions.IgnoreCase)) return true;
-            if (Regex.IsMatch(text, @"^[a-f0-9]{32}$", RegexOptions.IgnoreCase)) return true;
-            if (Regex.IsMatch(text, @"^[a-f0-9]{40}$", RegexOptions.IgnoreCase)) return true;
-            if (Regex.IsMatch(text, @"^[a-f0-9]{64}$", RegexOptions.IgnoreCase)) return true;
-            
-            // Iwara-like alphanumeric IDs (usually 14 chars, mixed case, no spaces)
-            if (text.Length >= 10 && text.Length <= 20 && !text.Contains(" ") && Regex.IsMatch(text, @"^[a-zA-Z0-9_-]+$"))
-            {
-                // If it contains at least one digit and one letter, it's very likely an ID
-                if (Regex.IsMatch(text, @"\d") && Regex.IsMatch(text, @"[a-zA-Z]")) return true;
-            }
-
-            return false;
-        }
-
-        private string DeSlugifyUrl(string url)
-        {
-            try
-            {
-                var uri = new Uri(url);
-                var path = uri.AbsolutePath.Trim('/');
-                var parts = path.Split('/');
-                if (parts.Length == 0) return null;
-
-                // For Iwara, the slug is the last part if there are 3 parts (video/id/slug)
-                // For Hypnotube, it's the last part (video/slug.html)
-                var lastPart = parts.Last();
-                if (lastPart.Contains(".")) lastPart = lastPart.Split('.')[0];
-                
-                // If it's a 3-part Iwara URL, the slug is index 2
-                if (url.Contains("iwara.tv") && parts.Length >= 3) lastPart = parts[2];
-
-                return DeSlugify(lastPart);
-            }
-            catch { return null; }
-        }
-
-        private string DeSlugify(string slug)
-        {
-            if (string.IsNullOrWhiteSpace(slug)) return slug;
-            
-            // Remove numeric IDs at the end (e.g. -7132)
-            var clean = Regex.Replace(slug, @"-\d+$", "");
-            
-            // Replace dashes/underscores with spaces
-            clean = clean.Replace("-", " ").Replace("_", " ");
-            
-            // Capitalize
-            return System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(clean);
         }
 
         public struct UrlAmbiguityInfo
@@ -1246,7 +1185,7 @@ namespace EdgeLoop.Classes
                 var host = uri.Host.ToLowerInvariant();
 
                 // YouTube
-                if (host.Contains("youtube.com") || host.Contains("youtu.be"))
+                if (SiteRules.Is(host, Site.YouTube))
                 {
                     string vid = GetQueryParam(uri, "v");
                     string lid = GetQueryParam(uri, "list");
@@ -1255,7 +1194,7 @@ namespace EdgeLoop.Classes
                     {
                         vid = uri.AbsolutePath.Split('/').Last();
                     }
-                    if (string.IsNullOrEmpty(vid) && host.Contains("youtu.be"))
+                    if (string.IsNullOrEmpty(vid) && SiteRules.HostMatches(host, "youtu.be"))
                     {
                         vid = uri.AbsolutePath.TrimStart('/');
                     }
@@ -1269,7 +1208,7 @@ namespace EdgeLoop.Classes
                     }
                 }
                 // Hypnotube (some shared links contain playlist context)
-                else if (host.Contains("hypnotube.com"))
+                else if (SiteRules.Is(host, Site.Hypnotube))
                 {
                     string lid = GetQueryParam(uri, "playlist_id");
                     if (uri.AbsolutePath.Contains("/video/") && !string.IsNullOrEmpty(lid))
@@ -1414,7 +1353,7 @@ namespace EdgeLoop.Classes
                 var query = currentUri.Query;
 
                 // Strategy 0: Rule34Video AJAX pagination (supports manual query params)
-                if (domain.Contains("rule34video.com", StringComparison.OrdinalIgnoreCase))
+                if (SiteRules.Is(domain, Site.Rule34Video))
                 {
                     bool isMember = currentUrl.Contains("/members/");
                     bool isPlaylist = currentUrl.Contains("/playlists/");
@@ -1481,7 +1420,7 @@ namespace EdgeLoop.Classes
                             var normalizedBasePath = basePath.TrimEnd('/');
 
                             // Rule34Video specific: don't follow favorites pagination
-                            if (domain.Contains("rule34video.com", StringComparison.OrdinalIgnoreCase))
+                            if (SiteRules.Is(domain, Site.Rule34Video))
                             {
                                 if (nextUrl.Contains("#fav_videos", StringComparison.OrdinalIgnoreCase) ||
                                     normalizedNextPath.Contains("/favourites/", StringComparison.OrdinalIgnoreCase))

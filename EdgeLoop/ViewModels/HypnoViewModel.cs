@@ -529,6 +529,12 @@ namespace EdgeLoop.ViewModels
 
         private readonly IVideoUrlExtractor _urlExtractor;
 
+        /// <summary>
+        /// Clock for the "stuck in Opening" watchdog. Tests swap in a fake clock so they
+        /// don't have to wait out the real 30s/60s timeouts.
+        /// </summary>
+        internal TimeProvider Time { get; set; } = TimeProvider.System;
+
         public HypnoViewModel(IVideoUrlExtractor urlExtractor = null, IVideoDownloadService downloadService = null)
         {
             _urlExtractor = urlExtractor ?? (ServiceContainer.TryGet<IVideoUrlExtractor>(out var extractor) ? extractor : null) ?? App.UrlExtractor;
@@ -1541,28 +1547,13 @@ namespace EdgeLoop.ViewModels
                     Config.Demuxer.FormatOpt["rw_timeout"] = "15000000"; // 15s socket timeout (in microseconds)
 
                     // --- SITE-SPECIFIC HEADER INJECTION ---
-                    string referer = _currentItem.OriginalPageUrl;
+                    var mediaSite = SiteRules.Identify(path);
+                    var site = mediaSite;
+                    // Iwara media can come from hosts outside iwara.tv, so also recognise it by its page
+                    if (site == Site.Unknown && SiteRules.Is(_currentItem.OriginalPageUrl, Site.Iwara)) site = Site.Iwara;
+                    var siteProfile = SiteRules.Get(site);
 
-                    // Common site detection
-                    if (path.Contains("rule34video.com"))
-                    {
-                        referer = "https://rule34video.com/";
-                    }
-                    else if (path.Contains("pmvhaven.com"))
-                    {
-                        referer = "https://pmvhaven.com/";
-                    }
-                    else if (path.Contains("iwara.tv") || (referer != null && referer.Contains("iwara.tv")))
-                    {
-                        referer = "https://iwara.tv/";
-                    }
-                    else if (path.Contains("hypnotube.com"))
-                    {
-                        if (App.Settings != null && !string.IsNullOrEmpty(App.Settings.HypnotubeCookies))
-                        {
-                            Config.Demuxer.FormatOpt["headers"] = $"Cookie: {App.Settings.HypnotubeCookies.Trim()}\r\n";
-                        }
-                    }
+                    string referer = siteProfile.MediaReferer ?? _currentItem.OriginalPageUrl;
 
                     // If we resolved a Page URL locally, that page URL is a good Referer backup
                     if (string.IsNullOrEmpty(referer) && FileValidator.IsPageUrl(_currentItem.FilePath))
@@ -1574,18 +1565,20 @@ namespace EdgeLoop.ViewModels
                     {
                         Logger.Debug($"LoadCurrentVideo: Injecting Referer header: {referer}");
                         Config.Demuxer.FormatOpt["referer"] = referer;
-                        if (referer == "https://iwara.tv/")
-                        {
-                            Config.Demuxer.FormatOpt["headers"] = $"Referer: {referer}\r\nOrigin: https://iwara.tv\r\n";
-                        }
-                        else
-                        {
-                            Config.Demuxer.FormatOpt["headers"] = $"Referer: {referer}\r\n";
-                        }
                     }
                     else
                     {
                         Config.Demuxer.FormatOpt.Remove("referer");
+                    }
+
+                    // Session cookies only go to the site's own hosts, never to a third-party CDN
+                    var mediaHeaders = SiteRules.BuildMediaHeaders(siteProfile, referer, includeCookies: mediaSite == siteProfile.Site);
+                    if (mediaHeaders != null)
+                    {
+                        Config.Demuxer.FormatOpt["headers"] = mediaHeaders;
+                    }
+                    else
+                    {
                         Config.Demuxer.FormatOpt.Remove("headers");
                     }
 
@@ -1593,7 +1586,7 @@ namespace EdgeLoop.ViewModels
                     // Increase timeout for remote URLs significantly (60s) vs local files (30s)
                     // PMVHaven and other HLS streams can take 20-30s to probe and buffer variants.
                     int timeoutMs = _currentItem.IsUrl ? 60000 : 30000;
-                    _ = Task.Delay(timeoutMs, token).ContinueWith(t =>
+                    _ = Task.Delay(TimeSpan.FromMilliseconds(timeoutMs), Time, token).ContinueWith(t =>
                     {
                         if (t.IsCanceled || _disposed) return;
 

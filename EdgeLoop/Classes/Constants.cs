@@ -31,6 +31,13 @@ namespace EdgeLoop.Classes
         };
 
         /// <summary>
+        /// Browser User-Agent sent with web requests. Keep it close to the current Chrome
+        /// stable release: Cloudflare-protected sites flag clients that report an old version.
+        /// </summary>
+        public const string BrowserUserAgent =
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/159.0.0.0 Safari/537.36";
+
+        /// <summary>
         /// Maximum number of entries in the file existence cache
         /// </summary>
         public const int MaxFileCacheSize = 1000;

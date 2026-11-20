@@ -44,9 +44,7 @@ namespace EdgeLoop.Classes
         {
             // Set user agent to avoid being blocked
             _httpClient.DefaultRequestHeaders.UserAgent.Clear();
-            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            );
+            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(Constants.BrowserUserAgent);
         }
 
         public VideoDownloadService()

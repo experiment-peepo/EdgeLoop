@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
+using Microsoft.Extensions.Time.Testing;
 using Moq;
 using FluentAssertions;
 using EdgeLoop.Classes;
@@ -152,7 +153,9 @@ namespace EdgeLoop.Tests.Stability
             mockExtractor.Setup(x => x.ExtractVideoUrlAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<string>>()))
                 .ReturnsAsync("https://pmvhaven.com/slow-stream.m3u8");
 
-            var vm = new HypnoViewModel(mockExtractor.Object);
+            // Fake clock: the watchdog's 60s timer only fires when the test advances time.
+            var time = new FakeTimeProvider();
+            var vm = new HypnoViewModel(mockExtractor.Object) { Time = time };
             var item = new VideoItem("https://pmvhaven.com/video/slow");
             item.Validate();
 
@@ -165,10 +168,10 @@ namespace EdgeLoop.Tests.Stability
             // Act
             vm.SetQueue(new[] { item });
 
-            // Wait for extraction to complete and Player.Open to be called
+            // Wait for extraction to complete and Player.Open to be called (arms the watchdog)
             await Task.Delay(1000);
 
-            // Periodically force status to Opening to fighting Flyleaf's internal failure thread
+            // Periodically force status to Opening to fight Flyleaf's internal failure thread
             using (var cts = new CancellationTokenSource())
             {
                 var task = Task.Run(async () =>
@@ -181,17 +184,19 @@ namespace EdgeLoop.Tests.Stability
                         vm.Player.Status = FlyleafLib.MediaPlayer.Status.Opening;
                         playerStatusField?.SetValue(vm.Player, FlyleafLib.MediaPlayer.Status.Opening);
                         isLoadingField?.SetValue(vm, true);
-                        await Task.Delay(50);
+                        await Task.Delay(10);
                     }
                 });
 
-                // Assert
-                // Wait 45 seconds (more than old 30s)
-                await Task.Delay(45000);
+                await Task.Delay(100); // let the loop pin the Opening state
+
+                // Assert: 45s in (more than the old 30s), the remote-URL timeout has not fired
+                time.Advance(TimeSpan.FromSeconds(45));
                 timeoutTriggered.Should().BeFalse("Timeout should NOT trigger at 45s because we increased it to 60s for URLs");
 
-                // Wait another 20 seconds (total 65s+)
-                await Task.Delay(20000);
+                // Past 60s it must fire
+                time.Advance(TimeSpan.FromSeconds(16));
+                await Task.Delay(100);
 
                 cts.Cancel();
                 await task;

@@ -1792,12 +1792,12 @@ namespace EdgeLoop.ViewModels
             }
 
             // Hypnotube URLs may also be time-limited
-            if (url.Contains("hypnotube.com") && !url.EndsWith(".m3u8"))
+            if (SiteRules.Is(url, Site.Hypnotube) && !url.EndsWith(".m3u8"))
             {
                 return true;
             }
 
-            if (url.Contains("iwara.tv"))
+            if (SiteRules.Is(url, Site.Iwara))
             {
                 return true;
             }
@@ -1817,7 +1817,7 @@ namespace EdgeLoop.ViewModels
                 // For Rule34Video, extract video ID from the URL
                 // Example: https://rule34video.com/get_file/.../4187000/4187379/4187379_360.mp4
                 // Should return: https://rule34video.com/video/4187379/
-                if (videoUrl.Contains("rule34video.com"))
+                if (SiteRules.Is(videoUrl, Site.Rule34Video))
                 {
                     var match = System.Text.RegularExpressions.Regex.Match(videoUrl, @"/(\d{7})/(\d+)/");
                     if (match.Success && match.Groups.Count > 2)

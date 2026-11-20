@@ -22,7 +22,7 @@
 
   <!-- Publish settings for Release builds -->
   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
-    <Optimize>false</Optimize>
+    <Optimize>true</Optimize>
     <DebugType>embedded</DebugType>
     <PublishTrimmed>false</PublishTrimmed>
   </PropertyGroup>

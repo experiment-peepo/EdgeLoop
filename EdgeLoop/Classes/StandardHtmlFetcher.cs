@@ -24,9 +24,7 @@ namespace EdgeLoop.Classes
         {
             // Set proper user agent to avoid being blocked
             _httpClient.DefaultRequestHeaders.UserAgent.Clear();
-            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(
-                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            );
+            _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd(Constants.BrowserUserAgent);
 
             // Accept gzip/deflate compression
             _httpClient.DefaultRequestHeaders.AcceptEncoding.Clear();
@@ -54,39 +52,8 @@ namespace EdgeLoop.Classes
 
                 using (var request = new HttpRequestMessage(HttpMethod.Get, url))
                 {
-                    // Add session cookies if applicable
-                    if (App.Settings != null)
-                    {
-                        if (url.Contains("hypnotube.com"))
-                        {
-                            if (!string.IsNullOrEmpty(App.Settings.HypnotubeCookies))
-                                request.Headers.TryAddWithoutValidation("Cookie", App.Settings.HypnotubeCookies.Trim());
-                            
-                            request.Headers.TryAddWithoutValidation("Referer", "https://hypnotube.com/");
-                            request.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36");
-                            Logger.Debug($"[Hypnotube] Applied browser headers for request");
-                        }
-                        else if (url.Contains("iwara.tv"))
-                        {
-                            if (!string.IsNullOrEmpty(App.Settings.IwaraCookies))
-                                request.Headers.TryAddWithoutValidation("Cookie", App.Settings.IwaraCookies.Trim());
-
-                            request.Headers.TryAddWithoutValidation("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7");
-                            request.Headers.TryAddWithoutValidation("Accept-Language", "en-US,en;q=0.9");
-                            request.Headers.TryAddWithoutValidation("Upgrade-Insecure-Requests", "1");
-                            request.Headers.TryAddWithoutValidation("Referer", "https://www.iwara.tv/");
-                            request.Headers.TryAddWithoutValidation("Origin", "https://www.iwara.tv");
-                            request.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36");
-                            request.Headers.TryAddWithoutValidation("X-Site", "www.iwara.tv");
-                            Logger.Debug($"[Iwara] Applied full browser headers for request");
-                        }
-                        else if (url.Contains("rule34video.com") && !string.IsNullOrEmpty(App.Settings.Rule34VideoCookies))
-                        {
-                            request.Headers.TryAddWithoutValidation("Cookie", App.Settings.Rule34VideoCookies.Trim());
-                            Logger.Debug($"[Rule34Video] Applied session cookies for request");
-                        }
-                    }
-
+                    var profile = SiteRules.Get(url);
+                    var siteCookies = ApplySiteHeaders(request, profile);
 
                     var response = await _httpClient.SendAsync(request, cancellationToken);
                     response.EnsureSuccessStatusCode();
@@ -94,7 +61,7 @@ namespace EdgeLoop.Classes
                     Logger.Debug($"Fetched {html.Length} characters from {url}");
 
                     // Log Hypnotube authentication status
-                    if (url.Contains("hypnotube.com") && !string.IsNullOrEmpty(App.Settings?.HypnotubeCookies))
+                    if (profile.Site == Site.Hypnotube && siteCookies != null)
                     {
                         // Check for indicators of authenticated session (e.g., logout link, user profile)
                         var isAuthenticated = html.Contains("logout") || html.Contains("my_profile") || html.Contains("user-menu");
@@ -124,6 +91,28 @@ namespace EdgeLoop.Classes
             }
         }
 
+        /// <summary>
+        /// Adds the site's referer, extra headers and session cookies to a page request.
+        /// Returns the cookies that were sent, or null.
+        /// </summary>
+        private static string ApplySiteHeaders(HttpRequestMessage request, SiteProfile profile)
+        {
+            if (profile.Site == Site.Unknown) return null;
+
+            if (!string.IsNullOrEmpty(profile.PageReferer))
+                request.Headers.TryAddWithoutValidation("Referer", profile.PageReferer);
+
+            foreach (var header in profile.PageHeaders)
+                request.Headers.TryAddWithoutValidation(header.Key, header.Value);
+
+            var cookies = profile.GetCookies();
+            if (cookies != null)
+                request.Headers.TryAddWithoutValidation("Cookie", cookies);
+
+            Logger.Debug($"[{profile.Site}] Applied site request headers{(cookies != null ? " and session cookies" : "")}");
+            return cookies;
+        }
+
         public async Task<string> ResolveRedirectUrlAsync(string url, string referer = null, CancellationToken cancellationToken = default)
         {
             try
@@ -135,24 +124,20 @@ namespace EdgeLoop.Classes
                 // Use GET instead of HEAD - some servers (including Rule34Video) only redirect on GET
                 using (var request = new HttpRequestMessage(HttpMethod.Get, url))
                 {
-                    // Add Referer header - critical for Rule34Video which requires it
-                    if (!string.IsNullOrEmpty(referer))
+                    var profile = SiteRules.Get(url);
+
+                    // Referer is critical for Rule34Video, which only redirects when one is present
+                    var effectiveReferer = !string.IsNullOrEmpty(referer) ? referer : profile.PageReferer;
+                    if (!string.IsNullOrEmpty(effectiveReferer))
                     {
-                        request.Headers.Referrer = new Uri(referer);
-                    }
-                    else if (url.Contains("rule34video.com"))
-                    {
-                        // Rule34Video requires Referer header for redirects to work
-                        request.Headers.Referrer = new Uri("https://rule34video.com/");
+                        request.Headers.Referrer = new Uri(effectiveReferer);
                     }
 
-                    // Add Hypnotube cookies if applicable
-                    if (url.Contains("hypnotube.com") && App.Settings != null && !string.IsNullOrEmpty(App.Settings.HypnotubeCookies))
+                    if (profile.GetCookies() is string cookies)
                     {
-                        request.Headers.TryAddWithoutValidation("Cookie", App.Settings.HypnotubeCookies);
+                        request.Headers.TryAddWithoutValidation("Cookie", cookies);
                         Logger.Debug("Adding session cookies for redirect resolution");
                     }
-
 
                     // We need to execute the request but handle redirects manually? 
                     // Actually HttpClient follows redirects by default.

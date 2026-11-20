@@ -82,11 +82,7 @@ namespace EdgeLoop.Classes
                     Logger.Debug($"[yt-dlp] Extracting video URL: {url}");
 
                     // Clean URL for Hypnotube/Iwara (strip playlist params that break yt-dlp)
-                    var fetchUrl = url;
-                    if (fetchUrl.Contains("hypnotube.com") || fetchUrl.Contains("iwara.tv"))
-                    {
-                        if (fetchUrl.Contains("?")) fetchUrl = fetchUrl.Split('?')[0];
-                    }
+                    var fetchUrl = SiteRules.NormalizePageUrl(url);
 
                     OptionSet options = BuildOptionsForUrl(fetchUrl, out cookieFile);
 
@@ -204,35 +200,21 @@ namespace EdgeLoop.Classes
                 options.AddCustomOption<string>("--js-runtimes", "node");
                 options.AddCustomOption<string>("--remote-components", "ejs:github");
 
-                bool isYouTube = host.Contains("youtube.com") || host.Contains("youtu.be");
-                bool isIwara = host.Contains("iwara.tv");
-                bool isHypno = host.Contains("hypnotube.com");
+                var profile = SiteRules.Get(SiteRules.Identify(uri));
 
-                if (isIwara)
+                if (profile.YtDlpHeaders.Count > 0)
                 {
-                    // For Iwara, we must use these specific headers to bypass Cloudflare
-                    options.AddHeaders = new[] { 
-                        "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-                        "X-Site: www.iwara.tv"
-                    };
+                    // Site-specific headers (e.g. Iwara's Cloudflare checks) replace the generic ones
+                    options.AddHeaders = profile.YtDlpHeaders.ToArray();
                 }
 
-                if (isHypno && !string.IsNullOrEmpty(App.Settings?.HypnotubeCookies))
+                var siteCookies = profile.GetCookies();
+                if (siteCookies != null)
                 {
-                    Logger.Debug($"[yt-dlp] Using Hypnotube cookies for extraction");
-                    cookieFile = CreateTempCookieFile(App.Settings.HypnotubeCookies, "hypnotube.com");
+                    Logger.Debug($"[yt-dlp] Using {profile.Site} cookies for extraction");
+                    cookieFile = CreateTempCookieFile(siteCookies, profile.CookieDomain);
                 }
-                else if (isIwara && !string.IsNullOrEmpty(App.Settings?.IwaraCookies))
-                {
-                    Logger.Debug($"[yt-dlp] Using Iwara cookies for extraction");
-                    cookieFile = CreateTempCookieFile(App.Settings.IwaraCookies, "iwara.tv");
-                }
-                else if (host.Contains("rule34video.com") && !string.IsNullOrEmpty(App.Settings?.Rule34VideoCookies))
-                {
-                    Logger.Debug($"[yt-dlp] Using Rule34Video cookies for extraction");
-                    cookieFile = CreateTempCookieFile(App.Settings.Rule34VideoCookies, "rule34video.com");
-                }
-                else if (isYouTube || isIwara || isHypno)
+                else if (profile.UseBrowserCookiesFallback)
                 {
                     // Use browser cookies for major sites that benefit from being logged in
                     if (!string.IsNullOrEmpty(App.Settings?.Cookies) && (App.Settings.Cookies.Contains(host) || host.Split('.').Any(part => App.Settings.Cookies.Contains(part))))
@@ -242,7 +224,7 @@ namespace EdgeLoop.Classes
                     }
                     else
                     {
-                        var browser = App.Settings?.BrowserForCookies ?? "Firefox";
+                        var browser = SiteRules.CookieBrowser;
                         options.AddCustomOption<string>("--cookies-from-browser", browser);
                         Logger.Debug($"[yt-dlp] Using --cookies-from-browser {browser} for {host}");
                     }
@@ -262,7 +244,7 @@ namespace EdgeLoop.Classes
                 }
 
                 // Fix for Iwara Cloudflare JSONDecodeError and Quality Selection
-                if (isIwara)
+                if (profile.Site == Site.Iwara)
                 {
                     options.Format = "Source/bestvideo+bestaudio/best";
                     Logger.Debug($"[yt-dlp] Prioritizing 'Source' format for Iwara.tv");
@@ -342,10 +324,7 @@ namespace EdgeLoop.Classes
             try
             {
                 // Clean URL for Hypnotube/Iwara (strip playlist params that break things)
-                if (playlistUrl.Contains("hypnotube.com") || playlistUrl.Contains("iwara.tv"))
-                {
-                    if (playlistUrl.Contains("?")) playlistUrl = playlistUrl.Split('?')[0];
-                }
+                playlistUrl = SiteRules.NormalizePageUrl(playlistUrl);
 
                 Logger.Debug($"[yt-dlp] Extracting playlist info: {playlistUrl}");
 
@@ -367,37 +346,7 @@ namespace EdgeLoop.Classes
                     args.Add(options.Cookies);
                 }
 
-                var uri = new Uri(playlistUrl);
-                var host = uri.Host.ToLowerInvariant();
-
-                if (options.AddHeaders != null)
-                {
-                    // Since MultiValue<string> is tricky to iterate in this version, 
-                    // we handle the most common case or use a custom approach.
-                    // For Iwara, we know we have X-Site and User-Agent.
-                    if (host.Contains("iwara.tv"))
-                    {
-                        args.Add("--add-header");
-                        args.Add("X-Site:www.iwara.tv");
-                        args.Add("--add-header");
-                        args.Add("User-Agent:Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36");
-                    }
-                }
-
-                bool isYouTube = host.Contains("youtube.com") || host.Contains("youtu.be");
-
-                if (isYouTube && string.IsNullOrEmpty(options.Cookies))
-                {
-                    var browser = App.Settings?.BrowserForCookies ?? "chrome";
-                    args.Add("--cookies-from-browser");
-                    args.Add(browser);
-                }
-                else if (host.Contains("iwara.tv") && string.IsNullOrEmpty(options.Cookies))
-                {
-                    // Fallback to browser cookies for Iwara if no manual cookies provided
-                    args.Add("--cookies-from-browser");
-                    args.Add("firefox");
-                }
+                AddSiteArgs(args, SiteRules.Get(playlistUrl), options);
 
                 args.Add(playlistUrl);
 
@@ -476,19 +425,41 @@ namespace EdgeLoop.Classes
 
 
         /// <summary>
+        /// Adds a site's yt-dlp headers, and falls back to the browser's cookies for sites
+        /// that benefit from being logged in when no cookie file was built.
+        /// </summary>
+        private static void AddSiteArgs(List<string> args, SiteProfile profile, OptionSet options)
+        {
+            foreach (var header in profile.YtDlpHeaders)
+            {
+                args.Add("--add-header");
+                args.Add(header);
+            }
+
+            if (string.IsNullOrEmpty(options.Cookies) && profile.UseBrowserCookiesFallback)
+            {
+                var browser = SiteRules.CookieBrowser;
+                args.Add("--cookies-from-browser");
+                args.Add(browser);
+                Logger.Debug($"[yt-dlp] Using --cookies-from-browser {browser} for {profile.Site}");
+            }
+        }
+
+        private static readonly string[] OtherDownloadRequiredDomains =
+        {
+            "vimeo.com", "dailymotion.com", "dai.ly", "twitch.tv", "twitter.com", "x.com"
+        };
+
+        /// <summary>
         /// Sites that serve separate video+audio streams, requiring download+mux for best quality.
         /// Other sites work via streaming.
         /// </summary>
         public static bool IsDownloadRequiredSite(string host)
         {
-            return host.Contains("youtube.com") || host.Contains("youtu.be") ||
-                   host.Contains("vimeo.com") ||
-                   host.Contains("iwara.tv") ||
-                   host.Contains("hypnotube.com") ||
-                   host.Contains("rule34video.com") ||
-                   host.Contains("dailymotion.com") || host.Contains("dai.ly") ||
-                   host.Contains("twitch.tv") ||
-                   host.Contains("twitter.com") || host.Contains("x.com");
+            if (string.IsNullOrEmpty(host)) return false;
+
+            return SiteRules.Identify(host) is Site.YouTube or Site.Iwara or Site.Hypnotube or Site.Rule34Video
+                || OtherDownloadRequiredDomains.Any(domain => SiteRules.HostMatches(host, domain));
         }
 
         /// <summary>
@@ -542,7 +513,8 @@ namespace EdgeLoop.Classes
                 "--remote-components", "ejs:github"
             };
 
-            if (url.Contains("iwara.tv"))
+            var profile = SiteRules.Get(url);
+            if (profile.Site == Site.Iwara)
             {
                 // Ensure Source is at the very front for Iwara
                 args[1] = "Source/bestvideo+bestaudio/best";
@@ -581,21 +553,14 @@ namespace EdgeLoop.Classes
                 Logger.Warning("[yt-dlp] ffmpeg.exe not found. Muxing of high-quality streams may fail.");
             }
 
-            // Add cookies if configured
+            // Add cookies and site headers if configured
             OptionSet options = BuildOptionsForUrl(url, out string cookieFile);
             if (!string.IsNullOrEmpty(options.Cookies))
             {
                 args.Add("--cookies");
                 args.Add(options.Cookies);
             }
-            else if (url.Contains("youtube.com") || url.Contains("youtu.be") || url.Contains("iwara.tv"))
-            {
-                // Simplified: Just always add it for major sites if no explicit cookie file
-                var browser = App.Settings?.BrowserForCookies ?? "Firefox";
-                args.Add("--cookies-from-browser");
-                args.Add(browser);
-                Logger.Debug($"[yt-dlp] Using --cookies-from-browser {browser} for high-quality download");
-            }
+            AddSiteArgs(args, profile, options);
 
             args.Add(url);
 

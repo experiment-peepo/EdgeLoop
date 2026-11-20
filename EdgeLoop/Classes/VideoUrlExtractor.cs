@@ -35,10 +35,7 @@ namespace EdgeLoop.Classes
             if (string.IsNullOrWhiteSpace(pageUrl)) return new VideoMetadata();
 
             // Clean URL for Hypnotube/Iwara (strip playlist params that break things)
-            if (pageUrl.Contains("hypnotube.com") || pageUrl.Contains("iwara.tv"))
-            {
-                if (pageUrl.Contains("?")) pageUrl = pageUrl.Split('?')[0];
-            }
+            pageUrl = SiteRules.NormalizePageUrl(pageUrl);
 
             var normalizedUrl = FileValidator.NormalizeUrl(pageUrl);
             var uri = new Uri(normalizedUrl);
@@ -77,7 +74,7 @@ namespace EdgeLoop.Classes
                 bool hasHtml = false;
 
                 // Use yt-dlp for video metadata if site is supported by it and blocks scraping
-                bool useYtDlpFirst = host.Contains("rule34video.com") || host.Contains("iwara.tv");
+                bool useYtDlpFirst = SiteRules.Is(host, Site.Rule34Video) || SiteRules.Is(host, Site.Iwara);
 
                 // Download+mux takes precedence if the site requires it (YouTube, Vimeo, etc.)
                 if (_ytDlpService != null && _ytDlpService.IsAvailable && YtDlpService.IsDownloadRequiredSite(host))
@@ -110,7 +107,7 @@ namespace EdgeLoop.Classes
                             if (!string.IsNullOrEmpty(videoUrl))
                             {
                                 var info = await _ytDlpService.ExtractVideoInfoAsync(normalizedUrl, cancellationToken);
-                                title = SanitizeTitle(info?.Title, host);
+                                title = TitleSanitizer.Clean(info?.Title, host);
                             }
                         }
                         else
@@ -119,11 +116,8 @@ namespace EdgeLoop.Classes
                             if (info != null)
                             {
                                 if (!string.IsNullOrWhiteSpace(info.Url)) videoUrl = info.Url;
-                                // Ignore generic titles like "view" often returned by iwara's media server
-                                if (!string.IsNullOrWhiteSpace(info.Title) && info.Title != "Unknown" && info.Title.ToLowerInvariant() != "view")
-                                {
-                                    title = SanitizeTitle(info.Title, host);
-                                }
+                                // Clean() drops generic titles like "view" often returned by iwara's media server
+                                title = TitleSanitizer.Clean(info.Title, host);
                             }
                         }
                     }
@@ -143,7 +137,7 @@ namespace EdgeLoop.Classes
                     else if (useYtDlpFirst)
                     {
                         // We already tried ExtractVideoInfoAsync and it failed, but let's strictly fallback
-                        if (host.Contains("rule34video.com"))
+                        if (SiteRules.Is(host, Site.Rule34Video))
                         {
                             videoUrl = await ExtractRule34VideoUrlAsync(normalizedUrl, cancellationToken);
                         }
@@ -152,11 +146,11 @@ namespace EdgeLoop.Classes
                             if (hasHtml) videoUrl = await ExtractGenericVideoUrlAsync(normalizedUrl, cancellationToken);
                         }
                     }
-                    else if (host.Contains("pmvhaven.com"))
+                    else if (SiteRules.Is(host, Site.PmvHaven))
                     {
                         videoUrl = await ExtractPmvHavenUrlAsync(normalizedUrl, cancellationToken);
                     }
-                    else if (host.Contains("hypnotube.com"))
+                    else if (SiteRules.Is(host, Site.Hypnotube))
                     {
                         videoUrl = await ExtractHypnotubeUrlAsync(normalizedUrl, cancellationToken);
                     }
@@ -172,7 +166,7 @@ namespace EdgeLoop.Classes
                     title = ExtractTitleFromUrlSlug(normalizedUrl);
 
                     // Fallback 2: Fetch HTML (Only if not a protected site that blocks HttpClient)
-                    bool canScrape = !host.Contains("iwara.tv") && !host.Contains("rule34video.com");
+                    bool canScrape = !SiteRules.Is(host, Site.Iwara) && !SiteRules.Is(host, Site.Rule34Video);
 
                     if (string.IsNullOrEmpty(title) && canScrape)
                     {
@@ -288,8 +282,8 @@ namespace EdgeLoop.Classes
                     // Fall through to streaming path as fallback
                 }
 
-                var hasSpecializedScraper = host.Contains("pmvhaven.com") ||
-                                           host.Contains("hypnotube.com");
+                var hasSpecializedScraper = SiteRules.Is(host, Site.PmvHaven) ||
+                                           SiteRules.Is(host, Site.Hypnotube);
 
                 // Explicitly block RedGifs support as requested
                 if (host.Contains("redgifs.com"))
@@ -324,15 +318,15 @@ namespace EdgeLoop.Classes
                     Logger.Debug($"[VideoUrlExtractor] Using specialized scraper for {host}");
                 }
 
-                if (host.Contains("hypnotube.com"))
+                if (SiteRules.Is(host, Site.Hypnotube))
                 {
                     videoUrl = await ExtractHypnotubeUrlAsync(normalizedUrl, cancellationToken);
                 }
-                else if (host.Contains("pmvhaven.com"))
+                else if (SiteRules.Is(host, Site.PmvHaven))
                 {
                     videoUrl = await ExtractPmvHavenUrlAsync(normalizedUrl, cancellationToken);
                 }
-                else if (host.Contains("rule34video.com"))
+                else if (SiteRules.Is(host, Site.Rule34Video))
                 {
                     videoUrl = await ExtractRule34VideoUrlAsync(normalizedUrl, cancellationToken);
                 }
@@ -1002,7 +996,7 @@ namespace EdgeLoop.Classes
                 var host = uri.Host.ToLowerInvariant();
 
                 // Fast path for sites that require CF bypass / yt-dlp to get title
-                if (host.Contains("rule34video.com") || host.Contains("iwara.tv"))
+                if (SiteRules.Is(host, Site.Rule34Video) || SiteRules.Is(host, Site.Iwara))
                 {
                     if (_ytDlpService != null && _ytDlpService.IsAvailable)
                     {
@@ -1062,28 +1056,28 @@ namespace EdgeLoop.Classes
                 var path = uri.AbsolutePath;
 
                 // Handle specific sites
-                if (host.Contains("iwara.tv"))
+                if (SiteRules.Is(host, Site.Iwara))
                 {
                     // https://www.iwara.tv/video/UZcPefzEvubIa5/bengugu-hmv-sfx -> bengugu-hmv-sfx
                     var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
                     if (segments.Length >= 3 && segments[0] == "video")
                     {
-                        return SanitizeTitle(segments[2], host);
+                        return TitleSanitizer.Clean(segments[2], host);
                     }
                 }
-                else if (host.Contains("hypnotube.com"))
+                else if (SiteRules.Is(host, Site.Hypnotube))
                 {
                     // https://hypnotube.com/video/seen-my-boyfriend-kpop-wbch-pmv-78110.html -> seen-my-boyfriend-kpop-wbch-pmv
                     var slug = Path.GetFileNameWithoutExtension(path);
-                    return SanitizeTitle(slug, host);
+                    return TitleSanitizer.Clean(slug, host);
                 }
-                else if (host.Contains("rule34video.com"))
+                else if (SiteRules.Is(host, Site.Rule34Video))
                 {
                     // https://rule34video.com/video/3067406/slug/ -> slug
                     var segments = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
                     if (segments.Length >= 3 && segments[0] == "video")
                     {
-                        return SanitizeTitle(segments[2], host);
+                        return TitleSanitizer.Clean(segments[2], host);
                     }
                 }
 
@@ -1091,7 +1085,7 @@ namespace EdgeLoop.Classes
                 var genericSlug = Path.GetFileNameWithoutExtension(path.TrimEnd('/'));
                 if (!string.IsNullOrEmpty(genericSlug) && genericSlug.Length > 3)
                 {
-                    return SanitizeTitle(genericSlug, host);
+                    return TitleSanitizer.Clean(genericSlug, host);
                 }
             }
             catch { }
@@ -1119,22 +1113,22 @@ namespace EdgeLoop.Classes
                     var title = WebUtility.HtmlDecode(ogRegex.Groups[1].Value.Trim());
                     if (!string.IsNullOrWhiteSpace(title))
                     {
-                        var sanitized = SanitizeTitle(title, host);
+                        var sanitized = TitleSanitizer.Clean(title, host);
                         if (!string.IsNullOrWhiteSpace(sanitized)) return sanitized;
                     }
                 }
 
                 // Method 1: Try site-specific title extraction (Highest Priority)
-                if (host.Contains("hypnotube.com"))
+                if (SiteRules.Is(host, Site.Hypnotube))
                 {
                     var hTitle = StashPatternExtractor.ExtractHypnotubeTitle(html);
                     if (!string.IsNullOrEmpty(hTitle))
                     {
-                        var sanitized = SanitizeTitle(hTitle, host);
+                        var sanitized = TitleSanitizer.Clean(hTitle, host);
                         if (!string.IsNullOrWhiteSpace(sanitized)) return sanitized;
                     }
                 }
-                else if (host.Contains("rule34video.com"))
+                else if (SiteRules.Is(host, Site.Rule34Video))
                 {
                     var doc = new HtmlDocument();
                     doc.LoadHtml(html);
@@ -1153,7 +1147,7 @@ namespace EdgeLoop.Classes
                     Logger.Debug($"[VideoUrlExtractor] ExtractOgTitle returned: '{ogTitle}'");
                     if (!string.IsNullOrWhiteSpace(ogTitle))
                     {
-                        var sanitized = SanitizeTitle(ogTitle, host);
+                        var sanitized = TitleSanitizer.Clean(ogTitle, host);
                         if (!string.IsNullOrWhiteSpace(sanitized))
                         {
                             return sanitized;
@@ -1171,7 +1165,7 @@ namespace EdgeLoop.Classes
                     var twitterTitle = ExtractMetaTag(html, "twitter:title");
                     if (!string.IsNullOrWhiteSpace(twitterTitle))
                     {
-                        var sanitized = SanitizeTitle(twitterTitle, host);
+                        var sanitized = TitleSanitizer.Clean(twitterTitle, host);
                         if (!string.IsNullOrWhiteSpace(sanitized))
                         {
                             return sanitized;
@@ -1186,7 +1180,7 @@ namespace EdgeLoop.Classes
                     var htmlTitle = ExtractHtmlTitle(html);
                     if (!string.IsNullOrWhiteSpace(htmlTitle))
                     {
-                        var sanitized = SanitizeTitle(htmlTitle, host);
+                        var sanitized = TitleSanitizer.Clean(htmlTitle, host);
                         if (!string.IsNullOrWhiteSpace(sanitized))
                         {
                             return sanitized;
@@ -1203,7 +1197,7 @@ namespace EdgeLoop.Classes
                     var elementTitle = ExtractTitleFromPageElements(html, host);
                     if (!string.IsNullOrWhiteSpace(elementTitle))
                     {
-                        var sanitized = SanitizeTitle(elementTitle, host);
+                        var sanitized = TitleSanitizer.Clean(elementTitle, host);
                         if (!string.IsNullOrWhiteSpace(sanitized))
                         {
                             return sanitized;
@@ -1295,7 +1289,7 @@ namespace EdgeLoop.Classes
                 var host = uri.Host.ToLowerInvariant();
 
                 // Site-specific extraction patterns
-                if (host.Contains("hypnotube.com"))
+                if (SiteRules.Is(host, Site.Hypnotube))
                 {
                     // Try h1 with video-title class or similar
                     var pattern = @"<h1[^>]*class\s*=\s*[""'][^""']*video[^""']*title[^""']*[""'][^>]*>([^<]+)</h1>";
@@ -1305,7 +1299,7 @@ namespace EdgeLoop.Classes
                         return WebUtility.HtmlDecode(match.Groups[1].Value);
                     }
                 }
-                else if (host.Contains("rule34video.com"))
+                else if (SiteRules.Is(host, Site.Rule34Video))
                 {
                     // Try common title patterns
                     var patterns = new[] {
@@ -1325,7 +1319,7 @@ namespace EdgeLoop.Classes
                         }
                     }
                 }
-                else if (host.Contains("pmvhaven.com"))
+                else if (SiteRules.Is(host, Site.PmvHaven))
                 {
                     // Try h1 or title div
                     var patterns = new[] {
@@ -1365,80 +1359,6 @@ namespace EdgeLoop.Classes
 
             return null;
         }
-
-        private string SanitizeTitle(string title, string host = null)
-        {
-            if (string.IsNullOrWhiteSpace(title)) return null;
-
-            try
-            {
-                // Remove HTML tags
-                title = Regex.Replace(title, @"<[^>]+>", string.Empty);
-
-                // Decode HTML entities
-                title = WebUtility.HtmlDecode(title);
-
-                // Trim whitespace
-                title = title.Trim();
-
-                // Limit length (reasonable max for display)
-                if (title.Length > 200)
-                {
-                    title = title.Substring(0, 197) + "...";
-                }
-
-                // Remove excessive whitespace
-                title = Regex.Replace(title, @"\s+", " ");
-
-                // Remove common site suffixes
-                string[] suffixes = {
-                    " - Videos - Hypnotube",
-                    " - Hypnotube",
-                    " | Rule34Video",
-                    " - PMV Haven",
-                    " - PMVHaven",
-                    " - YouTube"
-                };
-
-                foreach (var suffix in suffixes)
-                {
-                    if (title.EndsWith(suffix, StringComparison.OrdinalIgnoreCase))
-                    {
-                        title = title.Substring(0, title.Length - suffix.Length).Trim();
-                        break;
-                    }
-                }
-
-                // Remove trailing numbering artifacts like (1), (2) which are often search result artifacts
-                // but keep year markers like (2024)
-                title = Regex.Replace(title, @"\s+\(\d\)$", "");
-
-                // PMVHaven specific: Remove uploader "by [Name]"
-                if (!string.IsNullOrEmpty(host) && host.Contains("pmvhaven.com"))
-                {
-                    // Pattern: "Title by Uploader"
-                    // We search for " by " towards the end of the string
-                    var byMatch = Regex.Match(title, @"\s+by\s+([^-|]+)$", RegexOptions.IgnoreCase);
-                    if (byMatch.Success)
-                    {
-                        title = title.Substring(0, byMatch.Index).Trim();
-                    }
-                }
-
-                if (string.IsNullOrWhiteSpace(title)) return null;
-                
-                var lower = title.ToLowerInvariant();
-                if (lower == "na" || lower == "[na]" || lower == "view" || lower == "unknown") return null;
-
-                return title;
-            }
-            catch (Exception ex)
-            {
-                Logger.Warning($"Error sanitizing title: {ex.Message}");
-                return null;
-            }
-        }
-
 
         /// <summary>
         /// Clears the URL cache
