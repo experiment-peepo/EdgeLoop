@@ -149,7 +149,7 @@ namespace EdgeLoop.Tests.Stability
             var mockExtractor = new Mock<IVideoUrlExtractor>();
 
             // Fast extraction 
-            mockExtractor.Setup(x => x.ExtractVideoUrlAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            mockExtractor.Setup(x => x.ExtractVideoUrlAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<string>>()))
                 .ReturnsAsync("https://pmvhaven.com/slow-stream.m3u8");
 
             var vm = new HypnoViewModel(mockExtractor.Object);

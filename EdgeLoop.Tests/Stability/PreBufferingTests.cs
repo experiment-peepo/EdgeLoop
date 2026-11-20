@@ -27,7 +27,7 @@ namespace EdgeLoop.Tests.Stability
             var pageUrl = "https://rule34video.com/video/123/test-video/";
             var directUrl = "https://boomio-cdn.com/123.mp4?time=123";
 
-            MockExtractor.Setup(x => x.ExtractVideoUrlAsync(pageUrl, It.IsAny<CancellationToken>()))
+            MockExtractor.Setup(x => x.ExtractVideoUrlAsync(pageUrl, It.IsAny<CancellationToken>(), It.IsAny<IProgress<string>>()))
                 .ReturnsAsync(directUrl);
 
             _mockDownloadService.Setup(d => d.DownloadVideoAsync(It.IsAny<string>(), It.IsAny<Dictionary<string, string>>(), It.IsAny<CancellationToken>()))
@@ -39,7 +39,7 @@ namespace EdgeLoop.Tests.Stability
             var item1 = new VideoItem("https://example.com/item1.mp4");
             var item2 = new VideoItem(pageUrl) { OriginalPageUrl = pageUrl };
 
-            MockExtractor.Setup(x => x.ExtractVideoUrlAsync(item1.FilePath, It.IsAny<CancellationToken>()))
+            MockExtractor.Setup(x => x.ExtractVideoUrlAsync(item1.FilePath, It.IsAny<CancellationToken>(), It.IsAny<IProgress<string>>()))
                 .ReturnsAsync(item1.FilePath);
 
             vm.SetQueue(new[] { item1, item2 });
@@ -73,7 +73,7 @@ namespace EdgeLoop.Tests.Stability
             var pageUrl2 = "https://example.com/p2";
 
             var tcs = new TaskCompletionSource<string>();
-            MockExtractor.Setup(x => x.ExtractVideoUrlAsync(pageUrl2, It.IsAny<CancellationToken>()))
+            MockExtractor.Setup(x => x.ExtractVideoUrlAsync(pageUrl2, It.IsAny<CancellationToken>(), It.IsAny<IProgress<string>>()))
                 .Returns(tcs.Task);
 
             var vm = new HypnoViewModel(MockExtractor.Object, _mockDownloadService.Object);

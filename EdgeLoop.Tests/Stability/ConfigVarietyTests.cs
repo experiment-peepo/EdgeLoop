@@ -61,7 +61,7 @@ namespace EdgeLoop.Tests.Stability
             var checkPos = PlaybackPositionTracker.Instance.GetPosition(item.TrackingPath);
             checkPos.Should().Be(savedPos, "Tracker should return the position we just updated");
 
-            MockExtractor.Setup(x => x.ExtractVideoUrlAsync(pageUrl, It.IsAny<CancellationToken>()))
+            MockExtractor.Setup(x => x.ExtractVideoUrlAsync(pageUrl, It.IsAny<CancellationToken>(), It.IsAny<IProgress<string>>()))
                 .ReturnsAsync("https://cdn.pmvhaven.com/video.mp4");
 
             var vm = new HypnoViewModel(MockExtractor.Object);

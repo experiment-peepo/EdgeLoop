@@ -3,6 +3,10 @@ using Moq;
 using EdgeLoop.Classes;
 using EdgeLoop.ViewModels;
 
+// Every test registers its mocks in the static ServiceContainer (and App.Settings reads from it),
+// so test classes running in parallel overwrite each other's mocks. Run them one at a time.
+[assembly: CollectionBehavior(DisableTestParallelization = true)]
+
 namespace EdgeLoop.Tests
 {
     public abstract class TestBase : IDisposable

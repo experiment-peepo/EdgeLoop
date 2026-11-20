@@ -46,8 +46,8 @@ namespace EdgeLoop.Tests.Stability
         {
             // Arrange
             // Simulate a slow URL extraction that respects cancellation
-            MockExtractor.Setup(x => x.ExtractVideoUrlAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .Returns(async (string url, CancellationToken ct) =>
+            MockExtractor.Setup(x => x.ExtractVideoUrlAsync(It.IsAny<string>(), It.IsAny<CancellationToken>(), It.IsAny<IProgress<string>>()))
+                .Returns(async (string url, CancellationToken ct, IProgress<string> _) =>
                 {
                     await Task.Delay(50, ct);
                     return url;
