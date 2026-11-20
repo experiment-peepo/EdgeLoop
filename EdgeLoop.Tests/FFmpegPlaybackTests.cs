@@ -10,6 +10,7 @@ namespace EdgeLoop.Tests
     /// demux and decode real media. The other tests never start the engine, so an FFmpeg/bindings
     /// mismatch (e.g. after upgrading FlyleafLib or the DLLs) would otherwise go unnoticed.
     /// </summary>
+    [Collection(EngineCollection.Name)]
     public class FFmpegPlaybackTests : TestBase
     {
         private static readonly string SamplePath =
