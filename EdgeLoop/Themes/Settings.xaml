@@ -1,0 +1,203 @@
+<!--
+	Copyright (C) 2026 Llamasoft
+	Licensed under the GNU General Public License v3.0 or later (see LICENSE).
+
+	Settings building blocks: setting rows, the hotkey recorder, the section sidebar and small text buttons.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="clr-namespace:EdgeLoop.Controls">
+
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="Colors.xaml"/>
+        <ResourceDictionary Source="Typography.xaml"/>
+        <ResourceDictionary Source="Focus.xaml"/>
+    </ResourceDictionary.MergedDictionaries>
+
+    <!-- A setting: name, optional tag and description on the left; the control on the right (or below) -->
+    <Style x:Key="SettingRowStyle" TargetType="controls:SettingRow">
+        <Setter Property="Margin" Value="0,0,0,18"/>
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="IsTabStop" Value="False"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="controls:SettingRow">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <StackPanel x:Name="Text" Margin="0,0,16,0" VerticalAlignment="Center">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{TemplateBinding Header}" Style="{StaticResource SettingLabelText}" VerticalAlignment="Center"/>
+                                <Border x:Name="NoteBadge" Margin="8,0,0,0" Padding="6,1" CornerRadius="3" VerticalAlignment="Center"
+                                        Background="{StaticResource AccentSubtleBrush}">
+                                    <TextBlock Text="{TemplateBinding Note}" FontSize="10" FontWeight="SemiBold" Foreground="{StaticResource TextSecondary}"/>
+                                </Border>
+                            </StackPanel>
+                            <TextBlock x:Name="DescriptionText" Text="{TemplateBinding Description}" Style="{StaticResource CaptionText}" Margin="0,3,0,0"/>
+                        </StackPanel>
+
+                        <ContentPresenter x:Name="ControlSite" Grid.Column="1" VerticalAlignment="Center"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Note" Value="{x:Null}">
+                            <Setter TargetName="NoteBadge" Property="Visibility" Value="Collapsed"/>
+                        </Trigger>
+                        <Trigger Property="Description" Value="{x:Null}">
+                            <Setter TargetName="DescriptionText" Property="Visibility" Value="Collapsed"/>
+                        </Trigger>
+                        <Trigger Property="IsStacked" Value="True">
+                            <Setter TargetName="ControlSite" Property="Grid.Row" Value="1"/>
+                            <Setter TargetName="ControlSite" Property="Grid.Column" Value="0"/>
+                            <Setter TargetName="ControlSite" Property="Grid.ColumnSpan" Value="2"/>
+                            <Setter TargetName="ControlSite" Property="Margin" Value="0,8,0,0"/>
+                            <Setter TargetName="Text" Property="Margin" Value="0"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Hotkey recorder: looks like a key cap; pink outline while listening -->
+    <Style x:Key="HotkeyRecorderStyle" TargetType="controls:HotkeyRecorder">
+        <Setter Property="MinWidth" Value="150"/>
+        <Setter Property="Height" Value="32"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+        <Setter Property="Background" Value="{StaticResource SurfaceRaisedBrush}"/>
+        <Setter Property="BorderBrush" Value="{StaticResource SubtleBorderBrush}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingVisual}"/>
+        <Setter Property="ToolTip" Value="Click, then press the keys"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="controls:HotkeyRecorder">
+                    <Border x:Name="Cap" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="1.5" CornerRadius="6" Padding="12,0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{TemplateBinding DisplayText}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                            <Path x:Name="EditIcon" Grid.Column="1" Margin="10,0,0,0" Width="11" Height="11" Stretch="Uniform" VerticalAlignment="Center"
+                                  Fill="{StaticResource TextTertiary}" Opacity="0.7"
+                                  Data="M20.71,7.04C21.1,6.65 21.1,6 20.71,5.63L18.37,3.29C18,2.9 17.35,2.9 16.96,3.29L15.12,5.12L18.87,8.87M3,17.25V21H6.75L17.81,9.93L14.06,6.18L3,17.25Z"/>
+                        </Grid>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Cap" Property="BorderBrush" Value="{StaticResource AccentSecondary}"/>
+                        </Trigger>
+                        <Trigger Property="IsRecording" Value="True">
+                            <Setter TargetName="Cap" Property="BorderBrush" Value="{StaticResource AccentPrimary}"/>
+                            <Setter TargetName="Cap" Property="Background" Value="{StaticResource AccentSubtleBrush}"/>
+                            <Setter TargetName="EditIcon" Property="Visibility" Value="Collapsed"/>
+                            <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+                        </Trigger>
+                        <Trigger Property="IsEnabled" Value="False">
+                            <Setter Property="Opacity" Value="0.5"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- Section list on the left of Settings -->
+    <Style x:Key="SettingsNavItemStyle" TargetType="ListBoxItem">
+        <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Margin" Value="0,0,0,2"/>
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingVisualTight}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ListBoxItem">
+                    <Grid>
+                        <Border x:Name="Background" CornerRadius="6" Background="Transparent" Padding="12,9">
+                            <ContentPresenter/>
+                        </Border>
+                        <Border x:Name="Marker" Width="3" CornerRadius="1.5" HorizontalAlignment="Left" Margin="0,8"
+                                Background="{StaticResource AccentPrimary}" Visibility="Collapsed"/>
+                    </Grid>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="Background" Property="Background" Value="{StaticResource SurfaceHoverBrush}"/>
+                            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                        </Trigger>
+                        <Trigger Property="IsSelected" Value="True">
+                            <Setter TargetName="Background" Property="Background" Value="{StaticResource AccentSubtleBrush}"/>
+                            <Setter TargetName="Marker" Property="Visibility" Value="Visible"/>
+                            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- One line per screen in a screen picker: "Screen 2  2560×1440 · Primary" -->
+    <DataTemplate x:Key="ScreenPickerItem">
+        <StackPanel Orientation="Horizontal">
+            <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
+            <TextBlock Text="{Binding Details}" Margin="8,0,0,0" FontWeight="Regular" FontSize="11"
+                       Foreground="{StaticResource TextTertiary}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+        </StackPanel>
+    </DataTemplate>
+
+    <!-- A heading inside a Settings section, e.g. "Captured while videos play" -->
+    <Style x:Key="SettingsGroupHeader" TargetType="TextBlock" BasedOn="{StaticResource SectionLabelText}">
+        <Setter Property="Margin" Value="0,6,0,12"/>
+    </Style>
+
+    <!-- A text-only button, e.g. "Reset to defaults" -->
+    <Style x:Key="LinkButtonStyle" TargetType="Button">
+        <Setter Property="Foreground" Value="{StaticResource AccentSecondary}"/>
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Cursor" Value="Hand"/>
+        <Setter Property="Padding" Value="6,3"/>
+        <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingVisualTight}"/>
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}" CornerRadius="4">
+                        <ContentPresenter VerticalAlignment="Center"/>
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+        <Style.Triggers>
+            <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+                <Setter Property="Background" Value="{StaticResource SurfaceHoverBrush}"/>
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter Property="Opacity" Value="0.5"/>
+            </Trigger>
+        </Style.Triggers>
+    </Style>
+
+    <!-- Problem under a hotkey: duplicate keys (red) or taken by another app (yellow) -->
+    <Style x:Key="HotkeyProblemText" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="Margin" Value="0,5,0,0"/>
+        <Setter Property="Foreground" Value="{StaticResource WarningTextBrush}"/>
+        <Style.Triggers>
+            <DataTrigger Binding="{Binding IsConflict}" Value="True">
+                <Setter Property="Foreground" Value="{StaticResource ErrorTextBrush}"/>
+            </DataTrigger>
+        </Style.Triggers>
+    </Style>
+
+</ResourceDictionary>

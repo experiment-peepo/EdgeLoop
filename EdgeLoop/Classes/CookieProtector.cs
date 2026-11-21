@@ -69,6 +69,12 @@ namespace EdgeLoop.Classes
         }
 
         /// <summary>
+        /// Whether Windows can encrypt cookies on this PC. When it can't, <see cref="Protect"/> falls back
+        /// to saving them as plain text.
+        /// </summary>
+        public static bool IsEncryptionAvailable() => IsEncrypted(Protect("EdgeLoop encryption check"));
+
+        /// <summary>
         /// Returns true if the value is already encrypted with DPAPI.
         /// </summary>
         public static bool IsEncrypted(string value)

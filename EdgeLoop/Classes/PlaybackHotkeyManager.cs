@@ -29,13 +29,16 @@ namespace EdgeLoop.Classes
 
         /// <summary>Skip on the targeted screen(s): true = next video, false = previous.</summary>
         public Action<bool> Skip { get; init; }
+
+        /// <summary>Skip on one screen (by device name), for that screen's own keys.</summary>
+        public Action<string, bool> SkipScreen { get; init; }
     }
 
     /// <summary>
     /// Owns EdgeLoop's global hotkeys. Panic and Wipe &amp; Exit are registered for the whole app
-    /// lifetime. Skip and the triple-Escape exit are only registered while videos are playing:
-    /// global hotkeys take their keys away from every other app, and the defaults are the plain
-    /// arrow keys and Escape.
+    /// lifetime. Skip (including each screen's own skip keys) and the triple-Escape exit are only
+    /// registered while videos are playing: global hotkeys take their keys away from every other
+    /// app, and the defaults are the plain arrow keys and Escape.
     /// </summary>
     public sealed class PlaybackHotkeyManager : IDisposable
     {
@@ -45,17 +48,26 @@ namespace EdgeLoop.Classes
         public const string SkipBackwardName = "SkipBackward";
         public const string OpaquePanicName = "OpaquePanic";
 
+        /// <summary>Prefix of a screen's own skip hotkeys: "ScreenSkip:{device}:F" and ":B".</summary>
+        public const string ScreenSkipPrefix = "ScreenSkip:";
+
         private static readonly string[] PlaybackHotkeys = { SkipForwardName, SkipBackwardName, OpaquePanicName };
 
         private readonly IHotkeyRegistrar _hotkeys;
         private readonly Func<UserSettings> _settings;
         private readonly PlaybackHotkeyActions _actions;
+        private readonly Func<IEnumerable<string>> _connectedScreens;
+        private readonly HashSet<string> _screenSkipNames = new();
 
-        public PlaybackHotkeyManager(IHotkeyRegistrar hotkeys, Func<UserSettings> settings, PlaybackHotkeyActions actions)
+        /// <param name="connectedScreens">Device names of the screens plugged in now; screens' own skip keys are only
+        /// registered for these. Null registers them for every screen in the settings.</param>
+        public PlaybackHotkeyManager(IHotkeyRegistrar hotkeys, Func<UserSettings> settings, PlaybackHotkeyActions actions,
+            Func<IEnumerable<string>> connectedScreens = null)
         {
             _hotkeys = hotkeys ?? throw new ArgumentNullException(nameof(hotkeys));
             _settings = settings ?? throw new ArgumentNullException(nameof(settings));
             _actions = actions ?? throw new ArgumentNullException(nameof(actions));
+            _connectedScreens = connectedScreens;
         }
 
         public bool IsPlaying { get; private set; }
@@ -99,6 +111,7 @@ namespace EdgeLoop.Classes
             {
                 foreach (var name in PlaybackHotkeys)
                     _hotkeys.Unregister(name);
+                UnregisterScreenSkips();
                 return failures;
             }
 
@@ -111,7 +124,54 @@ namespace EdgeLoop.Classes
             else
                 _hotkeys.Unregister(OpaquePanicName);
 
+            RegisterScreenSkips(settings, failures);
             return failures;
+        }
+
+        private void RegisterScreenSkips(UserSettings settings, List<string> failures)
+        {
+            UnregisterScreenSkips();
+            if (settings.PerScreenSkipHotkeys == null) return;
+
+            var connected = _connectedScreens?.Invoke()?.ToHashSet(StringComparer.OrdinalIgnoreCase);
+            foreach (var (device, keys) in settings.PerScreenSkipHotkeys)
+            {
+                if (keys == null || (connected != null && !connected.Contains(device)))
+                    continue; // A screen that isn't plugged in keeps its keys for later, unregistered
+
+                RegisterScreenSkip(device, forward: true, keys.Forward, failures);
+                RegisterScreenSkip(device, forward: false, keys.Backward, failures);
+            }
+        }
+
+        private void RegisterScreenSkip(string device, bool forward, HotkeyCombo combo, List<string> failures)
+        {
+            if (combo.IsEmpty) return;
+            string name = ScreenSkipName(device, forward);
+            _screenSkipNames.Add(name);
+            Register(name, combo.Modifiers, combo.Key, () => _actions.SkipScreen?.Invoke(device, forward), failures);
+        }
+
+        private void UnregisterScreenSkips()
+        {
+            foreach (var name in _screenSkipNames)
+                _hotkeys.Unregister(name);
+            _screenSkipNames.Clear();
+        }
+
+        public static string ScreenSkipName(string device, bool forward) => $"{ScreenSkipPrefix}{device}:{(forward ? "F" : "B")}";
+
+        /// <summary>
+        /// Releases every hotkey until the next <see cref="RegisterAll"/>, so a key recorder in Settings
+        /// receives the keys instead of triggering them (Wipe &amp; Exit would close the app).
+        /// </summary>
+        public void Suspend()
+        {
+            _hotkeys.Unregister(PanicName);
+            _hotkeys.Unregister(ClearName);
+            foreach (var name in PlaybackHotkeys)
+                _hotkeys.Unregister(name);
+            UnregisterScreenSkips();
         }
 
         private void Register(string name, uint modifiers, string key, Action callback, List<string> failures)
@@ -127,16 +187,21 @@ namespace EdgeLoop.Classes
             SkipForwardName => "Skip Forward",
             SkipBackwardName => "Skip Backward",
             OpaquePanicName => "Fullscreen Escape",
+            _ when name.StartsWith(ScreenSkipPrefix, StringComparison.Ordinal) => ScreenSkipDisplayName(name),
             _ => name
         };
 
-        public void Dispose()
+        private static string ScreenSkipDisplayName(string name)
         {
-            _hotkeys.Unregister(PanicName);
-            _hotkeys.Unregister(ClearName);
-            foreach (var name in PlaybackHotkeys)
-                _hotkeys.Unregister(name);
+            var rest = name.Substring(ScreenSkipPrefix.Length);
+            bool forward = rest.EndsWith(":F", StringComparison.Ordinal);
+            var device = rest.Length > 2 ? rest.Substring(0, rest.Length - 2) : rest;
+            var number = System.Text.RegularExpressions.Regex.Match(device, @"DISPLAY(\d+)", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var screen = number.Success ? $"Screen {number.Groups[1].Value}" : device;
+            return $"{(forward ? "Skip Forward" : "Skip Backward")} on {screen}";
         }
+
+        public void Dispose() => Suspend();
     }
 
     /// <summary>Decides which player(s) a skip hotkey acts on.</summary>
@@ -159,6 +224,13 @@ namespace EdgeLoop.Classes
 
             var target = OwnerOn(players, cursorScreen) ?? OwnerOn(players, primaryScreen);
             return target != null ? new[] { target } : independent;
+        }
+
+        /// <summary>The player to skip for one screen's own keys: the one on that screen (or its group's master), or none.</summary>
+        public static IReadOnlyList<T> ResolveScreen<T>(IReadOnlyList<T> players, string screen) where T : class, ISkipTarget
+        {
+            var owner = players == null ? null : OwnerOn(players, screen);
+            return owner != null ? new[] { owner } : Array.Empty<T>();
         }
 
         private static T OwnerOn<T>(IReadOnlyList<T> players, string screen) where T : class, ISkipTarget

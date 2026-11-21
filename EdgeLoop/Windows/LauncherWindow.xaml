@@ -197,15 +197,6 @@
                 </Setter.Value>
             </Setter>
         </Style>
-
-        <!-- One line per screen in the screen picker: "Screen 2  2560×1440 · Primary" -->
-        <DataTemplate x:Key="ScreenPickerItem">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
-                <TextBlock Text="{Binding Details}" Margin="8,0,0,0" FontWeight="Regular" FontSize="11"
-                           Foreground="{StaticResource TextTertiary}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-            </StackPanel>
-        </DataTemplate>
     </Window.Resources>
 
     <controls:EdgeLoopWindow.TitleBarContent>

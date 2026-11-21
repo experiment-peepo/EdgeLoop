@@ -20,8 +20,8 @@ namespace EdgeLoop.Classes
         {
             window.PreviewKeyDown += (s, e) =>
             {
-                // An open drop-down uses Enter and Esc itself
-                if (IsInOpenDropDown(Keyboard.FocusedElement as DependencyObject))
+                // An open drop-down uses Enter and Esc itself, and a hotkey recorder takes any key
+                if (HotkeyCapture.IsRecording || IsInOpenDropDown(Keyboard.FocusedElement as DependencyObject))
                     return;
 
                 if (e.Key == Key.Escape)

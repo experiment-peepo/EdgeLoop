@@ -53,15 +53,13 @@ namespace EdgeLoop.Windows
                     Application.Current?.Shutdown();
                 },
                 OpaquePanic = HandleOpaquePanic,
-                Skip = forward =>
-                {
-                    foreach (var vm in GetContextualSkipTargets())
-                    {
-                        if (forward) vm.PlayNext(true);
-                        else vm.PlayPrevious(true);
-                    }
-                }
-            });
+                Skip = forward => SkipEach(GetContextualSkipTargets(), forward),
+                SkipScreen = (screen, forward) => SkipEach(SkipTargetResolver.ResolveScreen(App.VideoService.ActiveViewModels, screen), forward)
+            },
+            connectedScreens: () => System.Windows.Forms.Screen.AllScreens.Select(s => s.DeviceName));
+
+            // A key recorder in Settings needs the keys our hotkeys would otherwise catch
+            HotkeyCapture.RecordingChanged += HotkeyCapture_RecordingChanged;
 
             // Skip and the triple-Escape exit are only registered while something is playing
             _hotkeyManager.SetPlaying(App.VideoService?.ActivePlayers.Count > 0);
@@ -78,6 +76,24 @@ namespace EdgeLoop.Windows
             var failures = _hotkeyManager.SetPlaying(App.VideoService.ActivePlayers.Count > 0);
             if (failures.Count > 0)
                 ReportHotkeyFailures(failures);
+        }
+
+        private static void SkipEach(IEnumerable<HypnoViewModel> players, bool forward)
+        {
+            foreach (var vm in players)
+            {
+                if (forward) vm.PlayNext(true);
+                else vm.PlayPrevious(true);
+            }
+        }
+
+        private void HotkeyCapture_RecordingChanged(bool isRecording)
+        {
+            if (_hotkeyManager == null) return;
+            if (isRecording)
+                _hotkeyManager.Suspend();
+            else
+                ReloadHotkeys();
         }
 
         public void ReloadHotkeys()
@@ -216,6 +232,7 @@ namespace EdgeLoop.Windows
             SaveWindowBounds();
             if (App.VideoService != null)
                 App.VideoService.ActivePlayers.CollectionChanged -= ActivePlayers_CollectionChanged;
+            HotkeyCapture.RecordingChanged -= HotkeyCapture_RecordingChanged;
             _hotkeyManager?.Dispose();
             App.Hotkeys?.Dispose();
             (DataContext as IDisposable)?.Dispose();

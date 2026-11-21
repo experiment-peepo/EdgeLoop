@@ -178,7 +178,8 @@ namespace EdgeLoop.Tests
                     window.AllowsTransparency.Should().BeFalse("layered windows lose the system shadow and snapping");
                     window.Template.FindName("CloseButton", window).Should().BeOfType<Button>();
                     var maximize = window.Template.FindName("MaximizeButton", window).Should().BeOfType<Button>().Subject;
-                    maximize.Visibility.Should().Be(Visibility.Collapsed, "dialogs can't be maximized");
+                    maximize.Visibility.Should().Be(window.ResizeMode == ResizeMode.NoResize ? Visibility.Collapsed : Visibility.Visible,
+                        "only resizable windows (Settings) can be maximized");
                 }
                 finally
                 {

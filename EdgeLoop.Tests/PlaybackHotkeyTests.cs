@@ -93,16 +93,26 @@ namespace EdgeLoop.Tests
 
         private static (PlaybackHotkeyManager Manager, FakeHotkeys Hotkeys, List<bool> Skips) CreateManager(UserSettings settings)
         {
+            var (manager, hotkeys, skips, _) = CreateManager(settings, null);
+            return (manager, hotkeys, skips);
+        }
+
+        private static (PlaybackHotkeyManager Manager, FakeHotkeys Hotkeys, List<bool> Skips, List<(string Screen, bool Forward)> ScreenSkips)
+            CreateManager(UserSettings settings, string[]? connectedScreens)
+        {
             var hotkeys = new FakeHotkeys();
             var skips = new List<bool>();
+            var screenSkips = new List<(string, bool)>();
             var manager = new PlaybackHotkeyManager(hotkeys, () => settings, new PlaybackHotkeyActions
             {
                 Panic = () => { },
                 WipeAndExit = () => { },
                 OpaquePanic = () => { },
-                Skip = skips.Add
-            });
-            return (manager, hotkeys, skips);
+                Skip = skips.Add,
+                SkipScreen = (screen, forward) => screenSkips.Add((screen, forward))
+            },
+            connectedScreens == null ? null : () => connectedScreens);
+            return (manager, hotkeys, skips, screenSkips);
         }
 
         [Fact]
@@ -179,6 +189,72 @@ namespace EdgeLoop.Tests
             manager.Dispose();
 
             hotkeys.Registered.Should().BeEmpty();
+        }
+
+        // --- Each screen's own skip keys ---
+
+        private static UserSettings WithScreenKeys() => new()
+        {
+            PerScreenSkipHotkeys = new()
+            {
+                [Second] = new ScreenSkipKeys { ForwardModifiers = HotkeyCombo.Ctrl, ForwardKey = "Right", BackwardModifiers = HotkeyCombo.Ctrl, BackwardKey = "Left" },
+                [Third] = new ScreenSkipKeys { ForwardKey = "F7" }
+            }
+        };
+
+        [Fact]
+        public void ScreenKeys_AreRegisteredWhilePlaying_ForConnectedScreensOnly()
+        {
+            var (manager, hotkeys, _, screenSkips) = CreateManager(WithScreenKeys(), connectedScreens: new[] { Primary, Second });
+            manager.RegisterAll();
+            hotkeys.Registered.Keys.Should().NotContain(k => k.StartsWith(PlaybackHotkeyManager.ScreenSkipPrefix), "nothing is playing");
+
+            manager.SetPlaying(true);
+            var forward = PlaybackHotkeyManager.ScreenSkipName(Second, forward: true);
+            hotkeys.Registered.Should().ContainKey(forward);
+            hotkeys.Registered.Should().ContainKey(PlaybackHotkeyManager.ScreenSkipName(Second, forward: false));
+            hotkeys.Registered.Should().NotContainKey(PlaybackHotkeyManager.ScreenSkipName(Third, forward: true), "screen 3 isn't connected");
+
+            hotkeys.Registered[forward].Callback();
+            screenSkips.Should().Equal((Second, true));
+
+            manager.SetPlaying(false);
+            hotkeys.Registered.Keys.Should().NotContain(k => k.StartsWith(PlaybackHotkeyManager.ScreenSkipPrefix));
+        }
+
+        [Fact]
+        public void Suspend_ReleasesEveryHotkey_UntilTheyAreRegisteredAgain()
+        {
+            var (manager, hotkeys, _, _) = CreateManager(WithScreenKeys(), connectedScreens: new[] { Second });
+            manager.RegisterAll();
+            manager.SetPlaying(true);
+
+            manager.Suspend();
+            hotkeys.Registered.Should().BeEmpty("a key recorder in Settings needs the keys");
+
+            manager.RegisterAll();
+            hotkeys.Registered.Should().ContainKeys(PlaybackHotkeyManager.PanicName, PlaybackHotkeyManager.SkipForwardName,
+                PlaybackHotkeyManager.ScreenSkipName(Second, forward: true));
+        }
+
+        [Fact]
+        public void ScreenKeyFailures_NameTheScreen()
+        {
+            PlaybackHotkeyManager.DisplayName(PlaybackHotkeyManager.ScreenSkipName(Second, forward: false))
+                .Should().Be("Skip Backward on Screen 2");
+        }
+
+        [Fact]
+        public void ResolveScreen_SkipsOnlyThatScreen_ViaItsGroupsMaster()
+        {
+            var master = new Player(Primary, "group", IsSyncMaster: true);
+            var follower = new Player(Second, "group");
+            var alone = new Player(Third);
+            var players = new[] { master, follower, alone };
+
+            SkipTargetResolver.ResolveScreen(players, Third).Should().Equal(alone);
+            SkipTargetResolver.ResolveScreen(players, Second).Should().Equal(master);
+            SkipTargetResolver.ResolveScreen(players, @"\\.\DISPLAY9").Should().BeEmpty("nothing plays there");
         }
     }
 }

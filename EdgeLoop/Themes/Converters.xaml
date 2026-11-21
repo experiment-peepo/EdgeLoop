@@ -18,6 +18,7 @@
     <conv:OpacityScaleConverter x:Key="OpacityScaleConverter"/>
     <conv:IsProgressIndeterminateConverter x:Key="IsProgressIndeterminateConverter"/>
     <conv:LessThanConverter x:Key="LessThanConverter"/>
+    <conv:SecretMaskConverter x:Key="SecretMaskConverter"/>
     <conv:StatusMessageTypeToBrushConverter x:Key="StatusMessageTypeToBrushConverter"/>
     <conv:StatusMessageTypeToForegroundConverter x:Key="StatusMessageTypeToForegroundConverter"/>
 

@@ -53,6 +53,31 @@ namespace EdgeLoop.Classes
 
         public bool IsRegistered(string name) => _registrations.ContainsKey(name);
 
+        private const int AvailabilityProbeId = 0xBFFF; // Highest id an app may use
+
+        /// <summary>
+        /// Whether a key combination could be registered right now: true if free (or already one of
+        /// EdgeLoop's own hotkeys; clashes between those are checked separately), false if another
+        /// app holds it, null if it can't be checked (no window yet, unknown key).
+        /// </summary>
+        public bool? IsAvailable(uint modifiers, string keyName)
+        {
+            if (_windowHandle == IntPtr.Zero || !Enum.TryParse<Key>(keyName, true, out Key key) || key == Key.None)
+                return null;
+
+            uint virtualKey = (uint)KeyInterop.VirtualKeyFromKey(key);
+            foreach (var registration in _registrations.Values)
+            {
+                if (registration.Modifiers == modifiers && registration.VirtualKey == virtualKey)
+                    return true;
+            }
+
+            if (!RegisterHotKey(_windowHandle, AvailabilityProbeId, modifiers, virtualKey))
+                return false;
+            UnregisterHotKey(_windowHandle, AvailabilityProbeId);
+            return true;
+        }
+
         public bool Register(string name, uint modifiers, string keyName, Action callback)
         {
             if (_windowHandle == IntPtr.Zero) return false;

@@ -55,4 +55,13 @@ namespace EdgeLoop.Converters
             && double.TryParse(parameter?.ToString(), NumberStyles.Float, CultureInfo.InvariantCulture, out var limit)
             && number < limit;
     }
+
+    /// <summary>Hides a secret: "Not set", or dots and its length ("●●●●●●●● 120 characters").</summary>
+    public class SecretMaskConverter : OneWayConverter
+    {
+        public override object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
+            value is string secret && !string.IsNullOrWhiteSpace(secret)
+                ? $"{new string('●', 8)}  {secret.Trim().Length} characters"
+                : "Not set";
+    }
 }

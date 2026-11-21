@@ -96,6 +96,13 @@ namespace EdgeLoop.Classes
         public string OpaquePanicHotkeyKey { get; set; } = "Escape";
         public uint OpaquePanicHotkeyModifiers { get; set; } = 0; // No modifiers by default
 
+        /// <summary>
+        /// Skip keys for particular screens, by screen device name (e.g. \\.\DISPLAY2). These always
+        /// skip that screen, wherever the mouse is. Screens not listed follow the mouse with the skip
+        /// keys above.
+        /// </summary>
+        public System.Collections.Generic.Dictionary<string, ScreenSkipKeys> PerScreenSkipHotkeys { get; set; } = new();
+
         public virtual bool AlwaysOpaque { get; set; } = false;
         public virtual bool EnableSuperResolution { get; set; } = false;
 
@@ -502,5 +509,16 @@ namespace EdgeLoop.Classes
         public double SpeedRatio { get; set; } = 1.0;
         public DateTime LastPlayed { get; set; } = DateTime.MinValue;
     }
-}
 
+    /// <summary>One screen's own skip keys. An empty key means that direction has none.</summary>
+    public class ScreenSkipKeys
+    {
+        public uint ForwardModifiers { get; set; }
+        public string ForwardKey { get; set; }
+        public uint BackwardModifiers { get; set; }
+        public string BackwardKey { get; set; }
+
+        [JsonIgnore] public HotkeyCombo Forward => new(ForwardModifiers, ForwardKey);
+        [JsonIgnore] public HotkeyCombo Backward => new(BackwardModifiers, BackwardKey);
+    }
+}

@@ -5,7 +5,7 @@
 
 	This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
-	You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>. 
+	You should have received a copy of the GNU General Public License along with this program. If not, see <https://www.gnu.org/licenses/>.
 -->
 
 <controls:EdgeLoopWindow x:Class="EdgeLoop.Windows.SettingsWindow"
@@ -13,681 +13,422 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:local="clr-namespace:EdgeLoop.Windows"
-        xmlns:vm="clr-namespace:EdgeLoop.ViewModels"
         xmlns:controls="clr-namespace:EdgeLoop.Controls"
-        xmlns:sys="clr-namespace:System;assembly=System.Runtime"
         mc:Ignorable="d"
-        Title="Settings" Subtitle="Playback, display and app options"
-        SizeToContent="Height" Width="480"
-        ResizeMode="NoResize"
+        Title="Settings"
+        Width="780" Height="620" MinWidth="640" MinHeight="460"
+        ResizeMode="CanResize"
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
     <Window.Resources>
-        <x:Array x:Key="KeyList" Type="sys:String">
-            <sys:String>End</sys:String>
-            <sys:String>Escape</sys:String>
-            <sys:String>Space</sys:String>
-            <sys:String>F1</sys:String>
-            <sys:String>F2</sys:String>
-            <sys:String>F3</sys:String>
-            <sys:String>F4</sys:String>
-            <sys:String>F5</sys:String>
-            <sys:String>F6</sys:String>
-            <sys:String>F7</sys:String>
-            <sys:String>F8</sys:String>
-            <sys:String>F9</sys:String>
-            <sys:String>F10</sys:String>
-            <sys:String>F11</sys:String>
-            <sys:String>F12</sys:String>
-            <sys:String>Delete</sys:String>
-            <sys:String>Insert</sys:String>
-            <sys:String>Home</sys:String>
-            <sys:String>PageUp</sys:String>
-            <sys:String>PageDown</sys:String>
-            <sys:String>NumPad0</sys:String>
-            <sys:String>NumPad1</sys:String>
-            <sys:String>NumPad2</sys:String>
-            <sys:String>NumPad3</sys:String>
-            <sys:String>NumPad4</sys:String>
-            <sys:String>NumPad5</sys:String>
-            <sys:String>NumPad6</sys:String>
-            <sys:String>NumPad7</sys:String>
-            <sys:String>NumPad8</sys:String>
-            <sys:String>NumPad9</sys:String>
-            <sys:String>Left</sys:String>
-            <sys:String>Right</sys:String>
-            <sys:String>Up</sys:String>
-            <sys:String>Down</sys:String>
-        </x:Array>
+        <!-- Title, description and "Reset to defaults" at the top of a section -->
+        <DataTemplate x:Key="SectionHeader">
+            <Grid Margin="0,0,0,20">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel>
+                    <TextBlock Text="{Binding Title}" Style="{StaticResource WindowHeaderTitleStyle}"/>
+                    <TextBlock Text="{Binding Description}" Style="{StaticResource WindowHeaderSubtitleStyle}"/>
+                </StackPanel>
+                <Button Grid.Column="1" Style="{StaticResource LinkButtonStyle}" VerticalAlignment="Top" Margin="12,4,0,0"
+                        Content="Reset to defaults" ToolTip="Put this section back to the default values (applies when you save)"
+                        Command="{Binding DataContext.ResetSectionCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                        CommandParameter="{Binding Section}"/>
+            </Grid>
+        </DataTemplate>
 
-        <!-- Modern Collapsible Section Style -->
-        <Style x:Key="SettingsExpanderStyle" TargetType="{x:Type Expander}">
-            <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="BorderThickness" Value="0"/>
-            <Setter Property="Padding" Value="0"/>
-            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-            <Setter Property="Template">
-                <Setter.Value>
-                    <ControlTemplate TargetType="{x:Type Expander}">
-                        <Grid Margin="0,5">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/>
-                                <RowDefinition x:Name="ContentRow" Height="0"/>
-                                <RowDefinition Height="Auto"/>
-                            </Grid.RowDefinitions>
-                            
-                            <ToggleButton x:Name="HeaderSite"
-                                          Background="{TemplateBinding Background}"
-                                          BorderThickness="0"
-                                          Content="{TemplateBinding Header}"
-                                          IsChecked="{Binding IsExpanded, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}"
-                                          Padding="0,15"
-                                          Cursor="Hand">
-                                <ToggleButton.Template>
-                                    <ControlTemplate TargetType="{x:Type ToggleButton}">
-                                        <Border Background="{TemplateBinding Background}" IsHitTestVisible="True">
-                                            <Grid>
-                                                <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="*"/>
-                                                    <ColumnDefinition Width="Auto"/>
-                                                </Grid.ColumnDefinitions>
-                                                
-                                                <ContentPresenter Content="{TemplateBinding Content}"
-                                                                  ContentTemplate="{TemplateBinding ContentTemplate}"
-                                                                  VerticalAlignment="Center"
-                                                                  Margin="0">
-                                                    <ContentPresenter.Resources>
-                                                        <Style TargetType="{x:Type TextBlock}">
-                                                            <Setter Property="FontSize" Value="16"/>
-                                                            <Setter Property="FontWeight" Value="SemiBold"/>
-                                                            <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
-                                                        </Style>
-                                                    </ContentPresenter.Resources>
-                                                </ContentPresenter>
-                                                
-                                                <Path x:Name="Arrow"
-                                                      Grid.Column="1"
-                                                      Data="M 1,1 L 7,7 L 13,1"
-                                                      Stroke="{StaticResource TextSecondary}"
-                                                      StrokeThickness="2"
-                                                      VerticalAlignment="Center"
-                                                      Margin="10,0,5,0"
-                                                      RenderTransformOrigin="0.5,0.5">
-                                                    <Path.RenderTransform>
-                                                        <RotateTransform Angle="0"/>
-                                                    </Path.RenderTransform>
-                                                </Path>
-                                            </Grid>
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="Arrow" Property="Stroke" Value="{StaticResource AccentPrimary}"/>
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </ToggleButton.Template>
-                            </ToggleButton>
-                            
-                            <Border x:Name="ExpandSite"
-                                    Grid.Row="1"
-                                    Visibility="Collapsed"
-                                    HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                    VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
-                                    Padding="10,10,10,20">
-                                <Border.Resources>
-                                    <!-- Locally override the global Label style that has the glow/margin issues -->
-                                    <Style TargetType="Label">
-                                        <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
-                                        <Setter Property="FontSize" Value="13"/>
-                                        <Setter Property="FontWeight" Value="SemiBold"/>
-                                        <Setter Property="Padding" Value="0"/>
-                                        <Setter Property="Margin" Value="0"/>
-                                        <Setter Property="Effect" Value="{x:Null}"/>
-                                    </Style>
-                                </Border.Resources>
-                                <ContentPresenter/>
-                            </Border>
-                            
-                            <Border Grid.Row="2" 
-                                    Height="1" 
-                                    Background="{StaticResource DividerBrush}" 
-                                    Margin="0,5,0,0"/>
-                        </Grid>
-                        <ControlTemplate.Triggers>
-                            <Trigger Property="IsExpanded" Value="True">
-                                <Setter TargetName="ExpandSite" Property="Visibility" Value="Visible"/>
-                                <Setter TargetName="ContentRow" Property="Height" Value="Auto"/>
-                            </Trigger>
-                        </ControlTemplate.Triggers>
-                    </ControlTemplate>
-                </Setter.Value>
-            </Setter>
+        <!-- A hotkey: name and description, the key box, and any problem with the keys -->
+        <DataTemplate x:Key="HotkeyRow">
+            <controls:SettingRow Header="{Binding Title}" Description="{Binding Description}">
+                <StackPanel Width="200">
+                    <controls:HotkeyRecorder Modifiers="{Binding Modifiers}" KeyName="{Binding Key}" AutomationProperties.Name="{Binding Title}"/>
+                    <TextBlock Text="{Binding Problem}" Style="{StaticResource HotkeyProblemText}"
+                               Visibility="{Binding HasProblem, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                </StackPanel>
+            </controls:SettingRow>
+        </DataTemplate>
+
+        <!-- A site's cookies: hidden as dots unless "Show" is on, with Paste and Clear -->
+        <Style x:Key="SecretBox" TargetType="Border">
+            <Setter Property="Height" Value="32"/>
+            <Setter Property="Padding" Value="12,0"/>
+            <Setter Property="CornerRadius" Value="8"/>
+            <Setter Property="Background" Value="{StaticResource SurfaceSunkenBrush}"/>
+            <Setter Property="BorderBrush" Value="{StaticResource SubtleBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1.5"/>
         </Style>
     </Window.Resources>
+
     <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="200"/>
+            <ColumnDefinition Width="*"/>
+        </Grid.ColumnDefinitions>
         <Grid.RowDefinitions>
             <RowDefinition Height="*"/>
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <ScrollViewer Grid.Row="0" VerticalScrollBarVisibility="Auto" Margin="24,12,24,0" Padding="0,0,10,0">
-            <StackPanel>
-                <!-- Playback Settings -->
-                <Expander Header="Playback" Style="{StaticResource SettingsExpanderStyle}" IsExpanded="{Binding IsPlaybackExpanded}">
-                    <Grid Margin="0,10,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
+        <!-- Sections -->
+        <Border Background="{StaticResource SurfaceSunkenBrush}" BorderBrush="{StaticResource DividerBrush}" BorderThickness="0,0,1,0">
+            <ListBox ItemsSource="{Binding Sections}" SelectedItem="{Binding SelectedSection}"
+                     ItemContainerStyle="{StaticResource SettingsNavItemStyle}"
+                     Background="Transparent" BorderThickness="0" Margin="10,14,10,10"
+                     ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                     AutomationProperties.Name="Settings sections">
+                <ListBox.ItemTemplate>
+                    <DataTemplate>
+                        <TextBlock Text="{Binding Title}" FontSize="13" FontWeight="SemiBold"/>
+                    </DataTemplate>
+                </ListBox.ItemTemplate>
+            </ListBox>
+        </Border>
 
-                        <!-- Default Monitor -->
-                        <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,16,20" VerticalAlignment="Center">
-                            <TextBlock Text="Default Monitor" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                            <TextBlock Text="Monitor used by default for new videos" Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
+        <!-- The selected section -->
+        <ScrollViewer x:Name="ContentScroller" Grid.Column="1" VerticalScrollBarVisibility="Auto" Padding="28,20,24,8">
+            <Grid MaxWidth="640" HorizontalAlignment="Left">
+
+                <!-- Playback -->
+                <StackPanel Visibility="{Binding SelectedSection.Section, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Playback}">
+                    <ContentPresenter Content="{Binding SelectedSection}" ContentTemplate="{StaticResource SectionHeader}"/>
+
+                    <controls:SettingRow Header="Default screen" Note="New videos" Description="Where videos you add start out playing">
+                        <ComboBox Width="250" ItemsSource="{Binding AvailableMonitors}" SelectedItem="{Binding SelectedDefaultMonitor}"
+                                  ItemTemplate="{StaticResource ScreenPickerItem}"/>
+                    </controls:SettingRow>
+
+                    <controls:SettingRow Header="Default opacity" Note="New videos"
+                                         Description="How solid new videos start out. 100% is the most a video gets outside Opaque Mode.">
+                        <StackPanel Orientation="Horizontal">
+                            <Slider Width="160" Value="{Binding DefaultOpacity, Converter={StaticResource OpacityScaleConverter}}"
+                                    Minimum="0" Maximum="1" SmallChange="0.1" LargeChange="0.1" TickFrequency="0.1" TickPlacement="BottomRight" IsSnapToTickEnabled="True"/>
+                            <TextBlock Text="{Binding DefaultOpacity, Converter={StaticResource OpacityToIntConverter}, StringFormat='{}{0}%'}"
+                                       Width="44" TextAlignment="Right" VerticalAlignment="Center" FontWeight="SemiBold"/>
                         </StackPanel>
-                        <ComboBox Grid.Row="0" Grid.Column="1" Width="180"
-                                  ItemsSource="{Binding AvailableMonitors}"
-                                  SelectedItem="{Binding SelectedDefaultMonitor}"
-                                  Style="{StaticResource PinkComboBoxStyle}"
-                                  VerticalAlignment="Center"
-                                  Margin="0,0,0,20"/>
+                    </controls:SettingRow>
 
-                        <!-- Default Opacity -->
-                        <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,16,20" VerticalAlignment="Center">
-                            <TextBlock Text="Default Opacity" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                            <TextBlock Text="Initial opacity level for new videos" Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
+                    <controls:SettingRow Header="Default volume" Note="New videos" Description="How loud new videos start out">
+                        <StackPanel Orientation="Horizontal">
+                            <Slider Width="160" Value="{Binding DefaultVolume}"
+                                    Minimum="0" Maximum="1" SmallChange="0.1" LargeChange="0.1" TickFrequency="0.1" TickPlacement="BottomRight" IsSnapToTickEnabled="True"/>
+                            <TextBlock Text="{Binding DefaultVolume, StringFormat=P0}" Width="44" TextAlignment="Right" VerticalAlignment="Center" FontWeight="SemiBold"/>
                         </StackPanel>
-                        <StackPanel Grid.Row="1" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,20">
-                            <Slider Width="140" Value="{Binding DefaultOpacity, Converter={StaticResource OpacityScaleConverter}}"
-                                    Minimum="0" Maximum="1.0" SmallChange="0.1" LargeChange="0.1" TickFrequency="0.1"
-                                    TickPlacement="BottomRight"
-                                    Style="{StaticResource NeonSliderStyle}" IsSnapToTickEnabled="True"/>
-                            <TextBlock Text="{Binding DefaultOpacity, Converter={StaticResource OpacityToIntConverter}}"
-                                       Foreground="{StaticResource TextSecondary}" FontSize="12" FontWeight="SemiBold" Width="35" TextAlignment="Right" VerticalAlignment="Center" Margin="8,0,0,0"/>
-                        </StackPanel>
+                    </controls:SettingRow>
 
-                        <!-- Default Volume -->
-                        <StackPanel Grid.Row="2" Grid.Column="0" Margin="0,0,16,20" VerticalAlignment="Center">
-                            <TextBlock Text="Default Volume" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                            <TextBlock Text="Initial volume level for new videos" Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
-                        </StackPanel>
-                        <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,0,20">
-                            <Slider Width="140" Value="{Binding DefaultVolume}"
-                                    Minimum="0" Maximum="1" SmallChange="0.1" LargeChange="0.1" TickFrequency="0.1"
-                                    TickPlacement="BottomRight"
-                                    Style="{StaticResource NeonSliderStyle}" IsSnapToTickEnabled="True"/>
-                            <TextBlock Text="{Binding DefaultVolume, StringFormat='{}{0:P0}'}" 
-                                       Foreground="{StaticResource TextSecondary}" FontSize="12" FontWeight="SemiBold" Width="35" TextAlignment="Right" VerticalAlignment="Center" Margin="8,0,0,0"/>
-                        </StackPanel>
+                    <controls:SettingRow Header="Opaque Mode" Description="Every video is fully solid, not see-through. Press the emergency stop key (Esc) three times to stop.">
+                        <CheckBox IsChecked="{Binding AlwaysOpaque}"/>
+                    </controls:SettingRow>
 
-                        <!-- Opaque Mode -->
-                        <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,16,20" VerticalAlignment="Center">
-                            <TextBlock Text="Opaque Mode" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                            <TextBlock Text="Disable transparency for all videos" Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Row="3" Grid.Column="1" 
-                                  IsChecked="{Binding AlwaysOpaque}"
-                                  Style="{StaticResource ModernCheckBoxStyle}"
-                                  VerticalAlignment="Center"
-                                  Margin="0,0,0,20"/>
+                    <controls:SettingRow Header="AI upscaling" Description="Sharper video with NVIDIA RTX Video or Intel XeSS, if your graphics card supports it">
+                        <CheckBox IsChecked="{Binding EnableSuperResolution}"/>
+                    </controls:SettingRow>
+                </StackPanel>
 
-                        <!-- Super Resolution (AI Upscaling) -->
-                        <StackPanel Grid.Row="4" Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
-                            <TextBlock Text="AI Upscaling" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                            <TextBlock Text="Enhance video quality using Nvidia RTX or Intel XeSS" Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Row="4" Grid.Column="1" 
-                                  IsChecked="{Binding EnableSuperResolution}"
-                                  Style="{StaticResource ModernCheckBoxStyle}"
-                                  VerticalAlignment="Center"/>
+                <!-- Library & Cache -->
+                <StackPanel Visibility="{Binding SelectedSection.Section, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Library}">
+                    <ContentPresenter Content="{Binding SelectedSection}" ContentTemplate="{StaticResource SectionHeader}"/>
 
-                    </Grid>
-                </Expander>
-
-                <!-- Censoring (detection on the decoded frame, before window opacity) -->
-                <Expander Header="Censoring" Style="{StaticResource SettingsExpanderStyle}" IsExpanded="False"
-                          Visibility="{Binding ShowCensorSettings, Converter={StaticResource BooleanToVisibilityConverter}}">
-                    <StackPanel Margin="0,10,0,0">
-
-                        <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,10"
-                                   Text="Detects and covers content in the video itself. Because this runs on the decoded frame before the window opacity is applied, it keeps working at low opacity - unlike screen-capture tools, which only ever see the video already blended with whatever is behind it."/>
-
-                        <Grid Margin="0,0,0,8">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
-                                <TextBlock Text="Enable in-player censoring" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                                <TextBlock Text="{Binding CensorModelStatus}" Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,4,0,0"/>
-                            </StackPanel>
-                            <CheckBox Grid.Column="1"
-                                      IsChecked="{Binding EnableLocalCensor}"
-                                      Style="{StaticResource ModernCheckBoxStyle}"
-                                      VerticalAlignment="Center"/>
-                        </Grid>
-
-                        <TextBlock Text="Model file (leave empty to auto-detect from the Models folder)" Style="{StaticResource CaptionText}" Margin="0,6,0,4"/>
-                        <TextBox Text="{Binding CensorModelPath, UpdateSourceTrigger=PropertyChanged}"
-                                 Height="32" Padding="10,0" VerticalContentAlignment="Center"/>
-
-                        <Grid Margin="0,12,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
-                                <TextBlock Text="Sensitivity" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                                <TextBlock Text="Lower catches more, and gets more false positives" Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                <Slider Width="140" Minimum="0.05" Maximum="0.95" TickFrequency="0.05" IsSnapToTickEnabled="True"
-                                        Value="{Binding CensorConfidence}" Style="{StaticResource NeonSliderStyle}" VerticalAlignment="Center"/>
-                                <TextBlock Text="{Binding CensorConfidence, StringFormat={}{0:0.00}}" Foreground="{StaticResource TextPrimary}"
-                                           Width="40" TextAlignment="Right" VerticalAlignment="Center" Margin="8,0,0,0"/>
-                            </StackPanel>
-                        </Grid>
-
-                        <Grid Margin="0,12,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
-                                <TextBlock Text="Detection interval (ms)" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                                <TextBlock Text="How often a frame is sampled. Lower reacts faster and costs more CPU" Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,4,0,0"/>
-                            </StackPanel>
-                            <TextBox Grid.Column="1" Width="80" Height="32" Padding="10,0" VerticalContentAlignment="Center" TextAlignment="Center"
-                                     Text="{Binding CensorIntervalMs, UpdateSourceTrigger=PropertyChanged}"/>
-                        </Grid>
-
-                        <Grid Margin="0,12,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
-                                <TextBlock Text="Hold time (ms)" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                                <TextBlock Text="How long a box stays after detection drops. Stops flicker" Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,4,0,0"/>
-                            </StackPanel>
-                            <TextBox Grid.Column="1" Width="80" Height="32" Padding="10,0" VerticalContentAlignment="Center" TextAlignment="Center"
-                                     Text="{Binding CensorHoldMs, UpdateSourceTrigger=PropertyChanged}"/>
-                        </Grid>
-
-                        <Grid Margin="0,12,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
-                                <TextBlock Text="Box padding" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                                <TextBlock Text="Grows each box so edges are not left uncovered" Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
-                                <Slider Width="140" Minimum="0" Maximum="0.5" TickFrequency="0.01" IsSnapToTickEnabled="True"
-                                        Value="{Binding CensorPadding}" Style="{StaticResource NeonSliderStyle}" VerticalAlignment="Center"/>
-                                <TextBlock Text="{Binding CensorPadding, StringFormat={}{0:0.00}}" Foreground="{StaticResource TextPrimary}"
-                                           Width="40" TextAlignment="Right" VerticalAlignment="Center" Margin="8,0,0,0"/>
-                            </StackPanel>
-                        </Grid>
-
-                        <TextBlock Text="What to cover" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold" Margin="0,16,0,4"/>
-                        <ItemsControl ItemsSource="{Binding CensorClassOptions}">
-                            <ItemsControl.ItemsPanel>
-                                <ItemsPanelTemplate>
-                                    <WrapPanel Orientation="Horizontal"/>
-                                </ItemsPanelTemplate>
-                            </ItemsControl.ItemsPanel>
-                            <ItemsControl.ItemTemplate>
-                                <DataTemplate>
-                                    <CheckBox Content="{Binding Name}"
-                                              IsChecked="{Binding IsEnabled}"
-                                              Foreground="{StaticResource TextPrimary}"
-                                              Width="230" Margin="0,4,8,4"/>
-                                </DataTemplate>
-                            </ItemsControl.ItemTemplate>
-                        </ItemsControl>
-
-                        <Grid Margin="0,14,0,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,16,0" VerticalAlignment="Center">
-                                <TextBlock Text="Show detection labels" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                                <TextBlock Text="Draws class name and confidence on each box. For tuning only" Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,4,0,0"/>
-                            </StackPanel>
-                            <CheckBox Grid.Column="1"
-                                      IsChecked="{Binding CensorShowLabels}"
-                                      Style="{StaticResource ModernCheckBoxStyle}"
-                                      VerticalAlignment="Center"/>
-                        </Grid>
-
-                    </StackPanel>
-                </Expander>
-
-                <!-- General Settings (Application + Storage) -->
-                <Expander Header="General" Style="{StaticResource SettingsExpanderStyle}" IsExpanded="{Binding IsGeneralExpanded}">
-                    <Grid Margin="0,10,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
-
-                        
-                        <!-- Start with Windows -->
-                        <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,16,20" VerticalAlignment="Center">
-                            <TextBlock Text="Start with Windows" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                            <TextBlock Text="Launch EDGELOOP automatically when Windows starts" Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Row="1" Grid.Column="1" 
-                                  IsChecked="{Binding StartWithWindows}"
-                                  Style="{StaticResource ModernCheckBoxStyle}"
-                                  VerticalAlignment="Center"
-                                  Margin="0,0,0,20"/>
-
-                        <!-- Divider -->
-                        <Border Grid.Row="2" Grid.Column="0" Grid.ColumnSpan="2" Height="1" Background="{StaticResource DividerBrush}" Margin="0,0,0,20"/>
-
-                        <!-- Enable Local Caching -->
-                        <StackPanel Grid.Row="3" Grid.Column="0" Margin="0,0,16,20" VerticalAlignment="Center">
-                            <TextBlock Text="Enable Local Caching" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                            <TextBlock Text="Download videos to disk for instant seeking and stutter-free playback" Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
-                        </StackPanel>
-                        <CheckBox Grid.Row="3" Grid.Column="1" 
-                                  IsChecked="{Binding EnableLocalCaching}"
-                                  Style="{StaticResource ModernCheckBoxStyle}"
-                                  VerticalAlignment="Center"
-                                  Margin="0,0,0,20"/>
-                        
-                        <!-- Cache Directory -->
-                        <StackPanel Grid.Row="4" Grid.Column="0" Grid.ColumnSpan="2" Margin="0,0,0,10" VerticalAlignment="Center">
-                            <TextBlock Text="Cache Directory" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                            <TextBlock Text="Folder where downloaded videos are stored" Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
-                            <Grid Margin="0,8,0,0">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <TextBox Text="{Binding LocalCacheDirectory, UpdateSourceTrigger=PropertyChanged}" 
-                                         IsReadOnly="True"
-                                         Style="{StaticResource PinkTextBoxStyle}"
-                                         Foreground="{StaticResource TextSecondary}"
-                                         FontSize="12"
-                                         Height="32" Padding="10,0"
-                                         ToolTip="{Binding LocalCacheDirectory}"/>
-                                <Button Grid.Column="1" Command="{Binding BrowseCacheDirectoryCommand}" 
-                                        Style="{StaticResource SecondaryButtonStyle}" 
-                                        Content="Browse..." 
-                                        Margin="8,0,0,0" Height="32" Padding="12,0"/>
-                            </Grid>
-                        </StackPanel>
-                    </Grid>
-                </Expander>
-
-                <!-- Privacy & History (Session + History + Cookies) -->
-                <Expander Header="Privacy &amp; History" Style="{StaticResource SettingsExpanderStyle}" IsExpanded="{Binding IsPrivacyExpanded}">
-                    <StackPanel Margin="0,10,0,0">
-                        <!-- Session Persistence -->
-                        <TextBlock Text="SESSION PERSISTENCE" Foreground="{StaticResource AccentPrimary}" FontSize="11" FontWeight="Bold" Margin="0,0,0,12" Opacity="0.85"/>
-                        
-                        <Grid Margin="0,0,0,15">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="Remember last playlist" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                                <TextBlock Text="Automatically load your last playlist on startup" Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
-                            </StackPanel>
-                            <CheckBox Grid.Column="1" IsChecked="{Binding RememberLastPlaylist}" Style="{StaticResource ModernCheckBoxStyle}" VerticalAlignment="Center"/>
-                        </Grid>
-
-                        <Grid Margin="0,0,0,15">
-                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                            <StackPanel VerticalAlignment="Center">
-                                <TextBlock Text="Remember file position" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                                <TextBlock Text="Resume videos from where you left off" Style="{StaticResource CaptionText}" Margin="0,4,0,0"/>
-                            </StackPanel>
-                            <CheckBox Grid.Column="1" IsChecked="{Binding RememberFilePosition}" Style="{StaticResource ModernCheckBoxStyle}" VerticalAlignment="Center"/>
-                        </Grid>
-
-                        <Button Command="{Binding ResetPositionsCommand}" Style="{StaticResource SecondaryDangerButtonStyle}" Height="32" Margin="0,0,0,20">
+                    <TextBlock Text="PLAYLIST AND POSITIONS" Style="{StaticResource SettingsGroupHeader}"/>
+                    <controls:SettingRow Header="Remember last playlist" Description="Open EdgeLoop with the playlist you had last time">
+                        <CheckBox IsChecked="{Binding RememberLastPlaylist}"/>
+                    </controls:SettingRow>
+                    <controls:SettingRow Header="Remember where each video was" Description="Resume videos where you left off">
+                        <CheckBox IsChecked="{Binding RememberFilePosition}"/>
+                    </controls:SettingRow>
+                    <controls:SettingRow Header="Saved positions" Description="Forget where you were in every video. Happens right away, not when you save.">
+                        <Button Command="{Binding ResetPositionsCommand}" Style="{StaticResource SecondaryDangerButtonStyle}" Height="32" Padding="14,0">
                             <StackPanel Orientation="Horizontal">
-                                <Path Data="{StaticResource Icon_Trash}" Stretch="Uniform" Width="14" Height="14" Margin="0,0,8,0"/>
-                                <TextBlock Text="Reset All Saved Positions" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                <Path Data="{StaticResource Icon_Trash}" Stretch="Uniform" Width="12" Height="12" Margin="0,0,8,0"/>
+                                <TextBlock Text="Reset positions" FontWeight="SemiBold"/>
                             </StackPanel>
                         </Button>
+                    </controls:SettingRow>
 
-                        <!-- Web Sessions & Cookies -->
-                        <Border Height="1" Background="{StaticResource DividerBrush}" Margin="0,0,0,20"/>
-                        <TextBlock Text="WEB SESSIONS &amp; COOKIES" Foreground="{StaticResource AccentPrimary}" FontSize="11" FontWeight="Bold" Margin="0,0,0,12" Opacity="0.85"/>
-
-                        <StackPanel Margin="0,0,0,16">
-                            <TextBlock Text="Browser for Cookies" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                            <TextBlock Text="Select the browser for cookie extraction from sites like Iwara and YouTube" Style="{StaticResource CaptionText}" Margin="0,4,0,8"/>
-                            <ComboBox ItemsSource="{Binding AvailableBrowsers}" SelectedItem="{Binding BrowserForCookies}" Style="{StaticResource PinkComboBoxStyle}" Height="32"/>
-                        </StackPanel>
-
-                        <StackPanel Margin="0,0,0,12">
-                            <TextBlock Text="Hypnotube Session Cookies" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                            <TextBlock Text="Format: PHPSESSID=xxx; other=yyy" Foreground="{StaticResource TextTertiary}" FontSize="11" Margin="0,4,0,8"/>
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <TextBox Text="{Binding HypnotubeCookies, UpdateSourceTrigger=PropertyChanged}" Height="32" Padding="10,0" VerticalContentAlignment="Center"/>
-                                <Button Grid.Column="1" Command="{Binding PasteHypnoCookiesCommand}" Style="{StaticResource SecondaryButtonStyle}" Height="32" Padding="12,0" Margin="8,0,0,0" Content="Paste" FontWeight="SemiBold"/>
-                            </Grid>
-                        </StackPanel>
-                        
-                        <StackPanel Margin="0,0,0,16">
-                            <TextBlock Text="Iwara.tv Session Cookies" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                            <TextBlock Text="Format: sid=xxx; other=yyy" Foreground="{StaticResource TextTertiary}" FontSize="11" Margin="0,4,0,8"/>
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <TextBox Text="{Binding IwaraCookies, UpdateSourceTrigger=PropertyChanged}" Height="32" Padding="10,0" VerticalContentAlignment="Center"/>
-                                <Button Grid.Column="1" Command="{Binding PasteIwaraCookiesCommand}" Style="{StaticResource SecondaryButtonStyle}" Height="32" Padding="12,0" Margin="8,0,0,0" Content="Paste" FontWeight="SemiBold"/>
-                            </Grid>
-                        </StackPanel>
-
-                        <StackPanel Margin="0,0,0,16">
-                            <TextBlock Text="Rule34Video Session Cookies" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                            <TextBlock Text="Format: PHPSESSID=xxx; other=yyy" Foreground="{StaticResource TextTertiary}" FontSize="11" Margin="0,4,0,8"/>
-                            <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                                <TextBox Text="{Binding Rule34VideoCookies, UpdateSourceTrigger=PropertyChanged}" Height="32" Padding="10,0" VerticalContentAlignment="Center"/>
-                                <Button Grid.Column="1" Command="{Binding PasteRule34CookiesCommand}" Style="{StaticResource SecondaryButtonStyle}" Height="32" Padding="12,0" Margin="8,0,0,0" Content="Paste" FontWeight="SemiBold"/>
-                            </Grid>
-                        </StackPanel>
-
-                        <Button Command="{Binding CopyCookieScriptCommand}" Style="{StaticResource SecondaryButtonStyle}" Height="28" HorizontalAlignment="Left" Padding="10,0">
-                            <StackPanel Orientation="Horizontal">
-                                <Path Data="M14.6,16.6L19.2,12L14.6,7.4L16,6L22,12L16,18L14.6,16.6M9.4,16.6L4.8,12L9.4,7.4L8,6L2,12L8,18L9.4,16.6Z" Stretch="Uniform" Width="12" Height="12" Margin="0,0,8,0"/>
-                                <TextBlock Text="Copy Cookie Script" FontSize="11"/>
-                            </StackPanel>
-                        </Button>
-                    </StackPanel>
-                </Expander>
-
-                <!-- Hotkeys -->
-                <Expander Header="Hotkeys" Style="{StaticResource SettingsExpanderStyle}" IsExpanded="{Binding IsHotkeysExpanded}">
-                    <StackPanel Grid.IsSharedSizeScope="True">
-
-                        <!-- ═══ Emergency Controls ═══ -->
-                        <TextBlock Text="EMERGENCY CONTROLS" 
-                                   Foreground="{StaticResource AccentPrimary}" 
-                                   FontSize="11" FontWeight="Bold" 
-                                   Margin="0,0,0,12" 
-                                   Opacity="0.85"/>
-
-                        <!-- Panic Hotkey -->
-                        <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" SharedSizeGroup="HotkeyLabel"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Panic" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0"/>
-                            <StackPanel Orientation="Horizontal" Grid.Column="1" VerticalAlignment="Center">
-                                <CheckBox Content="Ctrl" IsChecked="{Binding PanicHotkeyCtrl}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
-                                <CheckBox Content="Shift" IsChecked="{Binding PanicHotkeyShift}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
-                                <CheckBox Content="Alt" IsChecked="{Binding PanicHotkeyAlt}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="+" VerticalAlignment="Center" Foreground="{StaticResource TextSecondary}" Margin="0,0,8,0"/>
-                            </StackPanel>
-                            <ComboBox Grid.Column="2" Width="95" ItemsSource="{StaticResource KeyList}" SelectedItem="{Binding PanicHotkeyKey}" Style="{StaticResource PinkComboBoxStyle}"/>
-                        </Grid>
-
-                        <!-- Wipe & Exit Hotkey -->
-                        <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" SharedSizeGroup="HotkeyLabel"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Wipe &amp; Exit" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0"/>
-                            <StackPanel Orientation="Horizontal" Grid.Column="1" VerticalAlignment="Center">
-                                <CheckBox Content="Ctrl" IsChecked="{Binding ClearHotkeyCtrl}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
-                                <CheckBox Content="Shift" IsChecked="{Binding ClearHotkeyShift}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
-                                <CheckBox Content="Alt" IsChecked="{Binding ClearHotkeyAlt}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="+" VerticalAlignment="Center" Foreground="{StaticResource TextSecondary}" Margin="0,0,8,0"/>
-                            </StackPanel>
-                            <ComboBox Grid.Column="2" Width="95" ItemsSource="{StaticResource KeyList}" SelectedItem="{Binding ClearHotkeyKey}" Style="{StaticResource PinkComboBoxStyle}"/>
-                        </Grid>
-
-                        <!-- Fullscreen Escape (Opaque Mode) -->
-                        <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" SharedSizeGroup="HotkeyLabel"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
-                                <TextBlock Text="Fullscreen Escape" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                                <TextBlock Text="Triple-press to exit" Foreground="{StaticResource TextTertiary}" FontSize="10" Margin="0,2,0,0"/>
-                            </StackPanel>
-                            <ComboBox Grid.Column="2" Width="95" ItemsSource="{StaticResource KeyList}" SelectedItem="{Binding OpaquePanicHotkeyKey}" Style="{StaticResource PinkComboBoxStyle}"/>
-                        </Grid>
-
-                        <!-- ═══ Divider ═══ -->
-                        <Border Height="1" Background="{StaticResource DividerBrush}" Margin="0,14,0,14"/>
-
-                        <!-- ═══ Playback Navigation ═══ -->
-                        <TextBlock Text="PLAYBACK NAVIGATION" 
-                                   Foreground="{StaticResource AccentPrimary}" 
-                                   FontSize="11" FontWeight="Bold" 
-                                   Margin="0,0,0,12" 
-                                   Opacity="0.85"/>
-
-                        <!-- Skip Forward Hotkey -->
-                        <Grid Margin="0,0,0,10">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" SharedSizeGroup="HotkeyLabel"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="Skip Forward" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0"/>
-                            <StackPanel Orientation="Horizontal" Grid.Column="1" VerticalAlignment="Center">
-                                <CheckBox Content="Ctrl" IsChecked="{Binding SkipForwardHotkeyCtrl}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
-                                <CheckBox Content="Shift" IsChecked="{Binding SkipForwardHotkeyShift}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
-                                <CheckBox Content="Alt" IsChecked="{Binding SkipForwardHotkeyAlt}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="+" VerticalAlignment="Center" Foreground="{StaticResource TextSecondary}" Margin="0,0,8,0"/>
-                            </StackPanel>
-                            <ComboBox Grid.Column="2" Width="95" ItemsSource="{StaticResource KeyList}" SelectedItem="{Binding SkipForwardHotkeyKey}" Style="{StaticResource PinkComboBoxStyle}"/>
-                        </Grid>
-
-                        <!-- Skip Backward Hotkey -->
+                    <TextBlock Text="DOWNLOADS" Style="{StaticResource SettingsGroupHeader}"/>
+                    <controls:SettingRow Header="Download web videos while they play" Description="Keeps a copy on disk, for instant seeking and smooth playback">
+                        <CheckBox IsChecked="{Binding EnableLocalCaching}"/>
+                    </controls:SettingRow>
+                    <controls:SettingRow Header="Download folder" IsStacked="True">
                         <Grid>
                             <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" SharedSizeGroup="HotkeyLabel"/>
                                 <ColumnDefinition Width="*"/>
                                 <ColumnDefinition Width="Auto"/>
                             </Grid.ColumnDefinitions>
-                            <TextBlock Text="Skip Backward" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center" Margin="0,0,12,0"/>
-                            <StackPanel Orientation="Horizontal" Grid.Column="1" VerticalAlignment="Center">
-                                <CheckBox Content="Ctrl" IsChecked="{Binding SkipBackwardHotkeyCtrl}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
-                                <CheckBox Content="Shift" IsChecked="{Binding SkipBackwardHotkeyShift}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
-                                <CheckBox Content="Alt" IsChecked="{Binding SkipBackwardHotkeyAlt}" Style="{StaticResource ModernCheckBoxStyle}" FontSize="11" Margin="0,0,8,0" Foreground="{StaticResource TextPrimary}"/>
-                                <TextBlock Text="+" VerticalAlignment="Center" Foreground="{StaticResource TextSecondary}" Margin="0,0,8,0"/>
-                            </StackPanel>
-                            <ComboBox Grid.Column="2" Width="95" ItemsSource="{StaticResource KeyList}" SelectedItem="{Binding SkipBackwardHotkeyKey}" Style="{StaticResource PinkComboBoxStyle}"/>
+                            <TextBox Text="{Binding LocalCacheDirectory, Mode=OneWay}" IsReadOnly="True" Height="32" Padding="10,0" FontSize="12"
+                                     Foreground="{StaticResource TextSecondary}" ToolTip="{Binding LocalCacheDirectory}"
+                                     AutomationProperties.Name="Download folder"/>
+                            <Button Grid.Column="1" Command="{Binding BrowseCacheDirectoryCommand}" Style="{StaticResource SecondaryButtonStyle}"
+                                    Content="Browse…" Margin="8,0,0,0" Height="32" Padding="14,0"/>
                         </Grid>
-                    </StackPanel>
-                </Expander>
- 
-                <!-- Diagnostics Settings -->
-                <Expander Header="Diagnostics" Style="{StaticResource SettingsExpanderStyle}" IsExpanded="{Binding IsDiagnosticsExpanded}">
-                    <Grid Margin="0,10,0,0">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto"/>
-                            <RowDefinition Height="Auto"/>
-                        </Grid.RowDefinitions>
- 
-                        <!-- Diagnostic Mode -->
-                        <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,16,20" VerticalAlignment="Center">
-                            <TextBlock Text="Diagnostic Mode" Foreground="{StaticResource TextPrimary}" FontSize="13" FontWeight="SemiBold"/>
-                            <TextBlock Text="Generate a separate diagnostic log with detailed file paths, engine events, and system info for troubleshooting" Style="{StaticResource CaptionText}" Margin="0,4,0,0" TextWrapping="Wrap"/>
-                        </StackPanel>
-                        <CheckBox Grid.Row="0" Grid.Column="1" 
-                                  IsChecked="{Binding EnableDiagnosticMode}"
-                                  Style="{StaticResource ModernCheckBoxStyle}"
-                                  VerticalAlignment="Center"
-                                  Margin="0,0,0,20"/>
+                    </controls:SettingRow>
+                </StackPanel>
 
-                        <!-- Open Log Folder Button -->
-                        <Button Grid.Row="1" Grid.Column="0" Grid.ColumnSpan="2"
-                                Command="{Binding OpenDiagnosticsFolderCommand}"
-                                Style="{StaticResource SecondaryButtonStyle}"
-                                Height="32" Padding="10,0"
-                                HorizontalAlignment="Stretch">
+                <!-- Privacy & Cookies -->
+                <StackPanel Visibility="{Binding SelectedSection.Section, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Privacy}">
+                    <ContentPresenter Content="{Binding SelectedSection}" ContentTemplate="{StaticResource SectionHeader}"/>
+
+                    <Border Background="{StaticResource WarningBannerBrush}" CornerRadius="8" Padding="14,10" Margin="0,0,0,18"
+                            Visibility="{Binding CookieEncryptionAvailable, Converter={StaticResource InvertedBooleanToVisibilityConverter}}">
+                        <TextBlock TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource WarningTextBrush}"
+                                   Text="Windows couldn't encrypt data on this PC, so cookies you enter here are saved as plain text in settings.json."/>
+                    </Border>
+
+                    <controls:SettingRow Header="Browser to sign in with" Description="EdgeLoop borrows this browser's sign-ins for sites such as Iwara">
+                        <ComboBox Width="160" ItemsSource="{Binding AvailableBrowsers}" SelectedItem="{Binding BrowserForCookies}"/>
+                    </controls:SettingRow>
+
+                    <Grid Margin="0,6,0,12">
+                        <TextBlock Text="SITE COOKIES" Style="{StaticResource SectionLabelText}" VerticalAlignment="Center"/>
+                        <CheckBox HorizontalAlignment="Right" IsChecked="{Binding ShowCookies}" Content="Show" FontSize="12"
+                                  ToolTip="Cookies sign you in to the site: keep them private"/>
+                    </Grid>
+
+                    <TextBlock Style="{StaticResource CaptionText}" Margin="0,0,0,14"
+                               Text="Paste a site's cookies here if signing in through the browser doesn't work. They're stored encrypted for your Windows account."/>
+
+                    <controls:SettingRow Header="Hypnotube" Description="Looks like PHPSESSID=…; other=…" IsStacked="True">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource SecretBox}" Visibility="{Binding ShowCookies, Converter={StaticResource InvertedBooleanToVisibilityConverter}}">
+                                <TextBlock Text="{Binding HypnotubeCookies, Converter={StaticResource SecretMaskConverter}}" VerticalAlignment="Center" Foreground="{StaticResource TextTertiary}"/>
+                            </Border>
+                            <TextBox Text="{Binding HypnotubeCookies, UpdateSourceTrigger=PropertyChanged}" Height="32" Padding="10,0" FontSize="12"
+                                     AutomationProperties.Name="Hypnotube cookies"
+                                     Visibility="{Binding ShowCookies, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            <Button Grid.Column="1" Command="{Binding PasteCookiesCommand}" CommandParameter="Hypnotube" Style="{StaticResource SecondaryButtonStyle}"
+                                    Content="Paste" Height="32" Padding="12,0" Margin="8,0,0,0"/>
+                            <Button Grid.Column="2" Command="{Binding ClearCookiesCommand}" CommandParameter="Hypnotube" Style="{StaticResource SecondaryButtonStyle}"
+                                    Content="Clear" Height="32" Padding="12,0" Margin="6,0,0,0"/>
+                        </Grid>
+                    </controls:SettingRow>
+
+                    <controls:SettingRow Header="Iwara" Description="Looks like sid=…; other=…" IsStacked="True">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource SecretBox}" Visibility="{Binding ShowCookies, Converter={StaticResource InvertedBooleanToVisibilityConverter}}">
+                                <TextBlock Text="{Binding IwaraCookies, Converter={StaticResource SecretMaskConverter}}" VerticalAlignment="Center" Foreground="{StaticResource TextTertiary}"/>
+                            </Border>
+                            <TextBox Text="{Binding IwaraCookies, UpdateSourceTrigger=PropertyChanged}" Height="32" Padding="10,0" FontSize="12"
+                                     AutomationProperties.Name="Iwara cookies"
+                                     Visibility="{Binding ShowCookies, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            <Button Grid.Column="1" Command="{Binding PasteCookiesCommand}" CommandParameter="Iwara" Style="{StaticResource SecondaryButtonStyle}"
+                                    Content="Paste" Height="32" Padding="12,0" Margin="8,0,0,0"/>
+                            <Button Grid.Column="2" Command="{Binding ClearCookiesCommand}" CommandParameter="Iwara" Style="{StaticResource SecondaryButtonStyle}"
+                                    Content="Clear" Height="32" Padding="12,0" Margin="6,0,0,0"/>
+                        </Grid>
+                    </controls:SettingRow>
+
+                    <controls:SettingRow Header="Rule34Video" Description="Looks like PHPSESSID=…; other=…" IsStacked="True">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <Border Style="{StaticResource SecretBox}" Visibility="{Binding ShowCookies, Converter={StaticResource InvertedBooleanToVisibilityConverter}}">
+                                <TextBlock Text="{Binding Rule34VideoCookies, Converter={StaticResource SecretMaskConverter}}" VerticalAlignment="Center" Foreground="{StaticResource TextTertiary}"/>
+                            </Border>
+                            <TextBox Text="{Binding Rule34VideoCookies, UpdateSourceTrigger=PropertyChanged}" Height="32" Padding="10,0" FontSize="12"
+                                     AutomationProperties.Name="Rule34Video cookies"
+                                     Visibility="{Binding ShowCookies, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            <Button Grid.Column="1" Command="{Binding PasteCookiesCommand}" CommandParameter="Rule34Video" Style="{StaticResource SecondaryButtonStyle}"
+                                    Content="Paste" Height="32" Padding="12,0" Margin="8,0,0,0"/>
+                            <Button Grid.Column="2" Command="{Binding ClearCookiesCommand}" CommandParameter="Rule34Video" Style="{StaticResource SecondaryButtonStyle}"
+                                    Content="Clear" Height="32" Padding="12,0" Margin="6,0,0,0"/>
+                        </Grid>
+                    </controls:SettingRow>
+
+                    <TextBlock Text="GETTING YOUR COOKIES" Style="{StaticResource SettingsGroupHeader}"/>
+                    <TextBlock Style="{StaticResource CaptionText}" Margin="0,0,0,10" LineHeight="19">
+                        <Run Text="1. Copy the helper below."/><LineBreak/>
+                        <Run Text="2. In your browser, open the site while signed in, press F12 and choose the Console tab."/><LineBreak/>
+                        <Run Text="3. Paste the helper there and press Enter."/><LineBreak/>
+                        <Run Text="4. Come back here and click Paste next to the site."/>
+                    </TextBlock>
+                    <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
+                        <Button Command="{Binding CopyCookieScriptCommand}" Style="{StaticResource SecondaryButtonStyle}" Height="32" Padding="12,0">
                             <StackPanel Orientation="Horizontal">
-                                <Path Data="M10,4H4C2.89,4 2,4.89 2,6V18A2,2 0 0,0 4,20H20A2,2 0 0,0 22,18V8C22,6.89 21.1,6 20,6H12L10,4Z" Stretch="Uniform" Width="14" Height="14" Margin="0,0,8,0"/>
-                                <TextBlock Text="Open Log Folder" VerticalAlignment="Center" FontWeight="SemiBold"/>
+                                <Path Data="M14.6,16.6L19.2,12L14.6,7.4L16,6L22,12L16,18L14.6,16.6M9.4,16.6L4.8,12L9.4,7.4L8,6L2,12L8,18L9.4,16.6Z" Stretch="Uniform" Width="12" Height="12" Margin="0,0,8,0"/>
+                                <TextBlock Text="Copy cookie helper" FontWeight="SemiBold"/>
                             </StackPanel>
                         </Button>
+                        <TextBlock Text="✓ Copied" Foreground="{StaticResource SuccessTextBrush}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="12,0,0,0"
+                                   Visibility="{Binding CookieScriptCopied, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                    </StackPanel>
+                </StackPanel>
+
+                <!-- Hotkeys -->
+                <StackPanel Visibility="{Binding SelectedSection.Section, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Hotkeys}">
+                    <ContentPresenter Content="{Binding SelectedSection}" ContentTemplate="{StaticResource SectionHeader}"/>
+                    <TextBlock Style="{StaticResource CaptionText}" Margin="0,-8,0,18"
+                               Text="Hotkeys work in every app, even when EdgeLoop isn't in front. Click a key box, then press the new keys."/>
+
+                    <TextBlock Text="ALWAYS ACTIVE" Style="{StaticResource SettingsGroupHeader}"/>
+                    <ContentControl Content="{Binding PanicHotkey}" ContentTemplate="{StaticResource HotkeyRow}" Focusable="False"/>
+                    <ContentControl Content="{Binding ClearHotkey}" ContentTemplate="{StaticResource HotkeyRow}" Focusable="False"/>
+
+                    <TextBlock Text="ONLY WHILE VIDEOS PLAY" Style="{StaticResource SettingsGroupHeader}" Margin="0,6,0,4"/>
+                    <TextBlock Style="{StaticResource CaptionText}" Margin="0,0,0,14"
+                               Text="The rest of the time these keys work normally in other apps."/>
+                    <ContentControl Content="{Binding SkipForwardHotkey}" ContentTemplate="{StaticResource HotkeyRow}" Focusable="False"/>
+                    <ContentControl Content="{Binding SkipBackwardHotkey}" ContentTemplate="{StaticResource HotkeyRow}" Focusable="False"/>
+                    <ContentControl Content="{Binding EscapeHotkey}" ContentTemplate="{StaticResource HotkeyRow}" Focusable="False"/>
+
+                    <Grid Margin="0,6,0,4">
+                        <TextBlock Text="SKIP KEYS FOR EACH SCREEN" Style="{StaticResource SectionLabelText}" VerticalAlignment="Center"/>
+                        <Button HorizontalAlignment="Right" Command="{Binding IdentifyScreensCommand}" Style="{StaticResource SecondaryButtonStyle}"
+                                Height="28" Padding="12,0" FontSize="12" Content="Identify screens"
+                                ToolTip="Shows each screen's number on it for a moment"/>
                     </Grid>
-                </Expander>
-            </StackPanel>
+                    <TextBlock Style="{StaticResource CaptionText}" Margin="0,4,0,12"
+                               Text="Skip keys act on the screen under the mouse. Give a screen its own keys to skip it wherever the mouse is."/>
+
+                    <ItemsControl ItemsSource="{Binding ScreenSkipSettings}" Focusable="False">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Style="{StaticResource CardStyle}" Margin="0,0,0,8" Padding="14,10">
+                                    <StackPanel>
+                                        <Grid>
+                                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold"/>
+                                                <TextBlock Text="{Binding Details}" Margin="8,0,0,0" FontSize="11" Foreground="{StaticResource TextTertiary}" VerticalAlignment="Center"/>
+                                            </StackPanel>
+                                            <CheckBox HorizontalAlignment="Right" IsChecked="{Binding UseOwnKeys}" Content="Own keys" FontSize="12"
+                                                      ToolTip="Off: this screen follows the mouse with the skip keys above"/>
+                                        </Grid>
+                                        <Grid Margin="0,10,0,0" Visibility="{Binding UseOwnKeys, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="16"/>
+                                                <ColumnDefinition Width="*"/>
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel DataContext="{Binding Forward}">
+                                                <TextBlock Text="Skip forward" Style="{StaticResource CaptionText}" Margin="0,0,0,4"/>
+                                                <controls:HotkeyRecorder Modifiers="{Binding Modifiers}" KeyName="{Binding Key}" AutomationProperties.Name="{Binding Title}"/>
+                                                <TextBlock Text="{Binding Problem}" Style="{StaticResource HotkeyProblemText}"
+                                                           Visibility="{Binding HasProblem, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" DataContext="{Binding Backward}">
+                                                <TextBlock Text="Skip back" Style="{StaticResource CaptionText}" Margin="0,0,0,4"/>
+                                                <controls:HotkeyRecorder Modifiers="{Binding Modifiers}" KeyName="{Binding Key}" AutomationProperties.Name="{Binding Title}"/>
+                                                <TextBlock Text="{Binding Problem}" Style="{StaticResource HotkeyProblemText}"
+                                                           Visibility="{Binding HasProblem, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                            </StackPanel>
+                                        </Grid>
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock Text="{Binding DisconnectedScreensNote}" Style="{StaticResource CaptionText}" Margin="0,4,0,12"
+                               Visibility="{Binding DisconnectedScreensNote, Converter={StaticResource StringToVisibilityConverter}}"/>
+                </StackPanel>
+
+                <!-- Advanced -->
+                <StackPanel Visibility="{Binding SelectedSection.Section, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Advanced}">
+                    <ContentPresenter Content="{Binding SelectedSection}" ContentTemplate="{StaticResource SectionHeader}"/>
+
+                    <controls:SettingRow Header="Start with Windows" Description="Open EdgeLoop when you sign in to Windows">
+                        <CheckBox IsChecked="{Binding StartWithWindows}"/>
+                    </controls:SettingRow>
+
+                    <TextBlock Text="TROUBLESHOOTING" Style="{StaticResource SettingsGroupHeader}"/>
+                    <controls:SettingRow Header="Diagnostic mode" Description="Writes a detailed diagnostics.log next to the normal log, with file paths and engine events, for bug reports">
+                        <CheckBox IsChecked="{Binding EnableDiagnosticMode}"/>
+                    </controls:SettingRow>
+                    <controls:SettingRow Header="Log files" Description="Opens the folder with EdgeLoop's logs">
+                        <Button Command="{Binding OpenDiagnosticsFolderCommand}" Style="{StaticResource SecondaryButtonStyle}" Height="32" Padding="14,0">
+                            <StackPanel Orientation="Horizontal">
+                                <Path Data="{StaticResource Icon_Folder}" Stretch="Uniform" Width="13" Height="13" Margin="0,0,8,0"/>
+                                <TextBlock Text="Open log folder" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </Button>
+                    </controls:SettingRow>
+                </StackPanel>
+
+                <!-- Censoring (only listed when the feature is switched on) -->
+                <StackPanel Visibility="{Binding SelectedSection.Section, Converter={StaticResource EnumToVisibilityConverter}, ConverterParameter=Censoring}">
+                    <ContentPresenter Content="{Binding SelectedSection}" ContentTemplate="{StaticResource SectionHeader}"/>
+                    <TextBlock Style="{StaticResource CaptionText}" Margin="0,-8,0,18"
+                               Text="Detects and covers content in the video itself. It runs on the decoded frame before the window's opacity is applied, so it keeps working at low opacity, unlike screen-capture tools."/>
+
+                    <controls:SettingRow Header="Cover content in videos" Description="{Binding CensorModelStatus}">
+                        <CheckBox IsChecked="{Binding EnableLocalCensor}"/>
+                    </controls:SettingRow>
+                    <controls:SettingRow Header="Model file" Description="Leave empty to use the one in the Models folder" IsStacked="True">
+                        <TextBox Text="{Binding CensorModelPath, UpdateSourceTrigger=PropertyChanged}" Height="32" Padding="10,0"/>
+                    </controls:SettingRow>
+                    <controls:SettingRow Header="Sensitivity" Description="Lower catches more, and gets more false positives">
+                        <StackPanel Orientation="Horizontal">
+                            <Slider Width="160" Minimum="0.05" Maximum="0.95" TickFrequency="0.05" IsSnapToTickEnabled="True" Value="{Binding CensorConfidence}"/>
+                            <TextBlock Text="{Binding CensorConfidence, StringFormat={}{0:0.00}}" Width="44" TextAlignment="Right" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </controls:SettingRow>
+                    <controls:SettingRow Header="Detection interval (ms)" Description="How often a frame is checked. Lower reacts faster and uses more CPU">
+                        <TextBox Width="80" Height="32" Padding="10,0" TextAlignment="Center" Text="{Binding CensorIntervalMs, UpdateSourceTrigger=PropertyChanged}"/>
+                    </controls:SettingRow>
+                    <controls:SettingRow Header="Hold time (ms)" Description="How long a box stays after detection drops. Stops flicker">
+                        <TextBox Width="80" Height="32" Padding="10,0" TextAlignment="Center" Text="{Binding CensorHoldMs, UpdateSourceTrigger=PropertyChanged}"/>
+                    </controls:SettingRow>
+                    <controls:SettingRow Header="Box padding" Description="Grows each box so edges aren't left uncovered">
+                        <StackPanel Orientation="Horizontal">
+                            <Slider Width="160" Minimum="0" Maximum="0.5" TickFrequency="0.01" IsSnapToTickEnabled="True" Value="{Binding CensorPadding}"/>
+                            <TextBlock Text="{Binding CensorPadding, StringFormat={}{0:0.00}}" Width="44" TextAlignment="Right" VerticalAlignment="Center"/>
+                        </StackPanel>
+                    </controls:SettingRow>
+                    <TextBlock Text="WHAT TO COVER" Style="{StaticResource SettingsGroupHeader}"/>
+                    <ItemsControl ItemsSource="{Binding CensorClassOptions}" Margin="0,0,0,14" Focusable="False">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <WrapPanel Orientation="Horizontal"/>
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <CheckBox Content="{Binding Name}" IsChecked="{Binding IsEnabled}" Width="220" Margin="0,4,8,4"/>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <controls:SettingRow Header="Show detection labels" Description="Draws the class and confidence on each box. For tuning only">
+                        <CheckBox IsChecked="{Binding CensorShowLabels}"/>
+                    </controls:SettingRow>
+                </StackPanel>
+            </Grid>
         </ScrollViewer>
 
-        <!-- Fixed Footer with Buttons -->
-        <Grid Grid.Row="1" Margin="24,16,24,24">
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button x:Name="CancelButton" Command="{Binding CancelCommand}" 
-                        Style="{StaticResource SecondaryButtonStyle}" 
-                        Width="100" 
-                        Height="38"
-                        Margin="0,0,12,0">
-                    <StackPanel Orientation="Horizontal">
-                        <Path Data="{StaticResource Icon_Close}" Stretch="Uniform" Width="10" Height="10" Margin="0,0,8,0"/>
-                        <TextBlock Text="Cancel" VerticalAlignment="Center" FontWeight="SemiBold"/>
-                    </StackPanel>
-                </Button>
-                <Button x:Name="SaveButton" Command="{Binding OkCommand}" 
-                        Style="{StaticResource PrimaryButtonStyle}" 
-                        Width="150" 
-                        Height="38">
-                    <StackPanel Orientation="Horizontal">
-                        <Path Data="{StaticResource Icon_Save}" Stretch="Uniform" Width="14" Height="14" Margin="0,0,8,0"/>
-                        <TextBlock Text="Save Changes" VerticalAlignment="Center" FontWeight="Bold"/>
-                    </StackPanel>
-                </Button>
-            </StackPanel>
-        </Grid>
+        <!-- Footer -->
+        <Border Grid.Row="1" Grid.ColumnSpan="2" BorderBrush="{StaticResource DividerBrush}" BorderThickness="0,1,0,0" Padding="24,12,24,14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel VerticalAlignment="Center">
+                    <TextBlock Text="Unsaved changes" FontSize="12" Foreground="{StaticResource TextSecondary}"
+                               Visibility="{Binding HasChanges, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                    <TextBlock Text="Two hotkeys use the same keys. Change one to save." FontSize="12" Foreground="{StaticResource ErrorTextBrush}" TextWrapping="Wrap"
+                               Visibility="{Binding HasHotkeyConflicts, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                </StackPanel>
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button x:Name="CancelButton" Command="{Binding CancelCommand}" Style="{StaticResource SecondaryButtonStyle}" MinWidth="96" Margin="0,0,10,0" Content="Cancel"/>
+                    <Button x:Name="SaveButton" Command="{Binding OkCommand}" Style="{StaticResource PrimaryButtonStyle}" MinWidth="120">
+                        <StackPanel Orientation="Horizontal">
+                            <Path Data="{StaticResource Icon_Save}" Stretch="Uniform" Width="13" Height="13" Margin="0,0,8,0"/>
+                            <TextBlock Text="Save" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </Button>
+                </StackPanel>
+            </Grid>
+        </Border>
     </Grid>
 </controls:EdgeLoopWindow>
-

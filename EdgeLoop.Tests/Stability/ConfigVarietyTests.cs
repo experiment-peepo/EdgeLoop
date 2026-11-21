@@ -111,37 +111,43 @@ namespace EdgeLoop.Tests.Stability
             vm.Dispose();
         }
 
+        /// <summary>
+        /// A player that never moves on by itself. The test videos don't exist, so a real player would fail
+        /// to load them and skip ahead on a background thread, racing the test's assertions.
+        /// </summary>
+        private sealed class NoAutoAdvanceViewModel(IVideoUrlExtractor extractor) : HypnoViewModel(extractor)
+        {
+            public override void PlayNext(bool force = false) { }
+        }
+
         [Fact]
         public void CoordinatedStart_MasterFollower_ShouldSyncIndex()
         {
             // Arrange
-            var masterVm = new HypnoViewModel(MockExtractor.Object);
-            masterVm.UseCoordinatedStart = true;
-            masterVm.IsSyncMaster = true;
-            masterVm.SyncGroupId = "Group1";
-
-            var followerVm = new HypnoViewModel(MockExtractor.Object);
-            followerVm.UseCoordinatedStart = true;
-            followerVm.IsSyncMaster = false;
-            followerVm.SyncGroupId = "Group1";
+            using var masterVm = new NoAutoAdvanceViewModel(MockExtractor.Object)
+            {
+                UseCoordinatedStart = true,
+                IsSyncMaster = true,
+                SyncGroupId = "Group1"
+            };
+            using var followerVm = new NoAutoAdvanceViewModel(MockExtractor.Object)
+            {
+                UseCoordinatedStart = true,
+                IsSyncMaster = false,
+                SyncGroupId = "Group1"
+            };
 
             var items = new[] { new VideoItem("v1.mp4"), new VideoItem("v2.mp4"), new VideoItem("v3.mp4") };
-
-            // Simulating VideoPlayerService behavior
-            var service = new VideoPlayerService();
-            // We need to inject the viewmodels into the service. 
-            // This is hard without a full HypnoWindow.
-
-            // Instead, let's test the JumpToIndex logic directly
             masterVm.SetQueue(items, 0);
             followerVm.SetQueue(items, 0);
 
-            // Act
+            // Act: the jump a sync master broadcasts to its group
             masterVm.JumpToIndex(2, true);
+            followerVm.JumpToIndex(2, true);
 
             // Assert
             masterVm.CurrentIndex.Should().Be(2);
-            // In a real scenario, the service would call BroadcastIndexToGroup or the sync timer would catch it.
+            followerVm.CurrentIndex.Should().Be(2);
         }
     }
 }
