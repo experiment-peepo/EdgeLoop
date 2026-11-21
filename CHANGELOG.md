@@ -1,3 +1,22 @@
+## [Unreleased]
+
+### Changed
+- **Playback engine**: Updated the bundled FlyleafLib to v3.12 with FFmpeg 9.
+- **One look across the app**: Every window shares the same title bar, with the Windows shadow, snapping and (on Windows 11) rounded corners. Colours, fonts and controls come from one theme; buttons, check boxes and sliders can be reached with Tab and show a focus ring.
+- **Launcher**: The playlist only builds the cards on screen, so large playlists stay fast. Cards show each video's length and PLAYING / FAILED / MISSING / CACHED badges. Removing videos, Clear and the new "Remove failed" offer Undo. Delete removes the selected card and Alt+Up/Down moves it. Start explains why it's disabled, and Now Playing has a Previous button.
+- **Settings**: Sections in a sidebar, a "click and press keys" hotkey recorder that flags duplicates, skip keys for each screen with an "Identify screens" button, hidden cookie fields, Reset to defaults per section, and a prompt before discarding unsaved changes.
+- **Dialogs**: One confirmation dialog, consistent button order, and an input dialog with a hint that keeps OK disabled until something is typed.
+- **Display scaling**: EdgeLoop is now per-monitor DPI aware, so windows, overlays and notices line up on setups that mix scaling levels.
+
+### Fixed
+- Skip hotkeys (the arrow keys) and the triple-Esc stop are only captured while videos play, so they work normally in other apps otherwise.
+- A video that fails to play is marked as failed instead of being removed from the playlist and saved session.
+- Overlay windows no longer appear in the taskbar or Alt+Tab, and never take focus.
+- Loading a video no longer darkens the whole screen: a small card in the corner shows progress, and each video's own opacity applies straight away.
+- A short notice in the corner of a screen says which video couldn't play and why; it can be turned off in Settings.
+- Cookie fields no longer delete spaces while you type; they're cleaned up when saved.
+- Enter and Esc work in every dialog.
+
 ## [1.0.0-prerelease] - 2026-04-26
 
 ### Added

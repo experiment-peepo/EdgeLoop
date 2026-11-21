@@ -1,4 +1,4 @@
-# 🌌 EdgeLoop v1.0
+# 🌌 EdgeLoop
 
 ![Build Status](https://img.shields.io/github/actions/workflow/status/experiment-peepo/EdgeLoop/release.yml?style=flat-square&label=Build)
 ![License](https://img.shields.io/github/license/experiment-peepo/EdgeLoop?style=flat-square)
@@ -7,6 +7,8 @@
 ![Hardening](https://img.shields.io/badge/Hardening-Deep%20Audit%20✅-ff00ff?style=flat-square)
 
 **EdgeLoop** is a high-performance video engine designed for multi-monitor setups. Built on a custom fork of `Flyleaf`, it provides seamless, transparent overlays directly on your desktop.
+
+![The EdgeLoop launcher with a playlist of four videos, each assigned to a screen with its own opacity and volume](assets/screenshot.png)
 
 ---
 
@@ -28,6 +30,7 @@
 *   **Smart Buffering**: Intelligent disk-caching for high-resolution content.
 *   **Zero-Install**: Fully portable architecture. All data is kept in the `Data/` folder.
 *   **Panic Mode**: Instant shortcut to wipe all active players from the screen.
+*   **Hotkeys that stay out of the way**: Skip keys are only captured while videos play. Skip the screen under the mouse, or give each screen its own keys.
 
 ### 💾 Local Caching Architecture
 EdgeLoop features a robust background pre-buffering system designed to eliminate stuttering and provide instant seeking capabilities.
@@ -49,10 +52,13 @@ EdgeLoop features a robust background pre-buffering system designed to eliminate
 3.  **Run**: Extract and launch `EdgeLoop.exe`.
 
 ### Site Authentication
-For sites that require sessions:
-1.  Open your browser and log in to the site.
-2.  Open DevTools (`F12`), go to the Console, and run: `copy(document.cookie)`.
-3.  In EdgeLoop, go to **Settings > Session & History** and click **Paste**.
+For sites that require you to be signed in:
+1.  In EdgeLoop, open **Settings → Privacy & Cookies** and click **Copy cookie helper**.
+2.  In your browser, open the site while signed in, press `F12` and choose the **Console** tab.
+3.  Paste the helper there and press Enter.
+4.  Back in EdgeLoop, click **Paste** next to the site, then **Save**.
+
+Cookies are stored encrypted for your Windows account and shown hidden unless you tick **Show**.
 
 ## 🤝 Contributing
 *   See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for guidelines.

@@ -23,10 +23,10 @@
         TextOptions.TextRenderingMode="Auto"
         SnapsToDevicePixels="True">
     <Window.Resources>
-        <!-- Below 650px wide the playlist buttons lose their labels -->
+        <!-- Below 650px wide (the window's content, LayoutRoot) the playlist buttons lose their labels -->
         <Style x:Key="WideLayoutOnly" TargetType="FrameworkElement">
             <Style.Triggers>
-                <DataTrigger Binding="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource LessThanConverter}, ConverterParameter=650}" Value="True">
+                <DataTrigger Binding="{Binding ActualWidth, ElementName=LayoutRoot, Converter={StaticResource LessThanConverter}, ConverterParameter=650}" Value="True">
                     <Setter Property="Visibility" Value="Collapsed"/>
                 </DataTrigger>
             </Style.Triggers>
@@ -34,7 +34,7 @@
         <Style x:Key="NarrowLayoutOnly" TargetType="FrameworkElement">
             <Setter Property="Visibility" Value="Collapsed"/>
             <Style.Triggers>
-                <DataTrigger Binding="{Binding ActualWidth, RelativeSource={RelativeSource AncestorType=Window}, Converter={StaticResource LessThanConverter}, ConverterParameter=650}" Value="True">
+                <DataTrigger Binding="{Binding ActualWidth, ElementName=LayoutRoot, Converter={StaticResource LessThanConverter}, ConverterParameter=650}" Value="True">
                     <Setter Property="Visibility" Value="Visible"/>
                 </DataTrigger>
             </Style.Triggers>
@@ -159,11 +159,17 @@
             <Setter Property="VerticalAlignment" Value="Center"/>
         </Style>
 
-        <!-- A playlist card; hover, selection and problems show on its outline -->
+        <!--
+            A playlist card; hover, selection and problems show on its outline. For the keyboard, Tab
+            reaches the selected card (or the first, if none is) and then its controls; the arrow keys
+            move between cards.
+        -->
         <Style x:Key="PlaylistItemStyle" TargetType="ListViewItem">
             <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
             <Setter Property="Margin" Value="0,0,0,6"/>
-            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="FocusVisualStyle" Value="{StaticResource FocusRingVisual}"/>
+            <Setter Property="IsTabStop" Value="False"/>
+            <Setter Property="AutomationProperties.Name" Value="{Binding FileName}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ListViewItem">
@@ -196,6 +202,18 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="IsTabStop" Value="True"/>
+                </Trigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding (ItemsControl.AlternationIndex), RelativeSource={RelativeSource Self}}" Value="0"/>
+                        <Condition Binding="{Binding SelectedIndex, RelativeSource={RelativeSource AncestorType=ListView}}" Value="-1"/>
+                    </MultiDataTrigger.Conditions>
+                    <Setter Property="IsTabStop" Value="True"/>
+                </MultiDataTrigger>
+            </Style.Triggers>
         </Style>
     </Window.Resources>
 
@@ -212,7 +230,7 @@
         </StackPanel>
     </controls:EdgeLoopWindow.TitleBarContent>
 
-    <Grid>
+    <Grid x:Name="LayoutRoot">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/> <!-- 0: Title and add buttons -->
             <RowDefinition Height="Auto"/> <!-- 1: Playlist header -->
@@ -226,7 +244,7 @@
         <StackPanel Grid.Row="0" Margin="24,8,24,10">
             <StackPanel Margin="0,4,0,14">
                 <Label Style="{StaticResource GlowingTitleStyle}" FontSize="28" Padding="0" Margin="0,0,0,2">EDGELOOP</Label>
-                <TextBlock Style="{StaticResource LowerTitle}" FontStyle="Italic" FontSize="13" HorizontalAlignment="Center">Advanced Multi-Monitor Overlay Engine</TextBlock>
+                <TextBlock Style="{StaticResource LowerTitle}" FontStyle="Italic" FontSize="13" HorizontalAlignment="Center">Advanced multi-monitor overlay engine</TextBlock>
             </StackPanel>
 
             <Grid>
@@ -238,7 +256,7 @@
                         ToolTip="Add video files from your computer">
                     <StackPanel Orientation="Horizontal">
                         <Path Data="{StaticResource Icon_Folder}" Fill="{StaticResource TextPrimary}" Stretch="Uniform" Width="16" Height="16" Margin="0,0,10,0"/>
-                        <TextBlock Text="Browse Videos"/>
+                        <TextBlock Text="Browse videos"/>
                     </StackPanel>
                 </Button>
                 <Button x:Name="AddUrlOrPlaylistButton" Grid.Column="1" Margin="8,0,0,0" Style="{StaticResource MainActionButtonStyle}" Command="{Binding AddUrlOrPlaylistCommand}"
@@ -326,6 +344,10 @@
                           ItemsSource="{Binding AddedFiles}"
                           ItemContainerStyle="{StaticResource PlaylistItemStyle}"
                           SelectionMode="Single"
+                          AlternationCount="2147483647"
+                          IsTabStop="False"
+                          KeyboardNavigation.TabNavigation="Continue"
+                          PreviewGotKeyboardFocus="AddedFilesList_PreviewGotKeyboardFocus"
                           Background="Transparent"
                           BorderThickness="0"
                           Padding="6,6,14,0"
@@ -409,10 +431,12 @@
                                               SelectedItem="{Binding AssignedScreen}"
                                               ItemTemplate="{StaticResource ScreenPickerItem}"
                                               ToolTip="Screen this video plays on"
+                                              IsTabStop="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListViewItem}}"
                                               AutomationProperties.Name="Screen"/>
                                     <Button Grid.Column="3" Style="{StaticResource ControlButton}" Width="26" Height="26" Margin="8,0,0,0" VerticalAlignment="Center"
                                             Command="{Binding DataContext.RemoveItemCommand, RelativeSource={RelativeSource AncestorType=Window}}" CommandParameter="{Binding}"
-                                            ToolTip="Remove from playlist (Delete)" AutomationProperties.Name="Remove">
+                                            ToolTip="Remove from playlist (Delete)" AutomationProperties.Name="Remove"
+                                            IsTabStop="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListViewItem}}">
                                         <Path Data="{StaticResource Icon_Close}" Stretch="Uniform" Width="10" Height="10"/>
                                     </Button>
                                 </Grid>
@@ -425,12 +449,14 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="Opacity" Foreground="{StaticResource TextSecondary}" FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                     <Slider Grid.Column="1" Value="{Binding Opacity, Converter={StaticResource OpacityScaleConverter}}" Minimum="0" Maximum="1"
-                                            TickFrequency="0.1" IsSnapToTickEnabled="True" TickPlacement="BottomRight" AutomationProperties.Name="Opacity"/>
+                                            TickFrequency="0.1" IsSnapToTickEnabled="True" TickPlacement="BottomRight" AutomationProperties.Name="Opacity"
+                                            IsTabStop="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListViewItem}}"/>
                                     <TextBlock Grid.Column="2" Text="{Binding Opacity, Converter={StaticResource OpacityToIntConverter}, StringFormat='{}{0}%'}" Width="38" TextAlignment="Right"
                                                Foreground="{StaticResource TextPrimary}" FontSize="12" VerticalAlignment="Center"/>
                                     <TextBlock Grid.Column="4" Text="Volume" Foreground="{StaticResource TextSecondary}" FontSize="12" VerticalAlignment="Center" Margin="0,0,10,0"/>
                                     <Slider Grid.Column="5" Value="{Binding Volume}" Minimum="0" Maximum="1"
-                                            TickFrequency="0.1" IsSnapToTickEnabled="True" TickPlacement="BottomRight" AutomationProperties.Name="Volume"/>
+                                            TickFrequency="0.1" IsSnapToTickEnabled="True" TickPlacement="BottomRight" AutomationProperties.Name="Volume"
+                                            IsTabStop="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ListViewItem}}"/>
                                     <TextBlock Grid.Column="6" Text="{Binding Volume, StringFormat=P0}" Width="38" TextAlignment="Right"
                                                Foreground="{StaticResource TextPrimary}" FontSize="12" VerticalAlignment="Center"/>
                                 </Grid>
@@ -445,7 +471,7 @@
                         Visibility="{Binding HasItems, ElementName=AddedFilesList, Converter={StaticResource InvertedBooleanToVisibilityConverter}}">
                 <Path Data="{StaticResource Icon_Folder}" Fill="{StaticResource AccentSecondary}" Stretch="Uniform" Width="56" Height="56" Opacity="0.4" Margin="0,0,0,18"/>
                 <TextBlock Text="Drag &amp; drop videos or links here" Foreground="{StaticResource TextPrimary}" HorizontalAlignment="Center" FontSize="17" FontWeight="SemiBold"/>
-                <TextBlock Text="Or use Browse Videos for files, and Add URL for a video page or playlist"
+                <TextBlock Text="Or use Browse videos for files, and Add URL for a video page or playlist"
                            Foreground="{StaticResource TextSecondary}" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap"
                            FontSize="13" Margin="0,6,0,0"/>
             </StackPanel>
@@ -476,7 +502,7 @@
 
         <!-- Row 4: Now Playing -->
         <StackPanel Grid.Row="4" Margin="24,8,24,0" Visibility="{Binding HasActivePlayers, Converter={StaticResource BooleanToVisibilityConverter}}">
-            <TextBlock Style="{StaticResource LowerTitle}" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,6" Text="Now Playing"/>
+            <TextBlock Style="{StaticResource LowerTitle}" FontSize="14" FontWeight="SemiBold" Margin="0,0,0,6" Text="Now playing"/>
             <ScrollViewer MaxHeight="160" VerticalScrollBarVisibility="Auto">
                 <ItemsControl ItemsSource="{Binding ActivePlayers}">
                     <ItemsControl.ItemTemplate>
@@ -547,13 +573,13 @@
                                     Visibility="{Binding HasActivePlayers, Converter={StaticResource InvertedBooleanToVisibilityConverter}}">
                             <Path Data="{StaticResource Icon_Play}" Stretch="Uniform" Width="12" Height="12" Margin="0,0,10,0"
                                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
-                            <TextBlock Text="Start Playback" FontWeight="SemiBold" FontSize="15"/>
+                            <TextBlock Text="Start playback" FontWeight="SemiBold" FontSize="15"/>
                         </StackPanel>
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center"
                                     Visibility="{Binding HasActivePlayers, Converter={StaticResource BooleanToVisibilityConverter}}">
                             <Path Data="{StaticResource Icon_Stop}" Stretch="Uniform" Width="14" Height="14" Margin="0,0,10,0"
                                   Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"/>
-                            <TextBlock Text="Stop Playback" FontWeight="SemiBold" FontSize="15"/>
+                            <TextBlock Text="Stop playback" FontWeight="SemiBold" FontSize="15"/>
                         </StackPanel>
                     </Grid>
                 </Button>
@@ -583,7 +609,7 @@
                 <TextBlock Text="{Binding ImportProgressText}" Foreground="{StaticResource TextPrimary}" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,20,0,10"/>
                 <ProgressBar Width="200" Height="4" Value="{Binding ImportProgressValue}" Background="{StaticResource TrackBrush}" Foreground="{StaticResource AccentPrimary}" BorderThickness="0"
                              IsIndeterminate="{Binding ImportProgressValue, Converter={StaticResource IsProgressIndeterminateConverter}}"/>
-                <Button Command="{Binding CancelImportCommand}" Style="{StaticResource SecondaryButtonStyle}" Margin="0,20,0,0" Padding="30,8" Content="Cancel Import"/>
+                <Button Command="{Binding CancelImportCommand}" Style="{StaticResource SecondaryButtonStyle}" Margin="0,20,0,0" Padding="30,8" Content="Cancel import"/>
             </StackPanel>
         </Grid>
     </Grid>

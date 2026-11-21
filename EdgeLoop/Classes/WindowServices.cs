@@ -36,6 +36,59 @@ namespace EdgeLoop.Classes
         [DllImport("user32.dll")]
         public static extern int SetWindowLong(IntPtr hwnd, int index, int newStyle);
 
+        [StructLayout(LayoutKind.Sequential)]
+        private struct RECT
+        {
+            public int Left, Top, Right, Bottom;
+        }
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int x, int y, int cx, int cy, uint flags);
+
+        [DllImport("user32.dll")]
+        private static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetDpiForWindow(IntPtr hWnd);
+
+        private const uint SWP_NOSIZE = 0x0001;
+        private const uint SWP_NOZORDER = 0x0004;
+        private const uint SWP_NOACTIVATE = 0x0010;
+
+        public enum ScreenAnchor
+        {
+            Center,
+            BottomLeft
+        }
+
+        /// <summary>
+        /// Puts a shown window on a screen, in real pixels: first onto the screen (so it takes that
+        /// screen's scaling and size), then at the anchor. <paramref name="marginDip"/> is in that
+        /// screen's scaled units. Works whatever scaling each monitor uses.
+        /// </summary>
+        public static void PlaceOnScreen(Window window, Screen screen, ScreenAnchor anchor, double marginDip = 0)
+        {
+            var hwnd = new WindowInteropHelper(window).Handle;
+            if (hwnd == IntPtr.Zero || screen == null) return;
+
+            var area = anchor == ScreenAnchor.Center ? screen.Bounds : screen.WorkingArea;
+            const uint flags = SWP_NOSIZE | SWP_NOZORDER | SWP_NOACTIVATE;
+
+            // Moving onto a screen with different scaling makes WPF resize the window for it
+            SetWindowPos(hwnd, IntPtr.Zero, area.Left, area.Top, 0, 0, flags);
+
+            if (!GetWindowRect(hwnd, out var rect)) return;
+            int width = rect.Right - rect.Left;
+            int height = rect.Bottom - rect.Top;
+            uint dpi = 96;
+            try { dpi = GetDpiForWindow(hwnd); } catch (EntryPointNotFoundException) { }
+            int margin = (int)Math.Round(marginDip * (dpi == 0 ? 96 : dpi) / 96.0);
+
+            int x = anchor == ScreenAnchor.Center ? area.Left + (area.Width - width) / 2 : area.Left + margin;
+            int y = anchor == ScreenAnchor.Center ? area.Top + (area.Height - height) / 2 : area.Bottom - height - margin;
+            SetWindowPos(hwnd, IntPtr.Zero, x, y, 0, 0, flags);
+        }
+
         [SupportedOSPlatform("windows")]
         public static Screen[] GetAllScreens()
         {

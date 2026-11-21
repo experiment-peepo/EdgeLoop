@@ -462,7 +462,7 @@ namespace EdgeLoop.ViewModels
                 if (AvailableScreens.Count <= 1)
                 { // 1 because of "All Monitors"
                     Logger.Warning("No real screens detected, using default screen");
-                    SetStatusMessage("Warning: No screens detected. Using default screen.", StatusMessageType.Warning);
+                    SetStatusMessage("No screens were detected, so the main screen is used.", StatusMessageType.Warning);
 
                     var defaultScreen = System.Windows.Forms.Screen.PrimaryScreen ?? System.Windows.Forms.Screen.AllScreens.FirstOrDefault();
                     if (defaultScreen != null)
@@ -479,7 +479,7 @@ namespace EdgeLoop.ViewModels
             catch (Exception ex)
             {
                 Logger.Error("Failed to refresh screens", ex);
-                SetStatusMessage($"Error refreshing screens: {ex.Message}", StatusMessageType.Error);
+                SetStatusMessage($"Couldn't read the screens: {ex.Message}", StatusMessageType.Error);
                 // Add a fallback screen
                 try
                 {
@@ -560,7 +560,7 @@ namespace EdgeLoop.ViewModels
                 // Handle null assignments from BuildAssignmentsFromSelection
                 if (assignments == null)
                 {
-                    SetStatusMessage("No valid video assignments could be built.", StatusMessageType.Error);
+                    SetStatusMessage("None of the videos could be given a screen. Choose a screen for each video.", StatusMessageType.Error);
                     return;
                 }
 
@@ -569,7 +569,7 @@ namespace EdgeLoop.ViewModels
 
                 if (assignments.Count == 0)
                 {
-                    SetStatusMessage("No screen assigned for the selected video(s)", StatusMessageType.Error);
+                    SetStatusMessage("Choose a screen for every video first.", StatusMessageType.Error);
                     return;
                 }
 
@@ -583,7 +583,7 @@ namespace EdgeLoop.ViewModels
                         Logger.Error("Error starting playback", ex);
                         Application.Current?.Dispatcher.InvokeAsync(() =>
                         {
-                            SetStatusMessage($"Error starting playback: {ex?.Message ?? "Unknown error"}", StatusMessageType.Error);
+                            SetStatusMessage($"Couldn't start playback: {ex?.Message ?? "unknown error"}", StatusMessageType.Error);
                         });
                     }
                 }, TaskContinuationOptions.ExecuteSynchronously);
@@ -691,7 +691,7 @@ namespace EdgeLoop.ViewModels
                     Logger.Error("Error in Browse operation", ex);
                     dispatcher?.InvokeAsync(() =>
                     {
-                        SetStatusMessage($"Error browsing files: {ex?.Message ?? "Unknown error"}", StatusMessageType.Error);
+                        SetStatusMessage($"Couldn't add the files: {ex?.Message ?? "unknown error"}", StatusMessageType.Error);
                     });
                 }
             }, TaskContinuationOptions.OnlyOnFaulted);
@@ -732,7 +732,7 @@ namespace EdgeLoop.ViewModels
 
                     if (string.IsNullOrWhiteSpace(finalUrl))
                     {
-                        SetStatusMessage("Failed to extract video URL from page. The page may not contain a video or the site structure may have changed.", StatusMessageType.Error);
+                        SetStatusMessage("Couldn't find a video on that page. It may not have one, or the site may have changed.", StatusMessageType.Error);
                         return;
                     }
                 }
@@ -754,7 +754,7 @@ namespace EdgeLoop.ViewModels
 
                 if (!isValid)
                 {
-                    SetStatusMessage($"Invalid video: {errorMessage}", StatusMessageType.Error);
+                    SetStatusMessage($"That video can't be played: {errorMessage}", StatusMessageType.Error);
                     return;
                 }
 
@@ -766,7 +766,7 @@ namespace EdgeLoop.ViewModels
 
                 if (existingPaths.Contains(normalizedUrl))
                 {
-                    SetStatusMessage("URL is already in the playlist", StatusMessageType.Warning);
+                    SetStatusMessage("That video is already in the playlist.", StatusMessageType.Warning);
                     return;
                 }
 
@@ -810,23 +810,23 @@ namespace EdgeLoop.ViewModels
                 {
                     AddedFiles.Add(item);
 
-                    SetStatusMessage($"Added URL: {item.FileName}", StatusMessageType.Success);
+                    SetStatusMessage($"Added \u201C{item.FileName}\u201D", StatusMessageType.Success);
                     UpdateButtons();
                     SaveSession();
                 }
                 else
                 {
-                    SetStatusMessage($"URL validation failed: {item.ValidationError}", StatusMessageType.Error);
+                    SetStatusMessage($"That link can't be played: {item.ValidationError}", StatusMessageType.Error);
                 }
             }
             catch (OperationCanceledException)
             {
-                SetStatusMessage("Operation cancelled", StatusMessageType.Warning);
+                SetStatusMessage("Cancelled", StatusMessageType.Warning);
             }
             catch (Exception ex)
             {
                 Logger.Error("Error processing URL", ex);
-                SetStatusMessage($"Error processing URL: {ex.Message}", StatusMessageType.Error);
+                SetStatusMessage($"Couldn't add the link: {ex.Message}", StatusMessageType.Error);
             }
         }
 
@@ -888,7 +888,7 @@ namespace EdgeLoop.ViewModels
             catch (Exception ex)
             {
                 Logger.Error("Failed to save playlist", ex);
-                SetStatusMessage($"Error saving playlist: {ex.Message}", StatusMessageType.Error);
+                SetStatusMessage($"Couldn't save the playlist: {ex.Message}", StatusMessageType.Error);
             }
         }
 
@@ -909,7 +909,7 @@ namespace EdgeLoop.ViewModels
         private async Task LoadPlaylistContentAsync(string filePath)
         {
             IsLoading = true;
-            SetStatusMessage($"Loading playlist: {Path.GetFileName(filePath)}...", StatusMessageType.Info);
+            SetStatusMessage($"Loading playlist {Path.GetFileName(filePath)}\u2026", StatusMessageType.Info);
 
             try
             {
@@ -968,25 +968,28 @@ namespace EdgeLoop.ViewModels
                         foreach (var item in itemsToLoad)
                             AddedFiles.Add(item);
                     }
-                    SetStatusMessage($"Loaded {itemsToLoad.Count} items from playlist", StatusMessageType.Success);
+                    SetStatusMessage($"Loaded {Videos(itemsToLoad.Count)} from the playlist", StatusMessageType.Success);
                     UpdateButtons();
                     SaveSession();
                 }
                 else
                 {
-                    SetStatusMessage("No valid videos found in playlist file", StatusMessageType.Warning);
+                    SetStatusMessage("That playlist file has no videos EdgeLoop can play.", StatusMessageType.Warning);
                 }
             }
             catch (Exception ex)
             {
                 Logger.Error("Failed to load playlist file", ex);
-                SetStatusMessage($"Error loading playlist: {ex.Message}", StatusMessageType.Error);
+                SetStatusMessage($"Couldn't load the playlist: {ex.Message}", StatusMessageType.Error);
             }
             finally
             {
                 IsLoading = false;
             }
         }
+
+        /// <summary>"1 video", "3 videos".</summary>
+        private static string Videos(int count) => count == 1 ? "1 video" : $"{count} videos";
 
         private const string SupportedSitesNote = "Supported: Hypnotube, Iwara, PMVHaven, Rule34Video";
 
@@ -1023,7 +1026,7 @@ namespace EdgeLoop.ViewModels
                 // Validate URL
                 if (!FileValidator.IsValidUrl(trimmedUrl))
                 {
-                    SetStatusMessage("Invalid URL", StatusMessageType.Error);
+                    SetStatusMessage("That isn't a valid link.", StatusMessageType.Error);
                     IsLoading = false;
                     return;
                 }
@@ -1087,11 +1090,11 @@ namespace EdgeLoop.ViewModels
 
                     if (skippedCount > 0)
                     {
-                        SetStatusMessage($"Added {addedCount} video(s) from playlist, skipped {skippedCount} duplicate(s)", StatusMessageType.Success);
+                        SetStatusMessage($"Added {Videos(addedCount)} from the playlist ({skippedCount} already in it)", StatusMessageType.Success);
                     }
                     else
                     {
-                        SetStatusMessage($"Added {addedCount} video(s) from playlist", StatusMessageType.Success);
+                        SetStatusMessage($"Added {Videos(addedCount)} from the playlist", StatusMessageType.Success);
                     }
 
                     UpdateButtons();
@@ -1106,7 +1109,7 @@ namespace EdgeLoop.ViewModels
             }
             catch (OperationCanceledException)
             {
-                SetStatusMessage("Operation cancelled", StatusMessageType.Warning);
+                SetStatusMessage("Cancelled", StatusMessageType.Warning);
             }
             catch (Exception ex)
             {
@@ -1124,7 +1127,7 @@ namespace EdgeLoop.ViewModels
             IsLoading = true;
             ImportProgressValue = 0;
             ImportProgressText = "Preparing import...";
-            SetStatusMessage("Validating files...", StatusMessageType.Info);
+            SetStatusMessage("Checking the files\u2026", StatusMessageType.Info);
 
             try
             {
@@ -1240,7 +1243,7 @@ namespace EdgeLoop.ViewModels
                 }
                 else
                 {
-                    SetStatusMessage($"Added {addedCount} file(s)", StatusMessageType.Success);
+                    SetStatusMessage($"Added {Videos(addedCount)}", StatusMessageType.Success);
                 }
 
                 UpdateButtons();
@@ -1248,13 +1251,13 @@ namespace EdgeLoop.ViewModels
             }
             catch (OperationCanceledException)
             {
-                SetStatusMessage("Operation cancelled", StatusMessageType.Warning);
+                SetStatusMessage("Cancelled", StatusMessageType.Warning);
                 Logger.Debug("Add files operation was cancelled");
             }
             catch (Exception ex)
             {
                 Logger.Error("Error adding files", ex);
-                SetStatusMessage($"Error adding files: {ex.Message}", StatusMessageType.Error);
+                SetStatusMessage($"Couldn't add the files: {ex.Message}", StatusMessageType.Error);
             }
             finally
             {
@@ -1301,7 +1304,7 @@ namespace EdgeLoop.ViewModels
                     Logger.Error("Error in AddDroppedFiles operation", ex);
                     dispatcher?.InvokeAsync(() =>
                     {
-                        SetStatusMessage($"Error adding dropped files: {ex?.Message ?? "Unknown error"}", StatusMessageType.Error);
+                        SetStatusMessage($"Couldn't add the dropped files: {ex?.Message ?? "unknown error"}", StatusMessageType.Error);
                     });
                 }
             }, TaskContinuationOptions.OnlyOnFaulted);
@@ -1359,7 +1362,7 @@ namespace EdgeLoop.ViewModels
             }
             catch (OperationCanceledException)
             {
-                SetStatusMessage("Scanning cancelled", StatusMessageType.Warning);
+                SetStatusMessage("Cancelled", StatusMessageType.Warning);
                 EndImport();
                 return;
             }
@@ -1368,13 +1371,13 @@ namespace EdgeLoop.ViewModels
             {
                 if (folderCount > 0)
                 {
-                    SetStatusMessage($"Found {allVideoFiles.Count} videos in {folderCount} folder(s). Validating...", StatusMessageType.Info);
+                    SetStatusMessage($"Found {Videos(allVideoFiles.Count)} in {folderCount} {(folderCount == 1 ? "folder" : "folders")}. Checking them\u2026", StatusMessageType.Info);
                 }
                 await AddFilesAsync(allVideoFiles.ToArray(), importToken);
             }
             else
             {
-                SetStatusMessage("No supported video files found in dropped items.", StatusMessageType.Warning);
+                SetStatusMessage("None of the dropped items are videos EdgeLoop can play.", StatusMessageType.Warning);
                 EndImport();
             }
         }
@@ -1405,7 +1408,7 @@ namespace EdgeLoop.ViewModels
             if (!Uri.TryCreate(potentialUrl, UriKind.Absolute, out var uri) ||
                 (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
             {
-                SetStatusMessage("Invalid URL dropped", StatusMessageType.Warning);
+                SetStatusMessage("That dropped text isn't a valid link.", StatusMessageType.Warning);
                 return;
             }
 
@@ -1499,7 +1502,7 @@ namespace EdgeLoop.ViewModels
                 {
                     if (!ytDlp.IsAvailable)
                     {
-                        SetStatusMessage("yt-dlp not found. Quality on major sites will be limited. Check Dependencies folder.", StatusMessageType.Warning);
+                        SetStatusMessage("yt-dlp is missing, so some sites play at lower quality. Check the Dependencies folder next to EdgeLoop.exe.", StatusMessageType.Warning);
                     }
                     else
                     {
@@ -1525,7 +1528,7 @@ namespace EdgeLoop.ViewModels
                 {
                     if (!ytDlp.IsAvailable)
                     {
-                        SetStatusMessage("yt-dlp not found. Quality on major sites will be limited. Check Dependencies folder.", StatusMessageType.Warning);
+                        SetStatusMessage("yt-dlp is missing, so some sites play at lower quality. Check the Dependencies folder next to EdgeLoop.exe.", StatusMessageType.Warning);
                     }
                     else
                     {
@@ -1827,7 +1830,7 @@ namespace EdgeLoop.ViewModels
             if (ambiguity.IsAmbiguous)
             {
                 var choice = DialogService.Choose(
-                    $"Crawl video {ambiguity.VideoId} or playlist {ambiguity.PlaylistId}",
+                    "Video or playlist?",
                     $"This {ambiguity.SiteName} link contains both a video and a playlist. What do you want to import?",
                     "Only video",
                     "Playlist"

@@ -451,6 +451,13 @@ namespace EdgeLoop.Windows
             _lastAdornedItem = null;
         }
 
+        /// <summary>Selection follows keyboard focus, so tabbing to a card (or into one of its controls) selects it.</summary>
+        private void AddedFilesList_PreviewGotKeyboardFocus(object sender, KeyboardFocusChangedEventArgs e)
+        {
+            if (e.NewFocus is DependencyObject focused && FindAncestor<ListViewItem>(focused) is { IsSelected: false } card)
+                card.IsSelected = true;
+        }
+
         /// <summary>Delete removes the selected card (with Undo); Alt+Up/Down move it.</summary>
         private void AddedFilesList_KeyDown(object sender, KeyEventArgs e)
         {

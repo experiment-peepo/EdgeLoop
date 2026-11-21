@@ -11,7 +11,7 @@
     <StackPanel Margin="24,20,24,24">
         <StackPanel Margin="0,0,0,24">
             <TextBlock Text="EDGELOOP" FontSize="28" FontWeight="Bold" Foreground="{StaticResource AccentPrimary}" HorizontalAlignment="Center"/>
-            <TextBlock Text="Advanced Multi-Monitor Overlay Engine" FontSize="14" FontStyle="Italic" Foreground="{StaticResource TextSecondary}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
+            <TextBlock Text="Advanced multi-monitor overlay engine" FontSize="14" FontStyle="Italic" Foreground="{StaticResource TextSecondary}" HorizontalAlignment="Center" Margin="0,4,0,0"/>
             <TextBlock x:Name="VersionText" 
                        HorizontalAlignment="Center" 
                        Foreground="{StaticResource TextTertiary}" 
@@ -19,7 +19,7 @@
                        FontSize="12"/>
         </StackPanel>
 
-        <TextBlock Text="EDGELOOP is a specialized video player designed for multi-monitor playback with overlay capabilities for desktop" 
+        <TextBlock Text="EdgeLoop plays videos as see-through overlays on your desktop, on as many monitors as you have." 
                    Foreground="{StaticResource TextSecondary}" 
                    TextWrapping="Wrap" 
                    TextAlignment="Center"
@@ -32,7 +32,7 @@
             <!-- Ko-fi Button -->
             <Button Command="{Binding OpenKoFiCommand}" 
                     Background="Transparent" BorderBrush="Transparent"
-                    Cursor="Hand" ToolTip="Support on Ko-fi"
+                    Cursor="Hand" ToolTip="Support on Ko-fi" AutomationProperties.Name="Support on Ko-fi"
                     Margin="0,0,12,0">
                 <Button.Template>
                     <ControlTemplate TargetType="Button">
@@ -52,7 +52,7 @@
             <!-- Patreon Button -->
             <Button Command="{Binding OpenPatreonCommand}" 
                     Background="Transparent" BorderBrush="Transparent"
-                    Cursor="Hand" ToolTip="Support on Patreon">
+                    Cursor="Hand" ToolTip="Support on Patreon" AutomationProperties.Name="Support on Patreon">
                 <Button.Template>
                     <ControlTemplate TargetType="Button">
                          <Grid>
@@ -69,7 +69,7 @@
             </Button>
         </StackPanel>
         
-        <TextBlock Text="Support the development" 
+        <TextBlock Text="Support development" 
                    Foreground="{StaticResource TextTertiary}" 
                    FontSize="11" 
                    HorizontalAlignment="Center" 

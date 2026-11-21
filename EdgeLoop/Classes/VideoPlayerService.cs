@@ -349,7 +349,7 @@ namespace EdgeLoop.Classes
                 {
                     players.Add(w);
                 }
-                ActivePlayers.Add(new ActivePlayerViewModel(sv.ToString(), w.ViewModel));
+                ActivePlayers.Add(new ActivePlayerViewModel(sv.DisplayName, w.ViewModel));
             }
 
             if (this.IsPlaying)
@@ -730,7 +730,7 @@ namespace EdgeLoop.Classes
                     // If put into group control, don't add individual controls
                     if (!sv.IsAllScreens && !showGroupControl)
                     {
-                        ActivePlayers.Add(new ActivePlayerViewModel(sv.ToString(), w.ViewModel));
+                        ActivePlayers.Add(new ActivePlayerViewModel(sv.DisplayName, w.ViewModel));
                     }
 
                     // Stagger window creation slightly (reduced for Flyleaf)
@@ -749,7 +749,7 @@ namespace EdgeLoop.Classes
                     if (allScreensPlayers.Any())
                     {
                         var groupVm = new GroupHypnoViewModel(allScreensPlayers.Select(p => p.ViewModel));
-                        ActivePlayers.Add(new ActivePlayerViewModel("All Monitors", groupVm));
+                        ActivePlayers.Add(new ActivePlayerViewModel("All monitors", groupVm));
                     }
                 }
 

@@ -45,18 +45,15 @@ namespace EdgeLoop.Classes
                     _open.Remove(screen.DeviceName);
             };
 
-            // Window positions are in device-independent units at the system DPI
-            var reference = Application.Current?.MainWindow;
-            double scale = reference != null ? VisualTreeHelper.GetDpi(reference).DpiScaleX : 1.0;
-            var area = screen.WorkingArea;
+            // Placed in real pixels once its size is known, so it sits in the corner at any scaling;
+            // invisible until then so it doesn't flash elsewhere
+            window.Opacity = 0;
             window.SourceInitialized += (s, e) => MakeClickThrough(window);
-            window.Loaded += (s, e) =>
+            window.ContentRendered += (s, e) =>
             {
-                window.Left = area.Left / scale + Margin;
-                window.Top = area.Bottom / scale - window.ActualHeight - Margin;
+                WindowServices.PlaceOnScreen(window, screen, WindowServices.ScreenAnchor.BottomLeft, Margin);
+                window.Opacity = 1;
             };
-            window.Left = area.Left / scale + Margin;
-            window.Top = area.Bottom / scale - 120 - Margin;
             window.Show();
 
             var timer = new DispatcherTimer { Interval = ShowFor };

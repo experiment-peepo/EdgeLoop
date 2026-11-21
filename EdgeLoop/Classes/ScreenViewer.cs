@@ -73,7 +73,7 @@ namespace EdgeLoop.Classes
 
         public override string ToString()
         {
-            if (IsAllScreens) return "All Monitors";
+            if (IsAllScreens) return "All monitors";
 
             // Extract screen number from DeviceName (e.g., "\\\\.\\DISPLAY1" -> "Screen 1")
             int screenNumber = ScreenIndex;

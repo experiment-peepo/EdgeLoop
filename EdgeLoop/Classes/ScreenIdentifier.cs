@@ -22,17 +22,18 @@ namespace EdgeLoop.Classes
 
         public static void Show()
         {
-            // Window positions are in device-independent units at the system DPI
-            var reference = Application.Current?.MainWindow;
-            double scale = reference != null ? VisualTreeHelper.GetDpi(reference).DpiScaleX : 1.0;
-
             foreach (var viewer in WindowServices.GetAllScreenViewers().Where(v => v.Screen != null))
             {
-                var bounds = viewer.Screen.Bounds;
+                var screen = viewer.Screen;
                 var window = CreateWindow(viewer);
-                window.Left = (bounds.X + bounds.Width / 2.0) / scale - Size / 2;
-                window.Top = (bounds.Y + bounds.Height / 2.0) / scale - Size / 2;
+                window.Opacity = 0; // Shown once it's in place
                 window.SourceInitialized += (s, e) => MakeClickThrough(window);
+                window.ContentRendered += (s, e) =>
+                {
+                    // In real pixels, so each number is centred at any scaling
+                    WindowServices.PlaceOnScreen(window, screen, WindowServices.ScreenAnchor.Center);
+                    window.Opacity = 1;
+                };
                 window.Show();
 
                 var timer = new DispatcherTimer { Interval = ShowFor };

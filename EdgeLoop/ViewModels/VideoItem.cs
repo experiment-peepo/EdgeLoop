@@ -278,7 +278,7 @@ namespace EdgeLoop.ViewModels
                                 if (!string.IsNullOrEmpty(mainPart))
                                 {
                                     if (mainPart.Equals("pmvhaven", StringComparison.OrdinalIgnoreCase)) return "PMVHaven";
-                                    if (mainPart.Equals("rule34video", StringComparison.OrdinalIgnoreCase)) return "RULE34Video";
+                                    if (mainPart.Equals("rule34video", StringComparison.OrdinalIgnoreCase)) return "Rule34Video";
                                     return char.ToUpper(mainPart[0]) + mainPart.Substring(1);
                                 }
                             }
@@ -290,7 +290,7 @@ namespace EdgeLoop.ViewModels
                         return "Web";
                     }
                 }
-                return "Local File";
+                return "Local file";
             }
         }
 

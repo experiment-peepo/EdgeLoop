@@ -9,6 +9,8 @@
     <Title>EdgeLoop</Title>
     <Product>EdgeLoop</Product>
     <ApplicationIcon>Images\icon.ico</ApplicationIcon>
+    <!-- Per-monitor DPI awareness, see app.manifest -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>

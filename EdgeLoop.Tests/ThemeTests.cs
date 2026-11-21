@@ -212,6 +212,12 @@ namespace EdgeLoop.Tests
                     int built = Enumerable.Range(0, launcher.AddedFiles.Count)
                         .Count(i => playlist.ItemContainerGenerator.ContainerFromIndex(i) != null);
                     built.Should().BeInRange(1, 20, "the playlist is virtualized: only cards on screen exist");
+
+                    // Tab reaches one card (the first, while none is selected), not all 200
+                    var first = (ListViewItem)playlist.ItemContainerGenerator.ContainerFromIndex(0);
+                    var second = (ListViewItem)playlist.ItemContainerGenerator.ContainerFromIndex(1);
+                    first.IsTabStop.Should().BeTrue();
+                    second.IsTabStop.Should().BeFalse();
                     launcher.StartHint.Should().Be("Start playback on the assigned screens");
                 }
                 finally

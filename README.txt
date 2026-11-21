@@ -1,7 +1,7 @@
 EdgeLoop - Advanced Overlay Video Engine
 ==========================================
 
-Version: v1.0.0-beta
+Version: 1.1.1
 Website: https://github.com/experiment-peepo/EdgeLoop
 
 EdgeLoop is a high-performance, multi-monitor overlay video player designed for 
@@ -29,4 +29,5 @@ script to ensure you have the latest versions.
 
 LICENSE
 -------
-Distributed under the MIT License. See LICENSE file for details.
+Distributed under the GNU General Public License v3.0 or later (GPL-3.0).
+See the LICENSE file for details.

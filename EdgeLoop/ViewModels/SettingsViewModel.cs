@@ -82,7 +82,7 @@ namespace EdgeLoop.ViewModels
                 new(settings.SkipForwardHotkeyModifiers, settings.SkipForwardHotkeyKey ?? "Right"), new(defaults.SkipForwardHotkeyModifiers, defaults.SkipForwardHotkeyKey));
             SkipBackwardHotkey = new HotkeySetting(PlaybackHotkeyManager.SkipBackwardName, "Skip back", "Previous video on the screen under the mouse",
                 new(settings.SkipBackwardHotkeyModifiers, settings.SkipBackwardHotkeyKey ?? "Left"), new(defaults.SkipBackwardHotkeyModifiers, defaults.SkipBackwardHotkeyKey));
-            EscapeHotkey = new HotkeySetting(PlaybackHotkeyManager.OpaquePanicName, "Emergency stop (press 3 times)", "Only in Opaque Mode: press three times quickly to stop everything",
+            EscapeHotkey = new HotkeySetting(PlaybackHotkeyManager.OpaquePanicName, "Emergency stop (press 3 times)", "Only in Opaque mode: press three times quickly to stop everything",
                 new(settings.OpaquePanicHotkeyModifiers, settings.OpaquePanicHotkeyKey ?? "Escape"), new(defaults.OpaquePanicHotkeyModifiers, defaults.OpaquePanicHotkeyKey));
 
             var savedScreenKeys = settings.PerScreenSkipHotkeys ?? new();
