@@ -27,6 +27,7 @@ namespace EdgeLoop.Windows
         public ConfirmationWindow()
         {
             InitializeComponent();
+            EdgeLoop.Classes.DialogKeys.Attach(this, YesButton, NoButton);
             DataContext = this;
         }
 

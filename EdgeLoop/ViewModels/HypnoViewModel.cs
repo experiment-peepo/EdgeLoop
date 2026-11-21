@@ -18,7 +18,7 @@ using Logger = EdgeLoop.Classes.Logger;
 
 namespace EdgeLoop.ViewModels
 {
-    public class HypnoViewModel : ObservableObject, IDisposable
+    public class HypnoViewModel : ObservableObject, IDisposable, ISkipTarget
     {
         private VideoItem[] _files;
         private int _currentPos = 0;
@@ -373,7 +373,7 @@ namespace EdgeLoop.ViewModels
             if (_disposed) return;
 
             var settings = App.Settings;
-            if (settings == null || !settings.EnableLocalCensor)
+            if (!FeatureFlags.IsCensorEnabled(settings))
             {
                 StopCensor();
                 return;

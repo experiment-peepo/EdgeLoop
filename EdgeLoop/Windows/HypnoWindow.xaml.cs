@@ -185,6 +185,7 @@ namespace EdgeLoop.Windows
         const uint SWP_NOMOVE = 0x0002;
         const uint SWP_NOZORDER = 0x0004;
         const uint SWP_SHOWWINDOW = 0x0040;
+        const uint SWP_NOACTIVATE = 0x0010;
         const uint SWP_FRAMECHANGED = 0x0020;
         const uint SWP_ASYNCWINDOWPOS = 0x4000;
 
@@ -233,15 +234,16 @@ namespace EdgeLoop.Windows
                 }
                 // ---------------------------
 
-                // 1. Transparency
+                // 1. Click-through overlay that stays out of the taskbar and Alt-Tab and never takes focus
                 int extendedStyle = WindowServices.GetWindowLong(hwnd, WindowServices.GWL_EXSTYLE);
-                WindowServices.SetWindowLong(hwnd, WindowServices.GWL_EXSTYLE, extendedStyle | WindowServices.WS_EX_TRANSPARENT);
+                WindowServices.SetWindowLong(hwnd, WindowServices.GWL_EXSTYLE,
+                    extendedStyle | WindowServices.WS_EX_TRANSPARENT | WindowServices.WS_EX_TOOLWINDOW | WindowServices.WS_EX_NOACTIVATE);
 
                 // 2. Physical Placement
                 var b = _targetScreen.Bounds;
                 Logger.Debug($"[HypnoWindow] Positioning: {b.Left},{b.Top} {b.Width}x{b.Height}");
                 SetWindowPos(hwnd, new IntPtr(-1), b.Left, b.Top, b.Width, b.Height,
-                    SWP_FRAMECHANGED | SWP_SHOWWINDOW);
+                    SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOACTIVATE);
 
                 // 3. WPF Metadata
                 this.WindowStartupLocation = WindowStartupLocation.Manual;

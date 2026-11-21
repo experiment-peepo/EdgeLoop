@@ -407,6 +407,9 @@ namespace EdgeLoop.ViewModels
 
         // --- Local censor ---
 
+        /// <summary>The Censoring section is hidden until the feature is ready (see <see cref="FeatureFlags"/>).</summary>
+        public bool ShowCensorSettings => FeatureFlags.CensorFeatureVisible;
+
         public bool EnableLocalCensor
         {
             get => _enableLocalCensor;

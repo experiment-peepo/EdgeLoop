@@ -55,7 +55,7 @@
                         <TextBlock Text="{Binding DialogTitle}" Foreground="White" FontSize="15" FontWeight="Bold" VerticalAlignment="Center"/>
                     </StackPanel>
 
-                    <Button Grid.Column="2" Style="{StaticResource ControlButton}" 
+                    <Button x:Name="CancelButton" Grid.Column="2" Style="{StaticResource ControlButton}" 
                             Click="CancelButton_Click" 
                             Width="50" Height="50" 
                             Background="Transparent"

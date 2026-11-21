@@ -7,7 +7,7 @@ using System.Windows.Interop;
 namespace EdgeLoop.Classes
 {
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    public class HotkeyService : IDisposable
+    public class HotkeyService : IHotkeyRegistrar, IDisposable
     {
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
@@ -27,6 +27,8 @@ namespace EdgeLoop.Classes
         private class HotkeyRegistration
         {
             public int Id { get; set; }
+            public uint Modifiers { get; set; }
+            public uint VirtualKey { get; set; }
             public Action Callback { get; set; }
         }
 
@@ -49,44 +51,53 @@ namespace EdgeLoop.Classes
             _source?.AddHook(HwndHook);
         }
 
+        public bool IsRegistered(string name) => _registrations.ContainsKey(name);
+
         public bool Register(string name, uint modifiers, string keyName, Action callback)
         {
             if (_windowHandle == IntPtr.Zero) return false;
 
-            // Unregister if exists
-            Unregister(name);
-
-            // Parse key
-            Key key;
-            uint virtualKey;
-
             // Handle specific key names that might process oddly or custom requirements
-            if (Enum.TryParse<Key>(keyName, true, out key))
-            {
-                virtualKey = (uint)KeyInterop.VirtualKeyFromKey(key);
-            }
-            else
+            if (!Enum.TryParse<Key>(keyName, true, out Key key))
             {
                 Logger.Warning($"Failed to parse key: {keyName}");
                 return false;
             }
+            uint virtualKey = (uint)KeyInterop.VirtualKeyFromKey(key);
 
+            _registrations.TryGetValue(name, out var previous);
+            if (previous != null && previous.Modifiers == modifiers && previous.VirtualKey == virtualKey)
+            {
+                previous.Callback = callback; // Same combination already registered: just refresh the action
+                return true;
+            }
+
+            Unregister(name);
+
+            if (TryRegister(name, modifiers, virtualKey, callback))
+            {
+                Logger.Debug($"Registered hotkey '{name}': {modifiers}+{keyName}");
+                return true;
+            }
+
+            Logger.Warning($"Failed to register hotkey '{name}': {modifiers}+{keyName} (ErrorCode: {Marshal.GetLastWin32Error()})");
+
+            // Keep the action reachable: put the previous combination back
+            if (previous != null && TryRegister(name, previous.Modifiers, previous.VirtualKey, previous.Callback))
+                Logger.Warning($"Kept the previous key combination for hotkey '{name}'.");
+
+            return false;
+        }
+
+        private bool TryRegister(string name, uint modifiers, uint virtualKey, Action callback)
+        {
             int id = _nextId++;
-            bool success = RegisterHotKey(_windowHandle, id, modifiers, virtualKey);
+            if (!RegisterHotKey(_windowHandle, id, modifiers, virtualKey))
+                return false;
 
-            if (success)
-            {
-                var reg = new HotkeyRegistration { Id = id, Callback = callback };
-                _registrations[name] = reg;
-                _idToNameMap[id] = name;
-                Logger.Debug($"Registered hotkey '{name}': {modifiers}+{keyName} (ID: {id})");
-            }
-            else
-            {
-                Logger.Warning($"Failed to register hotkey '{name}': {modifiers}+{keyName} (ErrorCode: {Marshal.GetLastWin32Error()})");
-            }
-
-            return success;
+            _registrations[name] = new HotkeyRegistration { Id = id, Modifiers = modifiers, VirtualKey = virtualKey, Callback = callback };
+            _idToNameMap[id] = name;
+            return true;
         }
 
         public void Unregister(string name)

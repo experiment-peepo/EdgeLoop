@@ -29,114 +29,82 @@ namespace EdgeLoop.Windows
             LoadWindowBounds();
         }
 
-        private HotkeyService _hotkeys;
+        private PlaybackHotkeyManager _hotkeyManager;
+        private const string HotkeyWarningPrefix = "Warning: Some hotkeys";
 
         // Triple-press tracking
         private int _opaquePanicPressCount = 0;
         private DateTime _lastOpaquePanicTime = DateTime.MinValue;
 
-
-
         private void InitializeHotkeys()
         {
-            var helper = new System.Windows.Interop.WindowInteropHelper(this);
-            // Use global service
-            _hotkeys = App.Hotkeys;
-            _hotkeys.Initialize(helper.Handle);
+            var hotkeys = App.Hotkeys;
+            if (hotkeys == null) return;
 
-            RegisterHotkeys();
+            hotkeys.Initialize(new System.Windows.Interop.WindowInteropHelper(this).Handle);
+
+            _hotkeyManager = new PlaybackHotkeyManager(hotkeys, () => App.Settings, new PlaybackHotkeyActions
+            {
+                Panic = () => App.VideoService.StopAll(),
+                WipeAndExit = () =>
+                {
+                    ViewModel?.ClearAllCommand?.Execute(null);
+                    Application.Current?.Shutdown();
+                },
+                OpaquePanic = HandleOpaquePanic,
+                Skip = forward =>
+                {
+                    foreach (var vm in GetContextualSkipTargets())
+                    {
+                        if (forward) vm.PlayNext(true);
+                        else vm.PlayPrevious(true);
+                    }
+                }
+            });
+
+            // Skip and the triple-Escape exit are only registered while something is playing
+            _hotkeyManager.SetPlaying(App.VideoService?.ActivePlayers.Count > 0);
+            if (App.VideoService != null)
+                App.VideoService.ActivePlayers.CollectionChanged += ActivePlayers_CollectionChanged;
+
+            ReportHotkeyFailures(_hotkeyManager.RegisterAll());
+        }
+
+        private void ActivePlayers_CollectionChanged(object sender, System.Collections.Specialized.NotifyCollectionChangedEventArgs e)
+        {
+            if (_hotkeyManager == null) return;
+
+            var failures = _hotkeyManager.SetPlaying(App.VideoService.ActivePlayers.Count > 0);
+            if (failures.Count > 0)
+                ReportHotkeyFailures(failures);
         }
 
         public void ReloadHotkeys()
         {
-            if (_hotkeys != null)
-            {
-                RegisterHotkeys();
-            }
+            if (_hotkeyManager != null)
+                ReportHotkeyFailures(_hotkeyManager.RegisterAll());
         }
 
-        private void RegisterHotkeys()
+        private void ReportHotkeyFailures(IReadOnlyList<string> failures)
         {
-            if (_hotkeys == null) return;
-
-            var settings = App.Settings;
-            var failures = new List<string>();
-
-            if (!_hotkeys.Register("Panic", settings.PanicHotkeyModifiers, settings.PanicHotkeyKey ?? "End", () =>
-            {
-                App.VideoService.StopAll();
-            })) failures.Add("Panic");
-
-            if (!_hotkeys.Register("OpaquePanic", settings.OpaquePanicHotkeyModifiers, settings.OpaquePanicHotkeyKey ?? "Escape", HandleOpaquePanic))
-                failures.Add("Fullscreen Escape");
-
-            if (!_hotkeys.Register("Clear", settings.ClearHotkeyModifiers, settings.ClearHotkeyKey ?? "Delete", () =>
-            {
-                ViewModel?.ClearAllCommand?.Execute(null);
-                Application.Current?.Shutdown();
-            })) failures.Add("Wipe & Exit");
-
-            if (!_hotkeys.Register("SkipForward", settings.SkipForwardHotkeyModifiers, settings.SkipForwardHotkeyKey ?? "Right", () =>
-            {
-                foreach (var vm in GetContextualSkipTargets()) vm.PlayNext(true);
-            })) failures.Add("Skip Forward");
-
-            if (!_hotkeys.Register("SkipBackward", settings.SkipBackwardHotkeyModifiers, settings.SkipBackwardHotkeyKey ?? "Left", () =>
-            {
-                foreach (var vm in GetContextualSkipTargets()) vm.PlayPrevious(true);
-            })) failures.Add("Skip Backward");
-
             if (failures.Count > 0)
             {
-                string msg = $"Warning: Some hotkeys could not be registered: {string.Join(", ", failures)}. They may be in use by another app.";
+                string msg = $"{HotkeyWarningPrefix} could not be registered: {string.Join(", ", failures)}. They may be in use by another app.";
                 ViewModel?.SetStatusMessage(msg, StatusMessageType.Warning);
                 Logger.Warning(msg);
             }
-            else
+            else if (ViewModel?.StatusMessage?.StartsWith(HotkeyWarningPrefix) == true)
             {
                 // Clear any previous hotkey warning if everything is now OK
-                if (ViewModel?.StatusMessage?.StartsWith("Warning: Some hotkeys") == true)
-                {
-                    ViewModel.SetStatusMessage(null);
-                }
+                ViewModel.SetStatusMessage(null);
             }
         }
 
-        private IEnumerable<HypnoViewModel> GetContextualSkipTargets()
+        private IReadOnlyList<HypnoViewModel> GetContextualSkipTargets()
         {
-            var allVms = App.VideoService.ActiveViewModels;
-            if (allVms.Count == 0) return Enumerable.Empty<HypnoViewModel>();
-
-            var independentPlayers = System.Linq.Enumerable.ToList(System.Linq.Enumerable.Where(allVms, vm => string.IsNullOrEmpty(vm.SyncGroupId) || vm.IsSyncMaster));
-
-            // If only one logical group is playing, just skip it context-free
-            if (independentPlayers.Count == 1)
-            {
-                return independentPlayers;
-            }
-
-            // Multiple independent groups. Target by mouse position.
-            var cursorPos = System.Windows.Forms.Cursor.Position;
-            var currentScreen = System.Windows.Forms.Screen.FromPoint(cursorPos);
-
-            var targetVm = System.Linq.Enumerable.FirstOrDefault(allVms, vm => vm.MonitorName == currentScreen.DeviceName);
-
-            if (targetVm != null)
-            {
-                // If the targeted monitor is part of a sync group, return the master of that group
-                if (!string.IsNullOrEmpty(targetVm.SyncGroupId))
-                {
-                    var master = System.Linq.Enumerable.FirstOrDefault(allVms, vm => vm.SyncGroupId == targetVm.SyncGroupId && vm.IsSyncMaster);
-                    if (master != null) return new[] { master };
-                }
-                else
-                {
-                    return new[] { targetVm };
-                }
-            }
-
-            // Fallback: cursor is not on a screen with a video. Skip all independent players simultaneously.
-            return independentPlayers;
+            var cursorScreen = System.Windows.Forms.Screen.FromPoint(System.Windows.Forms.Cursor.Position)?.DeviceName;
+            var primaryScreen = System.Windows.Forms.Screen.PrimaryScreen?.DeviceName;
+            return SkipTargetResolver.Resolve(App.VideoService.ActiveViewModels, cursorScreen, primaryScreen);
         }
 
         private void HandleOpaquePanic()
@@ -213,15 +181,20 @@ namespace EdgeLoop.Windows
                     double.IsFinite(settings.LauncherWindowTop) &&
                     double.IsFinite(settings.LauncherWindowLeft))
                 {
+                    if (double.IsFinite(settings.LauncherWindowWidth) && settings.LauncherWindowWidth > 0)
+                        this.Width = settings.LauncherWindowWidth;
+                    if (double.IsFinite(settings.LauncherWindowHeight) && settings.LauncherWindowHeight > 0)
+                        this.Height = settings.LauncherWindowHeight;
 
-                    this.Top = settings.LauncherWindowTop;
-                    this.Left = settings.LauncherWindowLeft;
-                    this.Width = settings.LauncherWindowWidth;
-                    this.Height = settings.LauncherWindowHeight;
-
-                    // Ensure window is on screen
-                    if (this.Top < 0) this.Top = 0;
-                    if (this.Left < 0) this.Left = 0;
+                    // Monitors left of or above the primary screen have negative coordinates, so don't clamp
+                    // to 0; only fall back to the centred default when the title bar would be off every screen
+                    // (e.g. the monitor it was on has been disconnected).
+                    if (IsOnConnectedScreen(settings.LauncherWindowLeft, settings.LauncherWindowTop, this.Width))
+                    {
+                        this.WindowStartupLocation = WindowStartupLocation.Manual;
+                        this.Top = settings.LauncherWindowTop;
+                        this.Left = settings.LauncherWindowLeft;
+                    }
                 }
             }
             catch (Exception ex)
@@ -230,10 +203,35 @@ namespace EdgeLoop.Windows
             }
         }
 
+        /// <summary>
+        /// Whether a point on the title bar of a window at (left, top) lies in a connected monitor's work area.
+        /// Positions are in DIPs; screen areas are scaled from pixels with the primary screen's DPI.
+        /// </summary>
+        private static bool IsOnConnectedScreen(double left, double top, double width)
+        {
+            var primary = System.Windows.Forms.Screen.PrimaryScreen;
+            if (primary == null || primary.Bounds.Width <= 0)
+                return false;
+
+            double pxToDip = SystemParameters.PrimaryScreenWidth / primary.Bounds.Width;
+            double x = left + Math.Min(100, Math.Max(0, width) / 2);
+            double y = top + 20;
+
+            return System.Windows.Forms.Screen.AllScreens.Any(s =>
+            {
+                var a = s.WorkingArea;
+                return x >= a.Left * pxToDip && x < a.Right * pxToDip &&
+                       y >= a.Top * pxToDip && y < a.Bottom * pxToDip;
+            });
+        }
+
         protected override void OnClosed(EventArgs e)
         {
             SaveWindowBounds();
-            _hotkeys?.Dispose();
+            if (App.VideoService != null)
+                App.VideoService.ActivePlayers.CollectionChanged -= ActivePlayers_CollectionChanged;
+            _hotkeyManager?.Dispose();
+            App.Hotkeys?.Dispose();
             (DataContext as IDisposable)?.Dispose();
             base.OnClosed(e);
         }
@@ -935,11 +933,11 @@ namespace EdgeLoop.Windows
                 {
                     ViewModels.StatusMessageType.Success => new SolidColorBrush(Color.FromArgb(0x33, 0x90, 0xEE, 0x90)), // Soft green with transparency
                     ViewModels.StatusMessageType.Warning => new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xD7, 0x00)), // Golden yellow with transparency
-                    ViewModels.StatusMessageType.Error => new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0x69, 0xB4)),   // HotPink with transparency (theme consistent)
-                    _ => new SolidColorBrush(Color.FromArgb(0x33, 0x00, 0x00, 0x00)) // Default: dark with transparency
+                    ViewModels.StatusMessageType.Error => new SolidColorBrush(Color.FromArgb(0x40, 0xFF, 0x44, 0x44)),   // ErrorColor tint: errors must not look like the pink accent
+                    _ => new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xB6, 0xD9)) // Info: TextSecondary tint, visible on the dark background
                 };
             }
-            return new SolidColorBrush(Color.FromArgb(0x33, 0x00, 0x00, 0x00));
+            return new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xB6, 0xD9));
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
@@ -960,7 +958,7 @@ namespace EdgeLoop.Windows
                 {
                     ViewModels.StatusMessageType.Success => new SolidColorBrush(Color.FromArgb(0xCC, 0x90, 0xEE, 0x90)), // Light green
                     ViewModels.StatusMessageType.Warning => new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xD7, 0x00)), // Golden yellow
-                    ViewModels.StatusMessageType.Error => new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0x69, 0xB4)),   // HotPink for errors (theme consistency)
+                    ViewModels.StatusMessageType.Error => new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x7A, 0x7A)),   // Light red, readable on the dark background
                     _ => new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)) // Default: white
                 };
             }

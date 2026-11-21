@@ -282,7 +282,8 @@
                     </Expander>
 
                     <!-- Censoring (detection on the decoded frame, before window opacity) -->
-                    <Expander Header="Censoring" Style="{StaticResource SettingsExpanderStyle}" IsExpanded="False">
+                    <Expander Header="Censoring" Style="{StaticResource SettingsExpanderStyle}" IsExpanded="False"
+                              Visibility="{Binding ShowCensorSettings, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <StackPanel Margin="0,10,0,0">
 
                             <TextBlock Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,0,10"
@@ -461,7 +462,9 @@
                                     </Grid.ColumnDefinitions>
                                     <TextBox Text="{Binding LocalCacheDirectory, UpdateSourceTrigger=PropertyChanged}" 
                                              IsReadOnly="True"
+                                             Style="{StaticResource PinkTextBoxStyle}"
                                              Foreground="{StaticResource TextSecondary}"
+                                             FontSize="12"
                                              Height="32" Padding="8,6"
                                              VerticalContentAlignment="Center"
                                              ToolTip="{Binding LocalCacheDirectory}"/>
@@ -701,7 +704,7 @@
             <!-- Fixed Footer with Buttons -->
             <Grid Grid.Row="2" Margin="24,20,24,24">
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button Command="{Binding CancelCommand}" 
+                    <Button x:Name="CancelButton" Command="{Binding CancelCommand}" 
                             Style="{StaticResource SecondaryButtonStyle}" 
                             Width="100" 
                             Height="38"
@@ -711,7 +714,7 @@
                             <TextBlock Text="Cancel" VerticalAlignment="Center" FontWeight="SemiBold"/>
                         </StackPanel>
                     </Button>
-                    <Button Command="{Binding OkCommand}" 
+                    <Button x:Name="SaveButton" Command="{Binding OkCommand}" 
                             Style="{StaticResource PrimaryButtonStyle}" 
                             Width="150" 
                             Height="38">

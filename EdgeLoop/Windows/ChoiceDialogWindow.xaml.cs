@@ -55,6 +55,7 @@ namespace EdgeLoop.Windows
         public ChoiceDialogWindow()
         {
             InitializeComponent();
+            EdgeLoop.Classes.DialogKeys.Attach(this, Option2Button, CancelButton);
             DataContext = this;
             Loaded += ChoiceDialogWindow_Loaded;
 

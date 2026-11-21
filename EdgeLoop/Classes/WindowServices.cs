@@ -26,6 +26,8 @@ namespace EdgeLoop.Classes
     public static class WindowServices
     {
         public const int WS_EX_TRANSPARENT = 0x00000020;
+        public const int WS_EX_TOOLWINDOW = 0x00000080;   // Not in the taskbar or Alt-Tab
+        public const int WS_EX_NOACTIVATE = 0x08000000;   // Never takes focus
         public const int GWL_EXSTYLE = (-20);
 
         [DllImport("user32.dll")]

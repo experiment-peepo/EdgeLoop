@@ -11,6 +11,7 @@ namespace EdgeLoop.Windows
         public AboutWindow()
         {
             InitializeComponent();
+            DialogKeys.Attach(this, defaultButton: null, cancelButton: CloseButton);
             DataContext = this;
 
             var version = Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;

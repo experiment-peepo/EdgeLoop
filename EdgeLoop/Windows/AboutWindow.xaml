@@ -30,7 +30,7 @@
                     <TextBlock Text="About" Style="{StaticResource WindowHeaderTitleStyle}"/>
                     <TextBlock Text="Information about EDGELOOP and the developer" Style="{StaticResource WindowHeaderSubtitleStyle}"/>
                 </StackPanel>
-                <Button Style="{StaticResource ControlButton}" 
+                <Button x:Name="CloseButton" Style="{StaticResource ControlButton}" 
                         Click="CloseButton_Click" 
                         ToolTip="Close"
                         HorizontalAlignment="Right"

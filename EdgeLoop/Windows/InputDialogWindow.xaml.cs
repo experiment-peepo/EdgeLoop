@@ -36,6 +36,7 @@ namespace EdgeLoop.Windows
         public InputDialogWindow()
         {
             InitializeComponent();
+            EdgeLoop.Classes.DialogKeys.Attach(this, OkButton, CancelButton);
             DataContext = this;
             Loaded += InputDialogWindow_Loaded;
         }

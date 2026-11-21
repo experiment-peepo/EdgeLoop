@@ -265,7 +265,7 @@
                 <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Style="{StaticResource LowerTitle}" VerticalAlignment="Center" Margin="0">
                         <Run Text="Playlist" Foreground="White" FontSize="16" FontWeight="SemiBold"/>
-                        <Run Text=" (" Foreground="{StaticResource TextSecondary}" FontSize="13"/><Run Text="{Binding AddedFiles.Count, Mode=OneWay}" Foreground="{StaticResource TextSecondary}" FontSize="13"/><Run Text=" videos)" Foreground="{StaticResource TextSecondary}" FontSize="13"/>
+                        <Run Text=" (" Foreground="{StaticResource TextSecondary}" FontSize="13"/><Run Text="{Binding AddedFiles.Count, Mode=OneWay}" Foreground="{StaticResource TextSecondary}" FontSize="13"/><Run Text=" " Foreground="{StaticResource TextSecondary}" FontSize="13"/><Run Text="{Binding AddedFiles.Count, Mode=OneWay, Converter={StaticResource PluralConverter}}" Foreground="{StaticResource TextSecondary}" FontSize="13"/><Run Text=")" Foreground="{StaticResource TextSecondary}" FontSize="13"/>
                     </TextBlock>
                 </StackPanel>
                 
@@ -374,6 +374,9 @@
                                                              <Border Background="{StaticResource SuccessColor}" CornerRadius="2" Margin="6,0,0,0" Padding="4,1" Visibility="{Binding IsCached, Converter={StaticResource BooleanToVisibilityConverter}}">
                                                                  <TextBlock Text="CACHED" Foreground="White" FontSize="8" FontWeight="Bold" VerticalAlignment="Center"/>
                                                              </Border>
+                                                             <Border Background="{StaticResource ErrorColor}" CornerRadius="2" Margin="6,0,0,0" Padding="4,1" ToolTip="{Binding PlaybackError}" Visibility="{Binding PlaybackFailed, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                                 <TextBlock Text="FAILED" Foreground="White" FontSize="8" FontWeight="Bold" VerticalAlignment="Center"/>
+                                                             </Border>
                                                          </StackPanel>
                                                      </StackPanel>
                                                     <ComboBox Grid.Column="2" ItemsSource="{Binding DataContext.AvailableScreens, RelativeSource={RelativeSource AncestorType=Window}}" SelectedItem="{Binding AssignedScreen}" Style="{StaticResource PinkComboBoxStyle}" Width="220" Margin="12,0"/>
@@ -414,8 +417,17 @@
             </ScrollViewer>
 
             <!-- Row 4: Status Area -->
-            <Border x:Name="StatusBorder" Grid.Row="4" Background="{Binding StatusMessageType, Converter={StaticResource StatusMessageTypeToBrushConverter}}" CornerRadius="8" Margin="24,12,24,0" Padding="16,10" Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibilityConverter}}">
-                <TextBlock Text="{Binding StatusMessage}" Foreground="{Binding StatusMessageType, Converter={StaticResource StatusMessageTypeToForegroundConverter}}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"/>
+            <Border x:Name="StatusBorder" Grid.Row="4" Background="{Binding StatusMessageType, Converter={StaticResource StatusMessageTypeToBrushConverter}}" CornerRadius="8" Margin="24,12,24,0" Padding="16,10,8,10" Visibility="{Binding StatusMessage, Converter={StaticResource StringToVisibilityConverter}}">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding StatusMessage}" Foreground="{Binding StatusMessageType, Converter={StaticResource StatusMessageTypeToForegroundConverter}}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" VerticalAlignment="Center"/>
+                    <Button Grid.Column="1" Style="{StaticResource ControlButton}" Command="{Binding DismissStatusCommand}" Width="24" Height="24" Margin="8,0,0,0" VerticalAlignment="Top" ToolTip="Dismiss">
+                        <Path Data="{StaticResource Icon_Close}" Fill="{Binding StatusMessageType, Converter={StaticResource StatusMessageTypeToForegroundConverter}}" Stretch="Uniform" Width="9" Height="9"/>
+                    </Button>
+                </Grid>
             </Border>
 
             <!-- Row 5: Currently Playing sticky area -->
@@ -463,14 +475,9 @@
             <!-- Row 6: Playback Actions sticky footer -->
             <Border Grid.Row="6" Background="{StaticResource BackgroundPrimary}" BorderBrush="{StaticResource BorderPink}" BorderThickness="0,1,0,0" Padding="24,20,24,24" CornerRadius="0,0,8,8">
                 <StackPanel>
-                    <Grid HorizontalAlignment="Center" Margin="0,0,0,16">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="Auto"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
-                        <TextBlock Style="{StaticResource LowerTitle}" FontSize="14" FontWeight="SemiBold" Margin="0,0,12,0" VerticalAlignment="Center">Shuffle</TextBlock>
-                        <CheckBox x:Name="ShuffleCheckBox" IsChecked="{Binding Shuffle}" Grid.Column="1" VerticalAlignment="Center"/>
-                    </Grid>
+                    <CheckBox x:Name="ShuffleCheckBox" IsChecked="{Binding Shuffle}" Content="Shuffle"
+                              Style="{StaticResource ModernCheckBoxStyle}" Foreground="{StaticResource TextSecondary}"
+                              FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,0,0,16"/>
                     
                     <Button x:Name="TrainingToggleButton" Style="{StaticResource TrainingToggleButtonStyle}" HorizontalAlignment="Stretch"
                             CommandParameter="{Binding ElementName=AddedFilesList, Path=SelectedItems}">

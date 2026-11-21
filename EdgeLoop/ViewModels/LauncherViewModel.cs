@@ -84,17 +84,12 @@ namespace EdgeLoop.ViewModels
 
 
         private bool _allFilesAssigned = false;
-        private string _statusMessage;
-        private StatusMessageType _statusMessageType = StatusMessageType.Info;
+        private readonly StatusBanner _status = new StatusBanner();
         private bool _isLoading;
         private double _importProgressValue;
         private string _importProgressText;
 
-        public string StatusMessage
-        {
-            get => _statusMessage;
-            set => SetProperty(ref _statusMessage, value);
-        }
+        public string StatusMessage => _status.Message;
 
         public double ImportProgressValue
         {
@@ -108,14 +103,11 @@ namespace EdgeLoop.ViewModels
             set => SetProperty(ref _importProgressText, value);
         }
 
-        public StatusMessageType StatusMessageType
-        {
-            get => _statusMessageType;
-            set => SetProperty(ref _statusMessageType, value);
-        }
+        public StatusMessageType StatusMessageType => _status.Type;
 
         /// <summary>
-        /// Helper method to set status message with type
+        /// Shows a status message. Info and success messages clear themselves after a few seconds
+        /// (but not while an import is still running); warnings and errors stay until dismissed or replaced.
         /// </summary>
         public void SetStatusMessage(string message, StatusMessageType type = StatusMessageType.Info)
         {
@@ -123,8 +115,7 @@ namespace EdgeLoop.ViewModels
             {
                 Logger.Debug($"[Launcher] Status: {message} ({type})");
             }
-            StatusMessage = message;
-            StatusMessageType = type;
+            _status.Show(message, type);
         }
 
         public bool IsLoading
@@ -145,6 +136,7 @@ namespace EdgeLoop.ViewModels
         public ICommand ExitCommand { get; }
         public ICommand MinimizeCommand { get; }
         public ICommand CancelImportCommand { get; }
+        public ICommand DismissStatusCommand { get; }
 
         private System.Windows.Threading.DispatcherTimer _saveTimer;
         private CancellationTokenSource _cancellationTokenSource;
@@ -156,6 +148,10 @@ namespace EdgeLoop.ViewModels
 
         public LauncherViewModel()
         {
+            _status.IsBusy = () => IsLoading;
+            _status.PropertyChanged += (s, e) =>
+                OnPropertyChanged(e.PropertyName == nameof(StatusBanner.Message) ? nameof(StatusMessage) : nameof(StatusMessageType));
+
             _cancellationTokenSource = new CancellationTokenSource();
             _urlExtractor = App.UrlExtractor ?? new VideoUrlExtractor();
             _playlistImporter = new PlaylistImporter(_urlExtractor);
@@ -171,6 +167,7 @@ namespace EdgeLoop.ViewModels
             RemoveSelectedCommand = new RelayCommand(RemoveSelected);
             RemoveItemCommand = new RelayCommand(RemoveItem);
             ClearAllCommand = new RelayCommand(ClearAll);
+            DismissStatusCommand = new RelayCommand(_ => SetStatusMessage(null));
             SavePlaylistCommand = new RelayCommand(SavePlaylist);
             LoadPlaylistCommand = new RelayCommand(LoadPlaylist);
             ExitCommand = new RelayCommand(Exit);
@@ -525,6 +522,10 @@ namespace EdgeLoop.ViewModels
             // Simple validation again just in case
             if (selectedFiles.Any(x => x.AssignedScreen == null)) return (null, false);
 
+            // A new playback session retries items that failed last time (failures can be temporary)
+            foreach (var f in selectedFiles)
+                f.PlaybackError = null;
+
             if (Shuffle)
             {
                 // Fisher-Yates shuffle - O(n) instead of O(n log n)
@@ -620,7 +621,7 @@ namespace EdgeLoop.ViewModels
             };
             if (dlg.ShowDialog() == true)
             {
-                await AddFilesAsync(dlg.FileNames, _cancellationTokenSource.Token);
+                await AddFilesAsync(dlg.FileNames, BeginImport());
             }
         }
 
@@ -642,9 +643,6 @@ namespace EdgeLoop.ViewModels
 
         private async Task AddUrlAsync()
         {
-            IsLoading = true;
-            SetStatusMessage("Enter video URL...", StatusMessageType.Info);
-
             try
             {
                 // Show input dialog
@@ -654,14 +652,11 @@ namespace EdgeLoop.ViewModels
                     "Video URL:"
                 );
                 if (string.IsNullOrWhiteSpace(inputUrl))
-                {
-                    IsLoading = false;
                     return;
-                }
 
-                _importCts?.Cancel();
-                _importCts = new CancellationTokenSource();
-                await ProcessUrlAsync(inputUrl.Trim(), _importCts.Token);
+                // Show the busy overlay only once there is work to do, not behind the input dialog
+                IsLoading = true;
+                await ProcessUrlAsync(inputUrl.Trim(), BeginImport());
             }
             catch (Exception ex)
             {
@@ -670,13 +665,13 @@ namespace EdgeLoop.ViewModels
             }
             finally
             {
-                IsLoading = false;
+                EndImport();
             }
         }
 
         private async Task ProcessUrlAsync(string inputUrl, CancellationToken cancellationToken = default)
         {
-            SetStatusMessage("Processing URL...", StatusMessageType.Info);
+            ShowImportProgress("Processing URL...");
 
             try
             {
@@ -691,7 +686,7 @@ namespace EdgeLoop.ViewModels
                 string finalUrl = inputUrl;
                 if (FileValidator.IsPageUrl(inputUrl))
                 {
-                    SetStatusMessage("Extracting video URL from page...", StatusMessageType.Info);
+                    ShowImportProgress("Extracting video URL from page...");
                     finalUrl = await _urlExtractor.ExtractVideoUrlAsync(inputUrl, cancellationToken);
 
                     if (string.IsNullOrWhiteSpace(finalUrl))
@@ -967,9 +962,6 @@ namespace EdgeLoop.ViewModels
 
         private async Task ImportPlaylistAsync()
         {
-            IsLoading = true;
-            SetStatusMessage("Enter playlist URL...", StatusMessageType.Info);
-
             try
             {
                 // Show input dialog
@@ -979,13 +971,11 @@ namespace EdgeLoop.ViewModels
                     "Playlist URL:"
                 );
                 if (string.IsNullOrWhiteSpace(playlistUrl))
-                {
-                    IsLoading = false;
                     return;
-                }
 
-                _importCts?.Cancel();
-                _importCts = new CancellationTokenSource();
+                // Show the busy overlay only once there is work to do, not behind the input dialog
+                IsLoading = true;
+                var importToken = BeginImport();
                 var trimmedUrl = playlistUrl.Trim();
 
                 // Validate URL
@@ -1004,23 +994,17 @@ namespace EdgeLoop.ViewModels
                     return;
                 }
 
-                SetStatusMessage("Importing playlist...", StatusMessageType.Info);
+                ShowImportProgress("Importing playlist...");
 
                 // Import playlist with progress updates
-                int current = 0;
-                int total = 0;
                 var videoItems = await _playlistImporter.ImportPlaylistAsync(
                     trimmedUrl,
                     (c, t) =>
                     {
-                        current = c;
-                        total = t;
                         Application.Current?.Dispatcher.InvokeAsync(() =>
-                        {
-                            SetStatusMessage($"Importing playlist... {current} of {total} videos", StatusMessageType.Info);
-                        });
+                            ShowImportProgress($"Importing playlist... {c} of {t} videos", c, t));
                     },
-                    _importCts.Token,
+                    importToken,
                     importMode
                 );
 
@@ -1091,7 +1075,7 @@ namespace EdgeLoop.ViewModels
             }
             finally
             {
-                IsLoading = false;
+                EndImport();
             }
         }
 
@@ -1113,9 +1097,6 @@ namespace EdgeLoop.ViewModels
 
         private async Task AddUrlOrPlaylistAsync()
         {
-            IsLoading = true;
-            SetStatusMessage("Enter video or playlist URL...", StatusMessageType.Info);
-
             try
             {
                 // Show input dialog
@@ -1125,13 +1106,11 @@ namespace EdgeLoop.ViewModels
                     "Video or Playlist URL:"
                 );
                 if (string.IsNullOrWhiteSpace(inputUrl))
-                {
-                    IsLoading = false;
                     return;
-                }
 
-                _importCts?.Cancel();
-                _importCts = new CancellationTokenSource();
+                // Show the busy overlay only once there is work to do, not behind the input dialog
+                IsLoading = true;
+                var importToken = BeginImport();
                 var trimmedUrl = inputUrl.Trim();
 
                 // Validate URL
@@ -1151,22 +1130,16 @@ namespace EdgeLoop.ViewModels
                 }
 
                 // First, try to import as a playlist
-                SetStatusMessage("Checking if URL is a playlist...", StatusMessageType.Info);
+                ShowImportProgress("Checking if URL is a playlist...");
 
-                int current = 0;
-                int total = 0;
                 var videoItems = await _playlistImporter.ImportPlaylistAsync(
                     trimmedUrl,
                     (c, t) =>
                     {
-                        current = c;
-                        total = t;
                         Application.Current?.Dispatcher.InvokeAsync(() =>
-                        {
-                            SetStatusMessage($"Importing playlist... {c} of {t} videos", StatusMessageType.Info);
-                        });
+                            ShowImportProgress($"Importing playlist... {c} of {t} videos", c, t));
                     },
-                    _importCts.Token,
+                    importToken,
                     importMode
                 );
 
@@ -1220,8 +1193,8 @@ namespace EdgeLoop.ViewModels
                 }
 
                 // If no videos found in playlist, treat as single video URL
-                SetStatusMessage("No playlist found, treating as single video URL...", StatusMessageType.Info);
-                await ProcessUrlAsync(trimmedUrl, _importCts.Token);
+                ShowImportProgress("No playlist found, treating as single video URL...");
+                await ProcessUrlAsync(trimmedUrl, importToken);
             }
             catch (OperationCanceledException)
             {
@@ -1234,7 +1207,7 @@ namespace EdgeLoop.ViewModels
             }
             finally
             {
-                IsLoading = false;
+                EndImport();
             }
         }
 
@@ -1348,11 +1321,11 @@ namespace EdgeLoop.ViewModels
                     var message = $"Added {addedCount} file(s), skipped {skippedCount} invalid file(s)";
                     if (failedFiles.Count <= 5)
                     {
-                        message += ":\n" + string.Join("\n", failedFiles.Select(f => $"â€¢ {f.name} - {f.error}"));
+                        message += ":\n" + string.Join("\n", failedFiles.Select(f => $"• {f.name} - {f.error}"));
                     }
                     else
                     {
-                        message += ":\n" + string.Join("\n", failedFiles.Take(5).Select(f => $"â€¢ {f.name} - {f.error}")) + $"\n... and {failedFiles.Count - 5} more";
+                        message += ":\n" + string.Join("\n", failedFiles.Take(5).Select(f => $"• {f.name} - {f.error}")) + $"\n... and {failedFiles.Count - 5} more";
                     }
                     SetStatusMessage(message, StatusMessageType.Warning);
                 }
@@ -1452,7 +1425,8 @@ namespace EdgeLoop.ViewModels
         private async Task AddDroppedFilesAsync(string[] files)
         {
             IsLoading = true;
-            SetStatusMessage("Scanning dropped items...", StatusMessageType.Info);
+            ShowImportProgress("Scanning dropped items...");
+            var importToken = BeginImport();
 
             var allVideoFiles = new List<string>();
             int folderCount = 0;
@@ -1463,6 +1437,7 @@ namespace EdgeLoop.ViewModels
                 {
                     foreach (var path in files)
                     {
+                        importToken.ThrowIfCancellationRequested();
                         if (Directory.Exists(path))
                         {
                             folderCount++;
@@ -1495,12 +1470,12 @@ namespace EdgeLoop.ViewModels
                             }
                         }
                     }
-                }, _cancellationTokenSource.Token);
+                }, importToken);
             }
             catch (OperationCanceledException)
             {
                 SetStatusMessage("Scanning cancelled", StatusMessageType.Warning);
-                IsLoading = false;
+                EndImport();
                 return;
             }
 
@@ -1510,12 +1485,12 @@ namespace EdgeLoop.ViewModels
                 {
                     SetStatusMessage($"Found {allVideoFiles.Count} videos in {folderCount} folder(s). Validating...", StatusMessageType.Info);
                 }
-                await AddFilesAsync(allVideoFiles.ToArray(), _cancellationTokenSource.Token);
+                await AddFilesAsync(allVideoFiles.ToArray(), importToken);
             }
             else
             {
                 SetStatusMessage("No supported video files found in dropped items.", StatusMessageType.Warning);
-                IsLoading = false;
+                EndImport();
             }
         }
 
@@ -1549,7 +1524,20 @@ namespace EdgeLoop.ViewModels
                 return;
             }
 
-            _ = ProcessUrlAsync(potentialUrl, _cancellationTokenSource.Token);
+            _ = ProcessDroppedUrlAsync(potentialUrl);
+        }
+
+        private async Task ProcessDroppedUrlAsync(string url)
+        {
+            IsLoading = true;
+            try
+            {
+                await ProcessUrlAsync(url, BeginImport());
+            }
+            finally
+            {
+                EndImport();
+            }
         }
 
 
@@ -1669,6 +1657,32 @@ namespace EdgeLoop.ViewModels
         {
             _importCts?.Cancel();
             IsLoading = false;
+        }
+
+        /// <summary>
+        /// Starts a new import that the busy overlay's Cancel button can stop, cancelling any earlier one.
+        /// Linked to the view model's lifetime token so closing the app still cancels it.
+        /// </summary>
+        private CancellationToken BeginImport()
+        {
+            _importCts?.Cancel();
+            _importCts = CancellationTokenSource.CreateLinkedTokenSource(_cancellationTokenSource.Token);
+            return _importCts.Token;
+        }
+
+        /// <summary>Shows progress in the busy overlay and the status bar.</summary>
+        private void ShowImportProgress(string text, int current = 0, int total = 0)
+        {
+            ImportProgressText = text;
+            ImportProgressValue = total > 0 ? Math.Min(100, current * 100.0 / total) : 0;
+            SetStatusMessage(text, StatusMessageType.Info);
+        }
+
+        private void EndImport()
+        {
+            IsLoading = false;
+            ImportProgressValue = 0;
+            ImportProgressText = string.Empty;
         }
 
         private async Task LoadSessionAsync(CancellationToken cancellationToken = default)
@@ -1843,6 +1857,26 @@ namespace EdgeLoop.ViewModels
 
         private bool _disposed = false;
 
+        /// <summary>
+        /// Marks the playlist items matching a failed video (same item, file or page URL) as failed and
+        /// returns them. They stay in the playlist: a failure can be temporary, and playback retries them next time.
+        /// </summary>
+        internal static List<VideoItem> MarkFailed(IEnumerable<VideoItem> playlist, VideoItem failed, string reason)
+        {
+            var path = failed.FilePath;
+            var originalUrl = failed.OriginalPageUrl;
+            var matches = playlist.Where(x =>
+                ReferenceEquals(x, failed) ||
+                string.Equals(x.FilePath, path, StringComparison.OrdinalIgnoreCase) ||
+                (!string.IsNullOrEmpty(originalUrl) && string.Equals(x.OriginalPageUrl, originalUrl, StringComparison.OrdinalIgnoreCase))
+            ).ToList();
+
+            foreach (var item in matches)
+                item.PlaybackError = string.IsNullOrWhiteSpace(reason) ? "Playback failed" : reason;
+
+            return matches;
+        }
+
         private void VideoService_MediaErrorOccurred(object sender, MediaErrorEventArgs e)
         {
             Application.Current?.Dispatcher.InvokeAsync(() =>
@@ -1850,36 +1884,18 @@ namespace EdgeLoop.ViewModels
                 Logger.Debug($"[Launcher] Media error received: {e.ErrorMessage} (Item: {e.Item?.FileName ?? "null"})");
                 SetStatusMessage(e.ErrorMessage, StatusMessageType.Error);
 
-                // Automatically remove failing items from the playlist
                 if (e.Item != null)
                 {
-                    var failingPath = e.Item.FilePath;
-                    var failingOriginalUrl = e.Item.OriginalPageUrl;
-
-                    // Match by reference OR by path (case-insensitive) to ensure robust removal
-                    var itemsToRemove = AddedFiles.Where(x =>
-                        ReferenceEquals(x, e.Item) ||
-                        string.Equals(x.FilePath, failingPath, StringComparison.OrdinalIgnoreCase) ||
-                        (!string.IsNullOrEmpty(failingOriginalUrl) && string.Equals(x.OriginalPageUrl, failingOriginalUrl, StringComparison.OrdinalIgnoreCase))
-                    ).ToList();
-
-                    if (itemsToRemove.Any())
+                    var failingItems = MarkFailed(AddedFiles, e.Item, e.ErrorMessage);
+                    if (failingItems.Count > 0)
                     {
-                        Logger.Debug($"[Launcher] Automatically removing {itemsToRemove.Count} dead link(s) from playlist.");
-                        foreach (var item in itemsToRemove)
-                        {
-                            AddedFiles.Remove(item);
-                        }
-
-                        // Also notify other players/monitors to stop trying to play this item
-                        App.VideoService.RemoveItemsFromAllPlayers(itemsToRemove);
-
-                        UpdateButtons();
-                        SaveSession();
+                        // The items stay in the playlist; just stop the running players from trying them again this session
+                        Logger.Debug($"[Launcher] Marked {failingItems.Count} playlist item(s) as failed.");
+                        App.VideoService?.RemoveItemsFromAllPlayers(failingItems);
                     }
                     else
                     {
-                        Logger.Warning($"[Launcher] Media error for '{e.Item.FileName}' but could not find a matching item in AddedFiles to remove. Path: {failingPath}");
+                        Logger.Warning($"[Launcher] Media error for '{e.Item.FileName}' but no matching playlist item was found. Path: {e.Item.FilePath}");
                     }
                 }
             });

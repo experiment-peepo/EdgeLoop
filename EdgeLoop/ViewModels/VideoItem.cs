@@ -172,6 +172,23 @@ namespace EdgeLoop.ViewModels
             set => SetProperty(ref _validationError, value);
         }
 
+        private string _playbackError;
+        /// <summary>
+        /// Why this item failed to play in the current playback session, or null. Failed items stay in
+        /// the playlist (a failure can be temporary) and are retried the next time playback starts.
+        /// </summary>
+        public string PlaybackError
+        {
+            get => _playbackError;
+            set
+            {
+                if (SetProperty(ref _playbackError, value))
+                    OnPropertyChanged(nameof(PlaybackFailed));
+            }
+        }
+
+        public bool PlaybackFailed => !string.IsNullOrEmpty(PlaybackError);
+
         /// <summary>
         /// The original page URL with full path (including slug). Used for re-extraction when video URLs expire.
         /// </summary>

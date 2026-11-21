@@ -14,6 +14,7 @@ namespace EdgeLoop.Windows
         public SettingsWindow()
         {
             InitializeComponent();
+            EdgeLoop.Classes.DialogKeys.Attach(this, SaveButton, CancelButton, enterFromTextBoxes: false);
             _viewModel = new SettingsViewModel();
             _viewModel.RequestClose += (s, e) =>
             {
@@ -26,6 +27,32 @@ namespace EdgeLoop.Windows
                 this.Close();
             };
             DataContext = _viewModel;
+
+            SourceInitialized += (s, e) => FitToScreen();
+            SizeChanged += (s, e) => FitToScreen();
+        }
+
+        private const double ScreenMargin = 20;
+
+        /// <summary>
+        /// Caps the height to the screen's work area so the Save/Cancel footer stays visible and the
+        /// content scrolls, and moves the window up when expanding a section would push it off screen.
+        /// </summary>
+        private void FitToScreen()
+        {
+            var reference = Owner ?? this;
+            var handle = new System.Windows.Interop.WindowInteropHelper(reference).Handle;
+            if (handle == IntPtr.Zero) return;
+
+            var area = System.Windows.Forms.Screen.FromHandle(handle).WorkingArea;
+            var dpi = System.Windows.Media.VisualTreeHelper.GetDpi(reference);
+            double areaTop = area.Top / dpi.DpiScaleY;
+            double areaHeight = area.Height / dpi.DpiScaleY;
+
+            MaxHeight = Math.Max(200, areaHeight - 2 * ScreenMargin);
+
+            if (IsLoaded && ActualHeight > 0 && Top + ActualHeight > areaTop + areaHeight - ScreenMargin)
+                Top = Math.Max(areaTop + ScreenMargin, areaTop + areaHeight - ScreenMargin - ActualHeight);
         }
 
         private void Grid_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
