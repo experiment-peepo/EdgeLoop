@@ -57,7 +57,7 @@ namespace EdgeLoop.ViewModels
             _defaultOpacity = settings.DefaultOpacity;
             _defaultVolume = settings.DefaultVolume;
             _alwaysOpaque = settings.AlwaysOpaque;
-            _enableSuperResolution = settings.EnableSuperResolution;
+            _upscaling = !settings.EnableSuperResolution ? -1 : Math.Max(0, settings.SuperResolutionMaxHeight);
             _showPlaybackNotices = settings.ShowPlaybackNotices;
 
             // --- Library ---
@@ -213,7 +213,7 @@ namespace EdgeLoop.ViewModels
         {
             var values = new List<object>
             {
-                SelectedDefaultMonitor?.DeviceName, DefaultOpacity, DefaultVolume, AlwaysOpaque, EnableSuperResolution, ShowPlaybackNotices,
+                SelectedDefaultMonitor?.DeviceName, DefaultOpacity, DefaultVolume, AlwaysOpaque, Upscaling, ShowPlaybackNotices,
                 RememberLastPlaylist, RememberFilePosition, EnableLocalCaching, LocalCacheDirectory,
                 BrowserForCookies, CleanCookieString(HypnotubeCookies), CleanCookieString(IwaraCookies), CleanCookieString(Rule34VideoCookies),
                 StartWithWindows, EnableDiagnosticMode,
@@ -256,12 +256,19 @@ namespace EdgeLoop.ViewModels
             set => SetProperty(ref _alwaysOpaque, value);
         }
 
-        private bool _enableSuperResolution;
-        public bool EnableSuperResolution
+        private int _upscaling;
+        /// <summary>Upscaling: -1 off, otherwise the tallest video to upscale (0 = any). See <see cref="UpscalingSupport.Choices"/>.</summary>
+        public int Upscaling
         {
-            get => _enableSuperResolution;
-            set => SetProperty(ref _enableSuperResolution, value);
+            get => _upscaling;
+            set => SetProperty(ref _upscaling, value);
         }
+
+        public IEnumerable<KeyValuePair<int, string>> UpscalingChoices =>
+            UpscalingSupport.Choices.Select(c => new KeyValuePair<int, string>(c.MaxHeight, c.Label));
+
+        /// <summary>What upscaling does.</summary>
+        public string UpscalingDescription => UpscalingSupport.Description;
 
         private bool _showPlaybackNotices;
         /// <summary>A short notice on a screen when one of its videos can't be played.</summary>
@@ -643,7 +650,7 @@ namespace EdgeLoop.ViewModels
                     DefaultOpacity = defaults.DefaultOpacity;
                     DefaultVolume = defaults.DefaultVolume;
                     AlwaysOpaque = defaults.AlwaysOpaque;
-                    EnableSuperResolution = defaults.EnableSuperResolution;
+                    Upscaling = defaults.EnableSuperResolution ? Math.Max(0, defaults.SuperResolutionMaxHeight) : -1;
                     ShowPlaybackNotices = defaults.ShowPlaybackNotices;
                     break;
                 case SettingsSection.Library:
@@ -757,7 +764,8 @@ namespace EdgeLoop.ViewModels
             settings.DefaultOpacity = DefaultOpacity;
             settings.DefaultVolume = DefaultVolume;
             settings.AlwaysOpaque = AlwaysOpaque;
-            settings.EnableSuperResolution = EnableSuperResolution;
+            settings.EnableSuperResolution = Upscaling >= 0;
+            settings.SuperResolutionMaxHeight = Math.Max(0, Upscaling);
             settings.ShowPlaybackNotices = ShowPlaybackNotices;
 
             settings.RememberLastPlaylist = RememberLastPlaylist;

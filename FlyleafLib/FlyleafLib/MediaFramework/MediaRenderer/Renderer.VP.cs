@@ -141,6 +141,10 @@ public unsafe partial class Renderer
         if (Pano360._enabled)
             return canFL ? VideoProcessors.Flyleaf : VideoProcessors.SwsScale;
 
+        // Fork: shader upscaling runs in the Flyleaf processor, whichever one is preferred
+        if (ucfg.ShaderUpscaling && canFL)
+            return VideoProcessors.Flyleaf;
+
         if (PreferredVideoProcessor == VideoProcessors.D3D11 && canD3)
             return VideoProcessors.D3D11;
 
@@ -283,6 +287,8 @@ public unsafe partial class Renderer
         var oldVP       = VideoProcessor;
         var vpRequests  = VPRequestType.RotationFlip | VPRequestType.Crop | VPRequestType.UpdatePS | VPRequestType.UpdateSwapChain; // TBR: we should set them all here as we don't compare with previous states
         VideoProcessor = VPSelection();
+        if (VideoProcessor != oldVP)
+            UpscaleProcessorChanged(oldVP); // Fork
         isPQSpline = false;
         isDovi = false;
         DynamicRange = "SDR";

@@ -52,7 +52,7 @@
 
     <!-- Playback overlay -->
     <SolidColorBrush x:Key="VideoBackdropBrush" Color="#000000"/>        <!-- Behind the video -->
-    <Color x:Key="EnhancedColor">#00FF99</Color>                          <!-- "AI Enhanced" label -->
+    <Color x:Key="EnhancedColor">#00FF99</Color>                          <!-- Upscaling label -->
     <SolidColorBrush x:Key="EnhancedBrush" Color="{StaticResource EnhancedColor}"/>
 
     <!-- Playlist cards -->

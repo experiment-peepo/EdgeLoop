@@ -77,6 +77,30 @@ namespace EdgeLoop.Tests
         }
 
         [Fact]
+        public async Task ShaderUpscaling_UsesTheFlyleafProcessor_EvenWhenD3D11IsPreferred()
+        {
+            EnsureEngineStarted();
+
+            var config = new Config();
+            config.Playback.AutoPlay = false;
+            config.Video.ShaderUpscaling = true;
+            using var player = new Player(config);
+            player.Renderer.PreferredVideoProcessor = VideoProcessors.D3D11; // What EdgeLoop's players ask for
+
+            var opened = player.Open(SamplePath);
+            opened.Success.Should().BeTrue(opened.Error);
+
+            // The processor is chosen once frames are decoding
+            player.Play();
+            var deadline = DateTime.UtcNow.AddSeconds(10);
+            while (player.Renderer.VideoProcessor == VideoProcessors.Auto && DateTime.UtcNow < deadline)
+                await Task.Delay(50);
+            player.Stop();
+
+            player.Renderer.VideoProcessor.Should().Be(VideoProcessors.Flyleaf, "FSRCNNX runs in the Flyleaf processor's shaders");
+        }
+
+        [Fact]
         public void DurationProbe_ReadsTheClipsLength()
         {
             EnsureEngineStarted();

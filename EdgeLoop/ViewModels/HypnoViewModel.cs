@@ -527,7 +527,7 @@ namespace EdgeLoop.ViewModels
         public void RefreshSuperResolution()
         {
             if (_disposed || Player == null) return;
-            Player.Config.Video.SuperResolution = App.Settings?.EnableSuperResolution ?? false;
+            UpscalingSupport.Apply(Player.Config.Video, App.Settings);
         }
 
         private readonly IVideoUrlExtractor _urlExtractor;
@@ -554,8 +554,8 @@ namespace EdgeLoop.ViewModels
             // Tuned for responsiveness: 5s total buffer to handle 4K 100Mbps peaks.
             Config.Demuxer.BufferDuration = 50000000;
 
-            // Inject AI Super Resolution setting
-            Config.Video.SuperResolution = App.Settings?.EnableSuperResolution ?? false;
+            // Upscaling settings
+            UpscalingSupport.Apply(Config.Video, App.Settings);
             // Config.Video.ClearImage = true; // Property validation failed, using default ClearScreen=true
 
             // HLS / Streaming Optimizations for Speed & Stability
@@ -593,6 +593,8 @@ namespace EdgeLoop.ViewModels
             // Map Flyleaf events (Named handlers for safe unsubscription)
             Player.OpenCompleted += Player_OpenCompleted;
             Player.PropertyChanged += Player_PropertyChanged;
+            if (Player.Renderer != null)
+                Player.Renderer.PropertyChanged += Renderer_PropertyChanged;
 
             SkipCommand = new RelayCommand(_ => PlayNext(true));
             PreviousCommand = new RelayCommand(_ => PlayPrevious(true));
@@ -1667,6 +1669,35 @@ namespace EdgeLoop.ViewModels
             }
         }
 
+        private static readonly HashSet<string> UpscalingProperties = new()
+        {
+            nameof(FlyleafLib.MediaFramework.MediaRenderer.Renderer.ShaderUpscaling),
+            nameof(FlyleafLib.MediaFramework.MediaRenderer.Renderer.ShaderUpscalingIdleReason),
+            nameof(FlyleafLib.MediaFramework.MediaRenderer.Renderer.UpscaledSize),
+            nameof(FlyleafLib.MediaFramework.MediaRenderer.Renderer.UpscalingMs)
+        };
+
+        /// <summary>The overlay's upscaling line: to what size, at what GPU cost, or why it isn't running. Null when it's off.</summary>
+        public string UpscalingStatus { get; private set; }
+
+        private void Renderer_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
+        {
+            if (!_disposed && UpscalingProperties.Contains(e.PropertyName))
+                RefreshUpscalingStatus();
+        }
+
+        internal void RefreshUpscalingStatus()
+        {
+            var renderer = Player?.Renderer;
+            if (renderer == null) return;
+
+            var status = UpscalingSupport.Status(renderer.ShaderUpscaling, renderer.UpscaledSize, renderer.UpscalingMs, renderer.ShaderUpscalingIdleReason);
+            if (status == UpscalingStatus) return;
+
+            UpscalingStatus = status;
+            OnPropertyChanged(nameof(UpscalingStatus));
+        }
+
         private void Player_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             if (_disposed) return;
@@ -2348,6 +2379,8 @@ namespace EdgeLoop.ViewModels
                 {
                     Player.OpenCompleted -= Player_OpenCompleted;
                     Player.PropertyChanged -= Player_PropertyChanged;
+                    if (Player.Renderer != null)
+                        Player.Renderer.PropertyChanged -= Renderer_PropertyChanged;
 
                     Player.Dispose();
                     Logger.Debug("[HypnoViewModel] Player disposed successfully");

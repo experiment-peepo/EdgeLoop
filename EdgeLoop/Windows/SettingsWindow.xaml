@@ -121,8 +121,10 @@
                         <CheckBox IsChecked="{Binding AlwaysOpaque}"/>
                     </controls:SettingRow>
 
-                    <controls:SettingRow Header="AI upscaling" Description="Sharper video with NVIDIA RTX Video or Intel XeSS, if your graphics card supports it">
-                        <CheckBox IsChecked="{Binding EnableSuperResolution}"/>
+                    <controls:SettingRow Header="Upscaling" Description="{Binding UpscalingDescription}">
+                        <ComboBox Width="190" ItemsSource="{Binding UpscalingChoices}" DisplayMemberPath="Value" SelectedValuePath="Key"
+                                  SelectedValue="{Binding Upscaling}"
+                                  ToolTip="Only videos smaller than the screen are upscaled"/>
                     </controls:SettingRow>
 
                     <controls:SettingRow Header="Notices when a video can't play" Description="A short message in the corner of that screen, which fades after a few seconds">

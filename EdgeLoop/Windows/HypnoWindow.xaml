@@ -71,9 +71,8 @@
                            Visibility="{Binding Player.Stats, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                 <TextBlock Text="{Binding Resolution, StringFormat='Res: {0}'}" FontSize="10" Foreground="{StaticResource TextPrimary}"
                            Visibility="{Binding Player.Stats, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                <TextBlock Text="✦ AI Enhanced" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource EnhancedBrush}" 
-                           Visibility="{Binding Player.Renderer.SuperResolution, Converter={StaticResource BooleanToVisibilityConverter}}"
-                           Margin="0,2,0,0">
+                <TextBlock Text="{Binding UpscalingStatus}" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource EnhancedBrush}" Margin="0,2,0,0"
+                           Visibility="{Binding UpscalingStatus, Converter={StaticResource StringToVisibilityConverter}}">
                     <TextBlock.Effect>
                         <DropShadowEffect Color="{StaticResource EnhancedColor}" BlurRadius="4" ShadowDepth="0" Opacity="0.5"/>
                     </TextBlock.Effect>

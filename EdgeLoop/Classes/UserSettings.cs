@@ -109,6 +109,9 @@ namespace EdgeLoop.Classes
         public virtual bool ShowPlaybackNotices { get; set; } = true;
         public virtual bool EnableSuperResolution { get; set; } = false;
 
+        /// <summary>Only upscale videos up to this many lines tall (720, 1080); 0 means any size.</summary>
+        public virtual int SuperResolutionMaxHeight { get; set; } = 0;
+
         // Local Censor Settings
         //
         // Screen-capture censoring tools detect on the composited desktop, which

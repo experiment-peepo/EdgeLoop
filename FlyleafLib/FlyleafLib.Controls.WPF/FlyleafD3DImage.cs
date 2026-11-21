@@ -96,17 +96,20 @@ public class FlyleafD3DImage : Image, IDisposable
                 return;
             lastFrameCount = manager.FrameCount;
 
+            // Fork: in the screen's real pixels, not WPF's scaled units, so video on a 150% 4K screen is
+            // drawn at 3840x2160 rather than drawn at 2560x1440 and stretched by WPF
             var control = this;
-            int width  = (int)control.ActualWidth;
-            int height = (int)control.ActualHeight;
+            var dpi = VisualTreeHelper.GetDpi(control);
+            int width  = (int)Math.Round(control.ActualWidth * dpi.DpiScaleX);
+            int height = (int)Math.Round(control.ActualHeight * dpi.DpiScaleY);
 
             if (width <= 0 || height <= 0)
             {
                 var window = Window.GetWindow(control);
                 if (window != null && window.ActualWidth > 0 && window.ActualHeight > 0)
                 {
-                    width = (int)window.ActualWidth;
-                    height = (int)window.ActualHeight;
+                    width = (int)Math.Round(window.ActualWidth * dpi.DpiScaleX);
+                    height = (int)Math.Round(window.ActualHeight * dpi.DpiScaleY);
                 }
                 else
                 {

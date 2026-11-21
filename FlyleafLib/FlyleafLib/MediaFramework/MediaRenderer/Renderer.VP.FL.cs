@@ -500,7 +500,9 @@ public unsafe partial class Renderer
         if (surface != null)
             context.OMSetRenderTargets(target);
 
-        context.Draw(6, 0);
+        // Fork: shader upscaling draws it doubled when enabled and worth it
+        if (!FLUpscaleDraw(frame, target))
+            context.Draw(6, 0);
 
         if (surface != null)
         {
@@ -542,6 +544,8 @@ public unsafe partial class Renderer
         SwsDispose();
         SubsDispose();
         FLHDRDispose();
+        FLUpscaleDispose();
+        upFailed = false;
 
         if (snapshot != null)
         {

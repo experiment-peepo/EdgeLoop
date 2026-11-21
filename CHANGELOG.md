@@ -2,6 +2,7 @@
 
 ### Changed
 - **Playback engine**: Updated the bundled FlyleafLib to v3.12 with FFmpeg 9.
+- **Upscaling**: Videos smaller than the screen are upscaled by EdgeLoop's own FSRCNNX shader, on every screen at once and on any graphics card. The NVIDIA and Intel driver upscalers are no longer used: they upscale only one video at a time and need the driver's own setting. Settings can limit upscaling to videos up to 720p or 1080p.
 - **One look across the app**: Every window shares the same title bar, with the Windows shadow, snapping and (on Windows 11) rounded corners. Colours, fonts and controls come from one theme; buttons, check boxes and sliders can be reached with Tab and show a focus ring.
 - **Launcher**: The playlist only builds the cards on screen, so large playlists stay fast. Cards show each video's length and PLAYING / FAILED / MISSING / CACHED badges. Removing videos, Clear and the new "Remove failed" offer Undo. Delete removes the selected card and Alt+Up/Down moves it. Start explains why it's disabled, and Now Playing has a Previous button.
 - **Settings**: Sections in a sidebar, a "click and press keys" hotkey recorder that flags duplicates, skip keys for each screen with an "Identify screens" button, hidden cookie fields, Reset to defaults per section, and a prompt before discarding unsaved changes.

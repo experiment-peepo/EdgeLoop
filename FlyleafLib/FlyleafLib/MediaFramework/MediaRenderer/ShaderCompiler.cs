@@ -1,6 +1,7 @@
 ﻿using System.Buffers;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 using Vortice.D3DCompiler;
@@ -160,6 +161,48 @@ internal static partial class ShaderCompiler
 #endif
 
             psError.Dispose();
+        }
+
+        return shaderBlob;
+    }
+
+    static Task<Blob[]> fsrcnnxBlobs;
+
+    /// <summary>
+    /// Fork: the FSRCNNX compute shaders, compiled once per process on a worker thread (they're large and take a
+    /// moment). Video draws normally until the task completes; it faults if any pass fails to compile.
+    /// </summary>
+    internal static Task<Blob[]> FSRCNNXBlobs()
+    {
+        lock (cache)
+            return fsrcnnxBlobs ??= Task.Run(() =>
+            {
+                var watch = Stopwatch.StartNew();
+                var blobs = new Blob[FSRCNNXPasses.Length];
+                Parallel.For(0, blobs.Length, i => blobs[i] = CompileCS(FSRCNNXPass(i), $"FSRCNNX pass {i + 1}"));
+                if (blobs.Any(b => b == null))
+                    throw new InvalidOperationException("FSRCNNX failed to compile");
+                LogInfo($"Compiled FSRCNNX in {watch.ElapsedMilliseconds} ms");
+                return blobs;
+            });
+    }
+
+    /// <summary>Fork: compiles a compute shader (cs_5_0, Direct3D 11.0 hardware). Null if it doesn't compile.</summary>
+    internal static unsafe Blob CompileCS(ReadOnlySpan<byte> hlsl, string name)
+    {
+        Compiler.Compile(hlsl, null, null, MAIN, null, "cs_5_0", ShaderFlags.OptimizationLevel3, out var shaderBlob, out var error);
+
+        if (error != null)
+        {
+            if (error.BufferPointer != IntPtr.Zero)
+            {
+                string message = BytePtrToStringUTF8((byte*)error.BufferPointer);
+                if (shaderBlob == null)
+                    LogError($"{name}: {message}");
+                else if (CanDebug)
+                    LogDebug($"{name}: {message}");
+            }
+            error.Dispose();
         }
 
         return shaderBlob;

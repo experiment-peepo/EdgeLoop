@@ -564,7 +564,7 @@ namespace EdgeLoop.Classes
         }
 
         /// <summary>
-        /// Refreshes the Super Resolution setting of all players
+        /// Refreshes the upscaling settings of all players
         /// </summary>
         public void RefreshAllSuperResolution()
         {

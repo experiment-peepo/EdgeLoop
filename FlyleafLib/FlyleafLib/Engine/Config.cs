@@ -567,6 +567,14 @@ public class Config : NotifyPropertyChanged
         public bool SuperResolution { get => _SuperResolution; set { if (Set(ref _SuperResolution, value)) player?.Renderer?.VPRequest(VPRequestType.Viewport); } }
         internal bool _SuperResolution;
 
+        /// <summary>Fork: doubles enlarged SDR video with the FSRCNNX shader before scaling it, on any Direct3D 11 GPU. Uses the Flyleaf processor. <see cref="Renderer.ShaderUpscaling"/> reports renderer state.</summary>
+        public bool ShaderUpscaling { get => _ShaderUpscaling; set { if (Set(ref _ShaderUpscaling, value)) player?.Renderer?.VPSwitchCheck(); } }
+        internal bool _ShaderUpscaling;
+
+        /// <summary>Fork: shader upscaling only runs on video up to this many lines tall (e.g. 1080). Zero means any size.</summary>
+        public int ShaderUpscalingMaxHeight { get => _ShaderUpscalingMaxHeight; set => Set(ref _ShaderUpscalingMaxHeight, value); }
+        internal int _ShaderUpscalingMaxHeight;
+
         /// <summary>Requests hardware video decoding on decoder setup. <see cref="MediaPlayer.Video.HWAcceleration"/> reports the effective result.</summary>
         public bool HWAcceleration { get; set; } = true;
         /// <summary>Toggles the saved hardware decoding preference for the next decoder setup.</summary>
