@@ -75,6 +75,18 @@ namespace EdgeLoop.Tests
             element.UpdateLayout();
         }
 
+        /// <summary>
+        /// Lays out a window that was never shown. WPF skips layout for a hidden window, so this lays out
+        /// the root of its template instead, which builds everything inside.
+        /// </summary>
+        private static void LayoutWindow(Window window, double width, double height)
+        {
+            new WindowInteropHelper(window).EnsureHandle();
+            window.ApplyTemplate();
+            var root = (FrameworkElement)VisualTreeHelper.GetChild(window, 0);
+            Layout(root, width, height);
+        }
+
         [Fact]
         public void EveryThemeResource_Loads()
         {
@@ -160,15 +172,46 @@ namespace EdgeLoop.Tests
                 try
                 {
                     // A real (hidden) window handle, so SourceInitialized and the chrome code run; never shown
-                    new WindowInteropHelper(window).EnsureHandle();
-                    window.ApplyTemplate();
-                    Layout(window, 520, 700);
+                    LayoutWindow(window, 520, 700);
 
                     window.Should().BeAssignableTo<Controls.EdgeLoopWindow>();
                     window.AllowsTransparency.Should().BeFalse("layered windows lose the system shadow and snapping");
                     window.Template.FindName("CloseButton", window).Should().BeOfType<Button>();
                     var maximize = window.Template.FindName("MaximizeButton", window).Should().BeOfType<Button>().Subject;
                     maximize.Visibility.Should().Be(Visibility.Collapsed, "dialogs can't be maximized");
+                }
+                finally
+                {
+                    window.Close();
+                }
+            });
+        }
+
+        [Fact]
+        public void Launcher_BuildsOnlyTheVisibleCards()
+        {
+            WpfApp.Run(() =>
+            {
+                MockSettings.Object.RememberLastPlaylist = false;
+                ServiceContainer.Register(new VideoPlayerService());
+                var window = new LauncherWindow();
+                try
+                {
+                    var launcher = (ViewModels.LauncherViewModel)window.DataContext;
+                    var screen = launcher.AvailableScreens.First(s => !s.IsAllScreens);
+                    for (int i = 0; i < 200; i++)
+                        launcher.AddedFiles.Add(new ViewModels.VideoItem($@"C:\Videos\clip{i}.mp4", screen) { Duration = TimeSpan.FromSeconds(65) });
+
+                    LayoutWindow(window, 700, 750);
+
+                    window.Template.FindName("MaximizeButton", window).Should().BeOfType<Button>()
+                        .Which.Visibility.Should().Be(Visibility.Visible, "the launcher can be maximized");
+
+                    var playlist = (ListView)window.FindName("AddedFilesList");
+                    int built = Enumerable.Range(0, launcher.AddedFiles.Count)
+                        .Count(i => playlist.ItemContainerGenerator.ContainerFromIndex(i) != null);
+                    built.Should().BeInRange(1, 20, "the playlist is virtualized: only cards on screen exist");
+                    launcher.StartHint.Should().Be("Start playback on the assigned screens");
                 }
                 finally
                 {

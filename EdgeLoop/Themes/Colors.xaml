@@ -48,6 +48,13 @@
     <SolidColorBrush x:Key="TrackBrush" Color="#30FFFFFF"/>              <!-- Progress bar background -->
     <SolidColorBrush x:Key="ScrollbarThumb" Color="#66FF1493"/>
     <SolidColorBrush x:Key="ScrollbarThumbHover" Color="#CCFF1493"/>
+    <SolidColorBrush x:Key="SliderTickBrush" Color="#B3FF1493"/>        <!-- Dashes along a slider track -->
+
+    <!-- Playlist cards -->
+    <SolidColorBrush x:Key="CardHoverBorderBrush" Color="#99FF69B4"/>
+    <SolidColorBrush x:Key="CardFailedBorderBrush" Color="#99FF4444"/>
+    <SolidColorBrush x:Key="CardMissingBorderBrush" Color="#99FFD700"/>
+    <SolidColorBrush x:Key="BadgeDarkTextBrush" Color="{StaticResource SurfaceColor}"/>  <!-- Text on light badges -->
 
     <!-- Status banner: a tinted background and a readable text colour per message type -->
     <SolidColorBrush x:Key="InfoBannerBrush" Color="#26FFB6D9"/>

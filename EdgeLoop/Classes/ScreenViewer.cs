@@ -56,6 +56,21 @@ namespace EdgeLoop.Classes
         public override bool Equals(object obj) => obj is ScreenViewer other && other.DeviceName == this.DeviceName;
         public override int GetHashCode() => DeviceName?.GetHashCode() ?? 0;
 
+        /// <summary>"Screen 2", or "All monitors". The number matches Windows' display number.</summary>
+        public string DisplayName => IsAllScreens ? "All monitors" : $"Screen {ScreenIndex}";
+
+        /// <summary>"2560×1440 · Primary", or what "All monitors" does.</summary>
+        public string Details
+        {
+            get
+            {
+                if (IsAllScreens) return "Every screen, in sync";
+                var bounds = Screen?.Bounds;
+                var resolution = bounds.HasValue ? $"{bounds.Value.Width}×{bounds.Value.Height}" : "Unknown size";
+                return Screen?.Primary == true ? $"{resolution} · Primary" : resolution;
+            }
+        }
+
         public override string ToString()
         {
             if (IsAllScreens) return "All Monitors";

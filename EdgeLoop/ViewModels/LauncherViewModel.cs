@@ -38,6 +38,17 @@ namespace EdgeLoop.ViewModels
 
         public bool HasActivePlayers => ActivePlayers.Count > 0;
 
+        /// <summary>Playlist entries that failed to play in this playback session.</summary>
+        public int FailedCount => AddedFiles.Count(f => f.PlaybackFailed);
+
+        private string _startHint = "Add videos first";
+        /// <summary>What Start will do, or why it's disabled. Shown as the button's tooltip.</summary>
+        public string StartHint
+        {
+            get => _startHint;
+            private set => SetProperty(ref _startHint, value);
+        }
+
         private Random random = new Random();
 
         public bool Shuffle
@@ -57,31 +68,12 @@ namespace EdgeLoop.ViewModels
             }
         }
 
-        private string _hypnotizeButtonText = "TRAIN ME!";
-        public string HypnotizeButtonText
-        {
-            get => _hypnotizeButtonText;
-            set => SetProperty(ref _hypnotizeButtonText, value);
-        }
-
         private bool _isHypnotizeEnabled;
         public bool IsHypnotizeEnabled
         {
             get => _isHypnotizeEnabled;
             set => SetProperty(ref _isHypnotizeEnabled, value);
         }
-
-        private bool _isDehypnotizeEnabled;
-        public bool IsDehypnotizeEnabled
-        {
-            get => _isDehypnotizeEnabled;
-            set => SetProperty(ref _isDehypnotizeEnabled, value);
-        }
-
-
-
-
-
 
         private bool _allFilesAssigned = false;
         private readonly StatusBanner _status = new StatusBanner();
@@ -90,6 +82,9 @@ namespace EdgeLoop.ViewModels
         private string _importProgressText;
 
         public string StatusMessage => _status.Message;
+
+        /// <summary>Label of the status message's button (e.g. "Undo"), or null.</summary>
+        public string StatusActionText => _status.ActionText;
 
         public double ImportProgressValue
         {
@@ -128,15 +123,13 @@ namespace EdgeLoop.ViewModels
         public ICommand DehypnotizeCommand { get; }
 
         public ICommand BrowseCommand { get; }
-        public ICommand AddUrlCommand { get; }
-        public ICommand ImportPlaylistCommand { get; }
         public ICommand AddUrlOrPlaylistCommand { get; }
-        public ICommand RemoveSelectedCommand { get; }
         public ICommand ClearAllCommand { get; }
         public ICommand ExitCommand { get; }
-        public ICommand MinimizeCommand { get; }
         public ICommand CancelImportCommand { get; }
         public ICommand DismissStatusCommand { get; }
+        public ICommand StatusActionCommand { get; }
+        public ICommand RemoveFailedCommand { get; }
 
         private System.Windows.Threading.DispatcherTimer _saveTimer;
         private CancellationTokenSource _cancellationTokenSource;
@@ -149,8 +142,12 @@ namespace EdgeLoop.ViewModels
         public LauncherViewModel()
         {
             _status.IsBusy = () => IsLoading;
-            _status.PropertyChanged += (s, e) =>
-                OnPropertyChanged(e.PropertyName == nameof(StatusBanner.Message) ? nameof(StatusMessage) : nameof(StatusMessageType));
+            _status.PropertyChanged += (s, e) => OnPropertyChanged(e.PropertyName switch
+            {
+                nameof(StatusBanner.Message) => nameof(StatusMessage),
+                nameof(StatusBanner.ActionText) => nameof(StatusActionText),
+                _ => nameof(StatusMessageType)
+            });
 
             _cancellationTokenSource = new CancellationTokenSource();
             _urlExtractor = App.UrlExtractor ?? new VideoUrlExtractor();
@@ -161,17 +158,15 @@ namespace EdgeLoop.ViewModels
             DehypnotizeCommand = new RelayCommand(Dehypnotize);
 
             BrowseCommand = new RelayCommand(Browse);
-            AddUrlCommand = new RelayCommand(AddUrl);
-            ImportPlaylistCommand = new RelayCommand(ImportPlaylist);
             AddUrlOrPlaylistCommand = new RelayCommand(AddUrlOrPlaylist);
-            RemoveSelectedCommand = new RelayCommand(RemoveSelected);
             RemoveItemCommand = new RelayCommand(RemoveItem);
             ClearAllCommand = new RelayCommand(ClearAll);
             DismissStatusCommand = new RelayCommand(_ => SetStatusMessage(null));
+            StatusActionCommand = new RelayCommand(_ => _status.RunAction());
+            RemoveFailedCommand = new RelayCommand(RemoveFailed, _ => FailedCount > 0);
             SavePlaylistCommand = new RelayCommand(SavePlaylist);
             LoadPlaylistCommand = new RelayCommand(LoadPlaylist);
             ExitCommand = new RelayCommand(Exit);
-            MinimizeCommand = new RelayCommand(Minimize);
             CancelImportCommand = new RelayCommand(CancelImport);
 
             // Subscribe to media events
@@ -227,18 +222,16 @@ namespace EdgeLoop.ViewModels
                 if (e.NewItems != null)
                 {
                     foreach (VideoItem item in e.NewItems)
-                    {
                         item.PropertyChanged += VideoItem_PropertyChanged;
-                        // Track assignment status incrementally
-                        if (item.AssignedScreen == null) _allFilesAssigned = false;
-                    }
+                    DurationProbe.Shared.Request(e.NewItems.Cast<VideoItem>());
                 }
                 if (e.OldItems != null)
                 {
                     foreach (VideoItem item in e.OldItems) item.PropertyChanged -= VideoItem_PropertyChanged;
                 }
-                // Recalculate assignment status when collection changes
-                UpdateAllFilesAssigned();
+                // Bulk changes re-check the playlist once, when they finish
+                if (_bulkChangeDepth == 0)
+                    OnPlaylistChanged();
             };
             foreach (var item in AddedFiles) item.PropertyChanged += VideoItem_PropertyChanged;
             UpdateAllFilesAssigned();
@@ -258,6 +251,16 @@ namespace EdgeLoop.ViewModels
 
         private void VideoItem_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
+            if (e.PropertyName == nameof(VideoItem.PlaybackFailed))
+            {
+                OnPropertyChanged(nameof(FailedCount));
+                CommandManager.InvalidateRequerySuggested();
+            }
+            else if (e.PropertyName == nameof(VideoItem.Duration))
+            {
+                TriggerDebouncedSave(); // Streams learn their length while playing; keep it for next time
+            }
+
             if (e.PropertyName == nameof(VideoItem.Opacity) || e.PropertyName == nameof(VideoItem.Volume) || e.PropertyName == nameof(VideoItem.AssignedScreen))
             {
                 TriggerDebouncedSave();
@@ -291,15 +294,104 @@ namespace EdgeLoop.ViewModels
         private void RemoveItem(object parameter)
         {
             if (parameter is VideoItem item)
+                RemoveItems(new[] { item }, $"Removed \u201C{item.FileName}\u201D");
+        }
+
+        /// <summary>
+        /// Removes items from the playlist and from any running players, then offers Undo in the status bar.
+        /// </summary>
+        private void RemoveItems(IReadOnlyCollection<VideoItem> items, string message)
+        {
+            var removed = items
+                .Select(item => (Item: item, Index: AddedFiles.IndexOf(item)))
+                .Where(r => r.Index >= 0)
+                .OrderBy(r => r.Index)
+                .ToList();
+            if (removed.Count == 0) return;
+
+            using (BeginBulkChange())
             {
-                AddedFiles.Remove(item);
-
-                // CRITICAL: Notify active players to remove this from their queues
-                App.VideoService.RemoveItemsFromAllPlayers(new[] { item });
-
-                UpdateButtons();
-                SaveSession();
+                foreach (var r in removed)
+                    AddedFiles.Remove(r.Item);
             }
+
+            // CRITICAL: Notify active players to remove these from their queues
+            App.VideoService.RemoveItemsFromAllPlayers(removed.Select(r => r.Item).ToList());
+
+            UpdateButtons();
+            SaveSession();
+            _status.Show(message, StatusMessageType.Info, "Undo", () => RestoreItems(removed));
+        }
+
+        private void RestoreItems(List<(VideoItem Item, int Index)> removed)
+        {
+            using (BeginBulkChange())
+            {
+                // In ascending order, inserting each at its old index rebuilds the original order
+                foreach (var (item, index) in removed)
+                    AddedFiles.Insert(Math.Min(index, AddedFiles.Count), item);
+            }
+
+            UpdateButtons();
+            SaveSession();
+            SetStatusMessage(removed.Count == 1 ? "Restored 1 video" : $"Restored {removed.Count} videos", StatusMessageType.Success);
+        }
+
+        private void RemoveFailed(object obj)
+        {
+            var failed = AddedFiles.Where(f => f.PlaybackFailed).ToList();
+            if (failed.Count > 0)
+                RemoveItems(failed, failed.Count == 1 ? "Removed 1 video that failed to play" : $"Removed {failed.Count} videos that failed to play");
+        }
+
+        private int _bulkChangeDepth;
+
+        /// <summary>
+        /// While open, adding or removing items doesn't re-check the whole playlist (and every button)
+        /// after each item; it's checked once when the last scope closes.
+        /// </summary>
+        private IDisposable BeginBulkChange()
+        {
+            _bulkChangeDepth++;
+            return new ScopeExit(() =>
+            {
+                if (--_bulkChangeDepth == 0)
+                    OnPlaylistChanged();
+            });
+        }
+
+        private sealed class ScopeExit(Action onExit) : IDisposable
+        {
+            private Action _onExit = onExit;
+            public void Dispose() => Interlocked.Exchange(ref _onExit, null)?.Invoke();
+        }
+
+        private void OnPlaylistChanged()
+        {
+            UpdateAllFilesAssigned();
+            OnPropertyChanged(nameof(FailedCount));
+        }
+
+        /// <summary>Moves an item one place up (-1) or down (+1), as Alt+Up/Down do.</summary>
+        public bool MoveVideoItemBy(VideoItem item, int offset)
+        {
+            int index = AddedFiles.IndexOf(item);
+            int target = index + offset;
+            if (index < 0 || target < 0 || target >= AddedFiles.Count) return false;
+            MoveVideoItem(item, target);
+            return true;
+        }
+
+        /// <summary>
+        /// The index an item dragged from <paramref name="oldIndex"/> moves to when dropped before
+        /// (or <paramref name="after"/>) the item at <paramref name="targetIndex"/>.
+        /// </summary>
+        internal static int DropIndex(int oldIndex, int targetIndex, bool after, int count)
+        {
+            int destination = targetIndex;
+            if (after && oldIndex > targetIndex) destination++;
+            else if (!after && oldIndex < targetIndex) destination--;
+            return Math.Clamp(destination, 0, Math.Max(0, count - 1));
         }
 
         private List<ScreenViewer> _cachedScreens;
@@ -439,6 +531,9 @@ namespace EdgeLoop.ViewModels
         {
             bool hasFiles = AddedFiles.Count > 0;
             IsHypnotizeEnabled = hasFiles && _allFilesAssigned;
+            StartHint = !hasFiles ? "Add videos first"
+                : !_allFilesAssigned ? "Choose a screen for every video first"
+                : "Start playback on the assigned screens";
 
             // Force re-evaluation of command CanExecute states
             System.Windows.Input.CommandManager.InvalidateRequerySuggested();
@@ -489,14 +584,6 @@ namespace EdgeLoop.ViewModels
                         Application.Current?.Dispatcher.InvokeAsync(() =>
                         {
                             SetStatusMessage($"Error starting playback: {ex?.Message ?? "Unknown error"}", StatusMessageType.Error);
-                        });
-                    }
-                    else
-                    {
-                        Application.Current?.Dispatcher.InvokeAsync(() =>
-                        {
-                            IsDehypnotizeEnabled = true;
-
                         });
                     }
                 }, TaskContinuationOptions.ExecuteSynchronously);
@@ -584,8 +671,6 @@ namespace EdgeLoop.ViewModels
 
         private void Dehypnotize(object obj)
         {
-            IsDehypnotizeEnabled = false;
-
             App.VideoService.StopAll();
         }
 
@@ -622,48 +707,6 @@ namespace EdgeLoop.ViewModels
             if (dlg.ShowDialog() == true)
             {
                 await AddFilesAsync(dlg.FileNames, BeginImport());
-            }
-        }
-
-        private void AddUrl(object obj)
-        {
-            _ = AddUrlAsync().ContinueWith(task =>
-            {
-                if (task.IsFaulted)
-                {
-                    var ex = task.Exception?.GetBaseException() ?? task.Exception;
-                    Logger.Error("Error in AddUrl operation", ex);
-                    Application.Current?.Dispatcher.InvokeAsync(() =>
-                    {
-                        SetStatusMessage($"Error adding URL: {ex?.Message ?? "Unknown error"}", StatusMessageType.Error);
-                    });
-                }
-            }, TaskContinuationOptions.OnlyOnFaulted);
-        }
-
-        private const string SupportedSitesNote = "Supported: Hypnotube, Iwara, PMVHaven, Rule34Video";
-
-        private async Task AddUrlAsync()
-        {
-            try
-            {
-                var inputUrl = DialogService.Prompt("Add video URL", "Video URL",
-                    hint: "https://", note: SupportedSitesNote);
-                if (string.IsNullOrWhiteSpace(inputUrl))
-                    return;
-
-                // Show the busy overlay only once there is work to do, not behind the input dialog
-                IsLoading = true;
-                await ProcessUrlAsync(inputUrl.Trim(), BeginImport());
-            }
-            catch (Exception ex)
-            {
-                Logger.Error("Error in AddUrlAsync", ex);
-                SetStatusMessage($"Error adding URL: {ex.Message}", StatusMessageType.Error);
-            }
-            finally
-            {
-                EndImport();
             }
         }
 
@@ -833,7 +876,8 @@ namespace EdgeLoop.ViewModels
                             OriginalPageUrl = item.OriginalPageUrl,
                             Opacity = item.Opacity,
                             Volume = item.Volume,
-                            ScreenDeviceName = item.AssignedScreen?.Screen?.DeviceName
+                            ScreenDeviceName = item.AssignedScreen?.Screen?.DeviceName,
+                            DurationSeconds = item.Duration?.TotalSeconds
                         }).ToList()
                     };
                     var json = JsonSerializer.Serialize(playlist, new JsonSerializerOptions { WriteIndented = true });
@@ -900,7 +944,8 @@ namespace EdgeLoop.ViewModels
                                 Title = pi.Title,
                                 OriginalPageUrl = pi.OriginalPageUrl,
                                 Opacity = pi.Opacity,
-                                Volume = pi.Volume
+                                Volume = pi.Volume,
+                                Duration = pi.Duration
                             };
 
                             if (!string.IsNullOrEmpty(pi.ScreenDeviceName))
@@ -918,9 +963,10 @@ namespace EdgeLoop.ViewModels
 
                 if (itemsToLoad.Count > 0)
                 {
-                    foreach (var item in itemsToLoad)
+                    using (BeginBulkChange())
                     {
-                        AddedFiles.Add(item);
+                        foreach (var item in itemsToLoad)
+                            AddedFiles.Add(item);
                     }
                     SetStatusMessage($"Loaded {itemsToLoad.Count} items from playlist", StatusMessageType.Success);
                     UpdateButtons();
@@ -942,136 +988,7 @@ namespace EdgeLoop.ViewModels
             }
         }
 
-        private void ImportPlaylist(object obj)
-        {
-            _ = ImportPlaylistAsync().ContinueWith(task =>
-            {
-                if (task.IsFaulted)
-                {
-                    var ex = task.Exception?.GetBaseException() ?? task.Exception;
-                    Logger.Error("Error in ImportPlaylist operation", ex);
-                    Application.Current?.Dispatcher.InvokeAsync(() =>
-                    {
-                        SetStatusMessage($"Error importing playlist: {ex?.Message ?? "Unknown error"}", StatusMessageType.Error);
-                    });
-                }
-            }, TaskContinuationOptions.OnlyOnFaulted);
-        }
-
-        private async Task ImportPlaylistAsync()
-        {
-            try
-            {
-                var playlistUrl = DialogService.Prompt("Import playlist", "Playlist URL",
-                    hint: "https://", note: "A playlist or collection page from a supported site");
-                if (string.IsNullOrWhiteSpace(playlistUrl))
-                    return;
-
-                // Show the busy overlay only once there is work to do, not behind the input dialog
-                IsLoading = true;
-                var importToken = BeginImport();
-                var trimmedUrl = playlistUrl.Trim();
-
-                // Validate URL
-                if (!FileValidator.IsValidUrl(trimmedUrl))
-                {
-                    SetStatusMessage("Invalid playlist URL", StatusMessageType.Error);
-                    IsLoading = false;
-                    return;
-                }
-
-                // Handle Ambiguous URLs (e.g. YouTube v= and list=)
-                ImportMode importMode = PromptForAmbiguityIfRequired(trimmedUrl);
-                if (importMode == (ImportMode)(-1))
-                {
-                    IsLoading = false;
-                    return;
-                }
-
-                ShowImportProgress("Importing playlist...");
-
-                // Import playlist with progress updates
-                var videoItems = await _playlistImporter.ImportPlaylistAsync(
-                    trimmedUrl,
-                    (c, t) =>
-                    {
-                        Application.Current?.Dispatcher.InvokeAsync(() =>
-                            ShowImportProgress($"Importing playlist... {c} of {t} videos", c, t));
-                    },
-                    importToken,
-                    importMode
-                );
-
-                if (videoItems == null || videoItems.Count == 0)
-                {
-                    SetStatusMessage("No videos found in playlist", StatusMessageType.Warning);
-                    IsLoading = false;
-                    return;
-                }
-
-                // Ensure screens are up to date
-                if (AvailableScreens.Count == 0) RefreshScreens();
-                var defaultScreen = GetDefaultScreen();
-
-                // Check for duplicates and add items
-                var existingPaths = new HashSet<string>(AddedFiles.Select(x =>
-                    x.IsUrl ? FileValidator.NormalizeUrl(x.FilePath) : x.FilePath),
-                    StringComparer.OrdinalIgnoreCase);
-
-                var settings = App.Settings;
-                int addedCount = 0;
-                int skippedCount = 0;
-
-                foreach (var item in videoItems)
-                {
-                    var normalizedUrl = item.IsUrl ? FileValidator.NormalizeUrl(item.FilePath) : item.FilePath;
-
-                    // CRITICAL: Ensure OriginalPageUrl is set if it's a page URL and not already set
-                    if (item.IsUrl && string.IsNullOrEmpty(item.OriginalPageUrl) && FileValidator.IsPageUrl(item.FilePath))
-                    {
-                        item.OriginalPageUrl = item.FilePath;
-                    }
-                    if (existingPaths.Contains(normalizedUrl))
-                    {
-                        skippedCount++;
-                        continue;
-                    }
-
-                    item.AssignedScreen = defaultScreen;
-                    item.Opacity = settings.DefaultOpacity;
-                    item.Volume = settings.DefaultVolume;
-                    AddedFiles.Add(item);
-                    existingPaths.Add(normalizedUrl);
-
-                    addedCount++;
-                }
-
-                if (skippedCount > 0)
-                {
-                    SetStatusMessage($"Added {addedCount} video(s) from playlist, skipped {skippedCount} duplicate(s)", StatusMessageType.Success);
-                }
-                else
-                {
-                    SetStatusMessage($"Added {addedCount} video(s) from playlist", StatusMessageType.Success);
-                }
-
-                UpdateButtons();
-                SaveSession();
-            }
-            catch (OperationCanceledException)
-            {
-                SetStatusMessage("Playlist import cancelled", StatusMessageType.Warning);
-            }
-            catch (Exception ex)
-            {
-                Logger.Error("Error importing playlist", ex);
-                SetStatusMessage($"Error importing playlist: {ex.Message}", StatusMessageType.Error);
-            }
-            finally
-            {
-                EndImport();
-            }
-        }
+        private const string SupportedSitesNote = "Supported: Hypnotube, Iwara, PMVHaven, Rule34Video";
 
         private void AddUrlOrPlaylist(object obj)
         {
@@ -1149,6 +1066,7 @@ namespace EdgeLoop.ViewModels
                     int addedCount = 0;
                     int skippedCount = 0;
 
+                    using var bulk = BeginBulkChange();
                     foreach (var item in videoItems)
                     {
                         var normalizedUrl = item.IsUrl ? FileValidator.NormalizeUrl(item.FilePath) : item.FilePath;
@@ -1269,6 +1187,7 @@ namespace EdgeLoop.ViewModels
 
                 var failedFiles = new List<(string name, string error)>();
 
+                using var bulk = BeginBulkChange();
                 for (int i = 0; i < results.Length; i++)
                 {
                     var (filePath, isValid, errorMessage) = results[i];
@@ -1345,35 +1264,16 @@ namespace EdgeLoop.ViewModels
             }
         }
 
-        private void RemoveSelected(object parameter)
-        {
-            var selectedItems = parameter as System.Collections.IList;
-            if (selectedItems == null) return;
-
-            var toRemove = new List<VideoItem>();
-            foreach (VideoItem f in selectedItems) toRemove.Add(f);
-
-            foreach (var f in toRemove)
-            {
-                AddedFiles.Remove(f);
-            }
-
-            // CRITICAL: Notify active players to remove these from their queues
-            App.VideoService.RemoveItemsFromAllPlayers(toRemove);
-
-            UpdateButtons();
-            SaveSession();
-        }
-
         private void ClearAll(object obj)
         {
-            var itemsToRemove = AddedFiles.ToList();
-            AddedFiles.Clear();
+            int count = AddedFiles.Count;
+            if (count == 0) return;
 
-            App.VideoService.RemoveItemsFromAllPlayers(itemsToRemove);
+            string videos = count == 1 ? "1 video" : $"{count} videos";
+            if (!DialogService.Confirm("Clear playlist", $"Remove all {videos} from the playlist?", "Clear", "Cancel", destructive: true))
+                return;
 
-            UpdateButtons();
-            SaveSession();
+            RemoveItems(AddedFiles.ToList(), $"Cleared {videos}");
         }
 
         private void Exit(object obj)
@@ -1383,11 +1283,6 @@ namespace EdgeLoop.ViewModels
                 SaveSession(runInBackground: false);
                 Application.Current.Shutdown();
             }
-        }
-
-        private void Minimize(object obj)
-        {
-            if (obj is Window w) w.WindowState = WindowState.Minimized;
         }
 
         // Method to handle Drag & Drop from View
@@ -1551,7 +1446,8 @@ namespace EdgeLoop.ViewModels
                     Opacity = item.Opacity,
                     Volume = item.Volume,
                     Title = item.Title,
-                    OriginalPageUrl = item.OriginalPageUrl // Store for re-extraction when URLs expire
+                    OriginalPageUrl = item.OriginalPageUrl, // Store for re-extraction when URLs expire
+                    DurationSeconds = item.Duration?.TotalSeconds
                 }).ToList();
 
                 Action saveAction = () =>
@@ -1701,6 +1597,7 @@ namespace EdgeLoop.ViewModels
                         AddedFiles.Clear();
                         if (AvailableScreens.Count == 0) RefreshScreens();
 
+                        using var bulk = BeginBulkChange();
                         foreach (var item in playlist.Items)
                         {
                             cancellationToken.ThrowIfCancellationRequested();
@@ -1766,6 +1663,7 @@ namespace EdgeLoop.ViewModels
 
                             // Validate the file when loading from session
                             videoItem.Validate();
+                            videoItem.Duration ??= item.Duration;
                             AddedFiles.Add(videoItem);
                         }
                         UpdateButtons();
@@ -1860,6 +1758,7 @@ namespace EdgeLoop.ViewModels
                 string.Equals(x.FilePath, path, StringComparison.OrdinalIgnoreCase) ||
                 (!string.IsNullOrEmpty(originalUrl) && string.Equals(x.OriginalPageUrl, originalUrl, StringComparison.OrdinalIgnoreCase))
             ).ToList();
+
 
             foreach (var item in matches)
                 item.PlaybackError = string.IsNullOrWhiteSpace(reason) ? "Playback failed" : reason;

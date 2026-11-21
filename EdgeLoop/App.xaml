@@ -28,6 +28,7 @@
                 <ResourceDictionary Source="Themes/Inputs.xaml"/>
                 <ResourceDictionary Source="Themes/Scroll.xaml"/>
                 <ResourceDictionary Source="Themes/Windows.xaml"/>
+                <ResourceDictionary Source="Themes/Converters.xaml"/>
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

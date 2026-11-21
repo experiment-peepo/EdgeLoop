@@ -24,10 +24,6 @@
         WindowStartupLocation="CenterOwner"
         ShowInTaskbar="False">
     <Window.Resources>
-        <local:OpacityToIntConverter x:Key="OpacityToIntConverter"/>
-        <local:OpacityScaleConverter x:Key="OpacityScaleConverter"/>
-        <local:EnumToVisibilityConverter x:Key="EnumToVisibilityConverter"/>
-        <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
         <x:Array x:Key="KeyList" Type="sys:String">
             <sys:String>End</sys:String>
             <sys:String>Escape</sys:String>

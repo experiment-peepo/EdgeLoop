@@ -21,6 +21,7 @@ namespace EdgeLoop.ViewModels
         public HypnoViewModel Player => _playerVm;
 
         public ICommand SkipCommand => _playerVm?.SkipCommand;
+        public ICommand PreviousCommand => _playerVm?.PreviousCommand;
         public ICommand TogglePlayPauseCommand => _playerVm?.TogglePlayPauseCommand;
 
         public ActivePlayerViewModel(string screenName, HypnoViewModel playerVm)

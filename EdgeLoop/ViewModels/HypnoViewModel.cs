@@ -1795,6 +1795,12 @@ namespace EdgeLoop.ViewModels
             // Reset failure counter when video successfully opens
             _consecutiveFailures = 0;
 
+            // Streams only learn their length here; show it on the playlist card from now on
+            var openedItem = _currentItem;
+            long durationTicks = Player?.Duration ?? 0;
+            if (openedItem != null && openedItem.Duration == null && durationTicks > 0)
+                Application.Current?.Dispatcher.InvokeAsync(() => openedItem.Duration ??= TimeSpan.FromTicks(durationTicks));
+
             // Clear failure count for this file since it opened successfully (thread-safe)
             if (_currentItem?.FilePath != null)
             {

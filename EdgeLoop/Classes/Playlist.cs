@@ -22,6 +22,11 @@ namespace EdgeLoop.Classes
         /// The original page URL with full path (including slug). Used for re-extraction when video URLs expire.
         /// </summary>
         public string OriginalPageUrl { get; set; }
+        /// <summary>Length in seconds, if known. Saves probing (or playing) the video again to show it.</summary>
+        public double? DurationSeconds { get; set; }
+
+        [System.Text.Json.Serialization.JsonIgnore]
+        public System.TimeSpan? Duration => DurationSeconds is > 0 and var s ? System.TimeSpan.FromSeconds(s) : null;
     }
 }
 

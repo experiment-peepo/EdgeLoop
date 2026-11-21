@@ -10,6 +10,9 @@ namespace EdgeLoop.Classes
         private readonly AdornerLayer _adornerLayer;
         private readonly Pen _pen;
 
+        /// <summary>Whether the line is drawn below the card (drop after it) rather than above.</summary>
+        public bool IsAfter => _isAfter;
+
         public InsertionAdorner(UIElement adornedElement, bool isAfter, AdornerLayer adornerLayer)
             : base(adornedElement)
         {

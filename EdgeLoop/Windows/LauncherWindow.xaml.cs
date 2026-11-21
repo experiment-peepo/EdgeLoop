@@ -134,21 +134,6 @@ namespace EdgeLoop.Windows
         }
 
 
-        private void Window_SizeChanged(object sender, SizeChangedEventArgs e)
-        {
-            // Responsive layout: Switch to compact buttons if width < 650
-            if (e.NewSize.Width < 650)
-            {
-                if (FullPlaylistButtons != null) FullPlaylistButtons.Visibility = Visibility.Collapsed;
-                if (CompactPlaylistButtons != null) CompactPlaylistButtons.Visibility = Visibility.Visible;
-            }
-            else
-            {
-                if (FullPlaylistButtons != null) FullPlaylistButtons.Visibility = Visibility.Visible;
-                if (CompactPlaylistButtons != null) CompactPlaylistButtons.Visibility = Visibility.Collapsed;
-            }
-        }
-
         private void SaveWindowBounds()
         {
             var settings = App.Settings;
@@ -247,6 +232,7 @@ namespace EdgeLoop.Windows
         private InsertionAdorner _insertionAdorner;
         private ListViewItem _lastAdornedItem;
         private DragAdorner _dragAdorner;
+        private Point _dragGrabOffset;
         private ScrollViewer _playlistScrollViewer;
 
         private void AddedFilesList_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -256,71 +242,60 @@ namespace EdgeLoop.Windows
 
         private void AddedFilesList_MouseMove(object sender, MouseEventArgs e)
         {
-            Point mousePos = e.GetPosition(null);
-            Vector diff = _startPoint - mousePos;
+            if (e.LeftButton != MouseButtonState.Pressed) return;
 
-            if (e.LeftButton == MouseButtonState.Pressed &&
-                (Math.Abs(diff.X) > SystemParameters.MinimumHorizontalDragDistance ||
-                 Math.Abs(diff.Y) > SystemParameters.MinimumVerticalDragDistance))
+            Vector diff = _startPoint - e.GetPosition(null);
+            if (Math.Abs(diff.X) <= SystemParameters.MinimumHorizontalDragDistance &&
+                Math.Abs(diff.Y) <= SystemParameters.MinimumVerticalDragDistance)
+                return;
+
+            // Sliders, the screen picker and buttons keep their own mouse handling
+            var originalSource = e.OriginalSource as DependencyObject;
+            if (originalSource == null ||
+                FindAncestor<Slider>(originalSource) != null ||
+                FindAncestor<ComboBox>(originalSource) != null ||
+                FindAncestor<System.Windows.Controls.Primitives.ButtonBase>(originalSource) != null)
+                return;
+
+            var listViewItem = FindAncestor<ListViewItem>(originalSource);
+            if (listViewItem?.DataContext is not VideoItem data) return;
+
+            // A snapshot of the card follows the mouse; the card itself fades while it's moved
+            var layer = AdornerLayer.GetAdornerLayer(AddedFilesList);
+            if (layer != null)
             {
-
-                // Don't trigger drag-drop if we are clicking on a Slider or ComboBox
-                DependencyObject originalSource = e.OriginalSource as DependencyObject;
-                if (originalSource != null && (FindAncestor<Slider>(originalSource) != null || FindAncestor<ComboBox>(originalSource) != null))
+                _dragGrabOffset = e.GetPosition(listViewItem);
+                _dragAdorner = new DragAdorner(AddedFilesList, listViewItem, 0.75)
                 {
-                    return;
-                }
+                    HorizontalOffset = listViewItem.TranslatePoint(new Point(0, 0), AddedFilesList).X
+                };
+                layer.Add(_dragAdorner);
+                MoveDragGhost(e.GetPosition(AddedFilesList));
+            }
+            listViewItem.Opacity = 0.4;
 
-                ListView listView = sender as ListView;
-                ListViewItem listViewItem = FindAncestor<ListViewItem>(originalSource);
-                if (listViewItem == null) return;
-
-                VideoItem data = (VideoItem)listView.ItemContainerGenerator.ItemFromContainer(listViewItem);
-
-                // Create drag adorner (ghost)
-                var layer = AdornerLayer.GetAdornerLayer(listView);
-                if (layer != null)
+            try
+            {
+                DragDrop.DoDragDrop(listViewItem, new DataObject("VideoItem", data), DragDropEffects.Move);
+            }
+            finally
+            {
+                listViewItem.Opacity = 1;
+                if (_dragAdorner != null)
                 {
-                    _dragAdorner = new DragAdorner(listView, listViewItem, 0.6);
-                    layer.Add(_dragAdorner);
+                    layer?.Remove(_dragAdorner);
+                    _dragAdorner = null;
                 }
-
-                DataObject dragData = new DataObject("VideoItem", data);
-
-                try
-                {
-                    DragDrop.DoDragDrop(listViewItem, dragData, DragDropEffects.Move);
-                }
-                finally
-                {
-                    if (_dragAdorner != null)
-                    {
-                        layer?.Remove(_dragAdorner);
-                        _dragAdorner = null;
-                    }
-                }
+                RemoveInsertionAdorner();
             }
         }
 
-        private void AddedFilesList_QueryContinueDrag(object sender, QueryContinueDragEventArgs e)
+        /// <summary>Keeps the ghost card under the mouse, where it was picked up; it only moves up and down.</summary>
+        private void MoveDragGhost(Point positionInList)
         {
-            if (_dragAdorner != null)
-            {
-                // We need to update the adorner position. 
-                // Since DoDragDrop is blocking, we can't easily get mouse position relative to ListView here 
-                // without using Win32 API or tracking it elsewhere.
-                // However, GiveFeedback occurs during the drag and can be used too.
-            }
-        }
-
-        private void AddedFilesList_GiveFeedback(object sender, GiveFeedbackEventArgs e)
-        {
-            if (_dragAdorner != null)
-            {
-                // Update ghost position
-                var pos = Mouse.GetPosition(AddedFilesList);
-                _dragAdorner.SetPosition(pos.X - 20, pos.Y - 20);
-            }
+            if (_dragAdorner == null) return;
+            _dragAdorner.Visibility = Visibility.Visible;
+            _dragAdorner.SetPosition(_dragAdorner.HorizontalOffset, positionInList.Y - _dragGrabOffset.Y);
         }
 
         private void AddedFilesList_DragEnter(object sender, DragEventArgs e)
@@ -338,6 +313,8 @@ namespace EdgeLoop.Windows
         {
             PlaylistDropZone.Tag = null;
             RemoveInsertionAdorner();
+            if (_dragAdorner != null)
+                _dragAdorner.Visibility = Visibility.Hidden;
         }
 
         private void AddedFilesList_DragOver(object sender, DragEventArgs e)
@@ -349,6 +326,7 @@ namespace EdgeLoop.Windows
             else if (e.Data.GetDataPresent("VideoItem"))
             {
                 e.Effects = DragDropEffects.Move;
+                MoveDragGhost(e.GetPosition(AddedFilesList));
                 UpdateInsertionAdorner(e);
             }
             else if (e.Data.GetDataPresent(DataFormats.Text) || e.Data.GetDataPresent(DataFormats.UnicodeText))
@@ -366,15 +344,10 @@ namespace EdgeLoop.Windows
                         potentialUrl = "https://" + potentialUrl;
                     }
 
-                    if (Uri.TryCreate(potentialUrl, UriKind.Absolute, out var uri)
-                        && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps))
-                    {
-                        e.Effects = DragDropEffects.Link;
-                    }
-                    else
-                    {
-                        e.Effects = DragDropEffects.None;
-                    }
+                    e.Effects = Uri.TryCreate(potentialUrl, UriKind.Absolute, out var uri)
+                                && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps)
+                        ? DragDropEffects.Link
+                        : DragDropEffects.None;
                 }
                 else
                 {
@@ -398,30 +371,22 @@ namespace EdgeLoop.Windows
 
         private void AutoScrollDuringDrag(DragEventArgs e)
         {
-            if (_playlistScrollViewer == null)
-            {
-                _playlistScrollViewer = FindVisualChild<ScrollViewer>(AddedFilesList);
-            }
-
+            _playlistScrollViewer ??= FindVisualChild<ScrollViewer>(AddedFilesList);
             if (_playlistScrollViewer == null) return;
 
             var pos = e.GetPosition(AddedFilesList);
-            double scrollMargin = 40; // pixels from edge to trigger scroll
-            double scrollSpeed = 5;   // pixels per tick
+            const double scrollMargin = 40; // pixels from the edge that start scrolling
+            const double scrollSpeed = 10;  // pixels per DragOver at the very edge
 
             if (pos.Y < scrollMargin)
             {
-                // Scroll up
                 double intensity = 1 - (pos.Y / scrollMargin);
-                _playlistScrollViewer.ScrollToVerticalOffset(
-                    _playlistScrollViewer.VerticalOffset - (scrollSpeed * intensity * 2));
+                _playlistScrollViewer.ScrollToVerticalOffset(_playlistScrollViewer.VerticalOffset - scrollSpeed * intensity);
             }
             else if (pos.Y > AddedFilesList.ActualHeight - scrollMargin)
             {
-                // Scroll down
                 double intensity = 1 - ((AddedFilesList.ActualHeight - pos.Y) / scrollMargin);
-                _playlistScrollViewer.ScrollToVerticalOffset(
-                    _playlistScrollViewer.VerticalOffset + (scrollSpeed * intensity * 2));
+                _playlistScrollViewer.ScrollToVerticalOffset(_playlistScrollViewer.VerticalOffset + scrollSpeed * intensity);
             }
         }
 
@@ -440,37 +405,25 @@ namespace EdgeLoop.Windows
 
         private void UpdateInsertionAdorner(DragEventArgs e)
         {
-            var pos = e.GetPosition(AddedFilesList);
-            var result = VisualTreeHelper.HitTest(AddedFilesList, pos);
-
-            if (result?.VisualHit != null)
-            {
-                var item = FindAncestor<ListViewItem>(result.VisualHit as DependencyObject);
-                if (item != null)
-                {
-                    // Determine if inserting before or after based on mouse Y position
-                    var itemPos = e.GetPosition(item);
-                    bool isAfter = itemPos.Y > item.ActualHeight / 2;
-
-                    if (item != _lastAdornedItem || _insertionAdorner == null)
-                    {
-                        RemoveInsertionAdorner();
-                        var layer = AdornerLayer.GetAdornerLayer(item);
-                        if (layer != null)
-                        {
-                            _insertionAdorner = new InsertionAdorner(item, isAfter, layer);
-                            _lastAdornedItem = item;
-                        }
-                    }
-                }
-                else
-                {
-                    RemoveInsertionAdorner();
-                }
-            }
-            else
+            var result = VisualTreeHelper.HitTest(AddedFilesList, e.GetPosition(AddedFilesList));
+            var item = result?.VisualHit is DependencyObject hit ? FindAncestor<ListViewItem>(hit) : null;
+            if (item == null)
             {
                 RemoveInsertionAdorner();
+                return;
+            }
+
+            // Before or after the card, by which half the mouse is over
+            bool isAfter = e.GetPosition(item).Y > item.ActualHeight / 2;
+            if (item != _lastAdornedItem || _insertionAdorner == null || _insertionAdorner.IsAfter != isAfter)
+            {
+                RemoveInsertionAdorner();
+                var layer = AdornerLayer.GetAdornerLayer(item);
+                if (layer != null)
+                {
+                    _insertionAdorner = new InsertionAdorner(item, isAfter, layer);
+                    _lastAdornedItem = item;
+                }
             }
         }
 
@@ -481,35 +434,40 @@ namespace EdgeLoop.Windows
             _lastAdornedItem = null;
         }
 
+        /// <summary>Delete removes the selected card (with Undo); Alt+Up/Down move it.</summary>
         private void AddedFilesList_KeyDown(object sender, KeyEventArgs e)
         {
-            if (AddedFilesList.SelectedItem is VideoItem selectedItem)
-            {
-                int index = ViewModel.AddedFiles.IndexOf(selectedItem);
+            // Only when the card itself has focus, not its slider or screen picker
+            if (e.OriginalSource is not ListViewItem || AddedFilesList.SelectedItem is not VideoItem selected || ViewModel == null)
+                return;
 
-                if (e.Key == Key.Delete)
-                {
-                    ViewModel.AddedFiles.Remove(selectedItem);
-                    ViewModel.UpdateButtons();
-                    ViewModel.SaveSession();
-                    e.Handled = true;
-                }
-                else if ((Keyboard.Modifiers & ModifierKeys.Alt) == ModifierKeys.Alt)
-                {
-                    if (e.Key == Key.Up && index > 0)
-                    {
-                        ViewModel.AddedFiles.Move(index, index - 1);
-                        ViewModel.SaveSession();
-                        e.Handled = true;
-                    }
-                    else if (e.Key == Key.Down && index < ViewModel.AddedFiles.Count - 1)
-                    {
-                        ViewModel.AddedFiles.Move(index, index + 1);
-                        ViewModel.SaveSession();
-                        e.Handled = true;
-                    }
-                }
+            // With Alt held, WPF reports the key as Key.System and the real key in SystemKey
+            var key = e.Key == Key.System ? e.SystemKey : e.Key;
+
+            if (key == Key.Delete && Keyboard.Modifiers == ModifierKeys.None)
+            {
+                int index = AddedFilesList.SelectedIndex;
+                ViewModel.RemoveItemCommand.Execute(selected);
+                if (ViewModel.AddedFiles.Count > 0)
+                    SelectAndFocus(ViewModel.AddedFiles[Math.Min(index, ViewModel.AddedFiles.Count - 1)]);
+                e.Handled = true;
             }
+            else if (Keyboard.Modifiers == ModifierKeys.Alt && (key == Key.Up || key == Key.Down))
+            {
+                if (ViewModel.MoveVideoItemBy(selected, key == Key.Up ? -1 : 1))
+                    SelectAndFocus(selected);
+                e.Handled = true;
+            }
+        }
+
+        /// <summary>Selects an item and gives its card keyboard focus once it's on screen.</summary>
+        private void SelectAndFocus(VideoItem item)
+        {
+            AddedFilesList.SelectedItem = item;
+            AddedFilesList.ScrollIntoView(item);
+            Dispatcher.InvokeAsync(() =>
+                (AddedFilesList.ItemContainerGenerator.ContainerFromItem(item) as ListViewItem)?.Focus(),
+                System.Windows.Threading.DispatcherPriority.Loaded);
         }
 
         private void AddedFilesList_Drop(object sender, DragEventArgs e)
@@ -531,66 +489,40 @@ namespace EdgeLoop.Windows
                     ViewModel?.AddDroppedUrl(text.Trim());
                 }
             }
-            else if (e.Data.GetDataPresent("VideoItem"))
+            else if (e.Data.GetDataPresent("VideoItem") && e.Data.GetData("VideoItem") is VideoItem sourceItem && ViewModel != null)
             {
-                VideoItem sourceItem = (VideoItem)e.Data.GetData("VideoItem");
+                var files = ViewModel.AddedFiles;
+                int oldIndex = files.IndexOf(sourceItem);
+                if (oldIndex < 0) return;
 
-                // Find the target item by walking up from the original source
-                DependencyObject depObj = e.OriginalSource as DependencyObject;
-                ListViewItem listViewItem = FindAncestor<ListViewItem>(depObj);
-                VideoItem targetItem = listViewItem?.DataContext as VideoItem;
-
-                if (sourceItem != null && targetItem != null && sourceItem != targetItem)
+                var targetContainer = FindAncestor<ListViewItem>(e.OriginalSource as DependencyObject);
+                int destination;
+                if (targetContainer?.DataContext is VideoItem targetItem && files.IndexOf(targetItem) is var targetIndex and >= 0)
                 {
-                    // Find the precise drop position (before or after)
-                    var itemPos = e.GetPosition(listViewItem);
-                    bool isAfter = itemPos.Y > listViewItem.ActualHeight / 2;
-
-                    int oldIndex = ViewModel.AddedFiles.IndexOf(sourceItem);
-                    int targetIndex = ViewModel.AddedFiles.IndexOf(targetItem);
-
-                    if (oldIndex >= 0 && targetIndex >= 0)
-                    {
-                        int destinationIndex = targetIndex;
-                        if (isAfter)
-                        {
-                            if (oldIndex > targetIndex) destinationIndex++;
-                        }
-                        else
-                        {
-                            if (oldIndex < targetIndex) destinationIndex--;
-                        }
-
-                        // Bounds check
-                        destinationIndex = Math.Max(0, Math.Min(destinationIndex, ViewModel.AddedFiles.Count - 1));
-
-                        if (oldIndex != destinationIndex)
-                        {
-                            ViewModel.AddedFiles.Move(oldIndex, destinationIndex);
-                            ViewModel.SaveSession();
-                        }
-                    }
+                    bool isAfter = e.GetPosition(targetContainer).Y > targetContainer.ActualHeight / 2;
+                    destination = LauncherViewModel.DropIndex(oldIndex, targetIndex, isAfter, files.Count);
                 }
-                else if (sourceItem != null && targetItem == null)
+                else
                 {
-                    // Dropped in empty space (e.g. at the end), add to end
-                    int oldIndex = ViewModel.AddedFiles.IndexOf(sourceItem);
-                    if (oldIndex >= 0)
-                    {
-                        ViewModel.AddedFiles.Move(oldIndex, ViewModel.AddedFiles.Count - 1);
-                        ViewModel.SaveSession(); // Persist reorder
-                    }
+                    destination = files.Count - 1; // Dropped below the last card
                 }
+
+                if (destination != oldIndex)
+                    ViewModel.MoveVideoItem(sourceItem, destination);
+                SelectAndFocus(sourceItem);
             }
         }
 
         private static T FindAncestor<T>(DependencyObject current) where T : DependencyObject
         {
-            do
+            while (current != null)
             {
                 if (current is T t) return t;
-                current = VisualTreeHelper.GetParent(current);
-            } while (current != null);
+                // Text elements (Run) aren't visuals; step out through their logical parent
+                current = current is Visual or System.Windows.Media.Media3D.Visual3D
+                    ? VisualTreeHelper.GetParent(current)
+                    : LogicalTreeHelper.GetParent(current);
+            }
             return null;
         }
 
@@ -612,314 +544,4 @@ namespace EdgeLoop.Windows
             aboutWindow.ShowDialog();
         }
     }
-
-    public class StringToVisibilityConverter : IValueConverter
-    {
-        public static readonly StringToVisibilityConverter Instance = new StringToVisibilityConverter();
-
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value is string str && !string.IsNullOrWhiteSpace(str))
-            {
-                return Visibility.Visible;
-            }
-            return Visibility.Collapsed;
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            throw new NotImplementedException();
-        }
-    }
-
-    public class PluralConverter : IValueConverter
-    {
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value is int count)
-            {
-                return count == 1 ? "video" : "videos";
-            }
-            return "videos";
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            throw new NotImplementedException();
-        }
-    }
-
-    public class BooleanToVisibilityConverter : IValueConverter
-    {
-        public static readonly BooleanToVisibilityConverter Instance = new BooleanToVisibilityConverter();
-
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value is bool boolValue && boolValue)
-            {
-                return Visibility.Visible;
-            }
-            return Visibility.Collapsed;
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value is Visibility visibility)
-            {
-                return visibility == Visibility.Visible;
-            }
-            return false;
-        }
-    }
-
-    public class InverseBooleanToVisibilityConverter : IValueConverter
-    {
-        public static readonly InverseBooleanToVisibilityConverter Instance = new InverseBooleanToVisibilityConverter();
-
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value is bool boolValue && !boolValue)
-            {
-                return Visibility.Visible;
-            }
-            return Visibility.Collapsed;
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value is Visibility visibility)
-            {
-                return visibility != Visibility.Visible;
-            }
-            return false;
-        }
-    }
-
-    public class InvertedBooleanConverter : IValueConverter
-    {
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value is bool boolValue)
-            {
-                return !boolValue;
-            }
-            return true;
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value is bool boolValue)
-            {
-                return !boolValue;
-            }
-            return false;
-        }
-    }
-
-    public class StatusMessageTypeToBrushConverter : IValueConverter
-    {
-        public static readonly StatusMessageTypeToBrushConverter Instance = new StatusMessageTypeToBrushConverter();
-
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            return (value as ViewModels.StatusMessageType?) switch
-            {
-                ViewModels.StatusMessageType.Success => ThemeBrushes.Get("SuccessBannerBrush", Color.FromArgb(0x33, 0x90, 0xEE, 0x90)),
-                ViewModels.StatusMessageType.Warning => ThemeBrushes.Get("WarningBannerBrush", Color.FromArgb(0x33, 0xFF, 0xD7, 0x00)),
-                ViewModels.StatusMessageType.Error => ThemeBrushes.Get("ErrorBannerBrush", Color.FromArgb(0x40, 0xFF, 0x44, 0x44)),
-                _ => ThemeBrushes.Get("InfoBannerBrush", Color.FromArgb(0x26, 0xFF, 0xB6, 0xD9))
-            };
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            throw new NotImplementedException();
-        }
-    }
-
-    public class StatusMessageTypeToForegroundConverter : IValueConverter
-    {
-        public static readonly StatusMessageTypeToForegroundConverter Instance = new StatusMessageTypeToForegroundConverter();
-
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            return (value as ViewModels.StatusMessageType?) switch
-            {
-                ViewModels.StatusMessageType.Success => ThemeBrushes.Get("SuccessTextBrush", Color.FromArgb(0xCC, 0x90, 0xEE, 0x90)),
-                ViewModels.StatusMessageType.Warning => ThemeBrushes.Get("WarningTextBrush", Color.FromArgb(0xCC, 0xFF, 0xD7, 0x00)),
-                ViewModels.StatusMessageType.Error => ThemeBrushes.Get("ErrorTextBrush", Color.FromRgb(0xFF, 0x7A, 0x7A)),
-                _ => ThemeBrushes.Get("InfoTextBrush", Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF))
-            };
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            throw new NotImplementedException();
-        }
-    }
-
-    public class ValidationStatusToBrushConverter : IValueConverter
-    {
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value is ViewModels.FileValidationStatus status)
-            {
-                return status switch
-                {
-                    ViewModels.FileValidationStatus.Valid => new SolidColorBrush(Color.FromArgb(0x66, 0x90, 0xEE, 0x90)), // Soft green border
-                    ViewModels.FileValidationStatus.Missing => new SolidColorBrush(Color.FromArgb(0x99, 0xFF, 0x69, 0xB4)), // HotPink border
-                    ViewModels.FileValidationStatus.Invalid => new SolidColorBrush(Color.FromArgb(0x99, 0xFF, 0xD7, 0x00)), // Golden yellow border
-                    _ => new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0x69, 0xB4)) // Default: HotPink border
-                };
-            }
-            return new SolidColorBrush(Color.FromArgb(0x66, 0xFF, 0x69, 0xB4));
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            throw new NotImplementedException();
-        }
-    }
-
-    public class ValidationStatusToIconConverter : IValueConverter
-    {
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value is ViewModels.FileValidationStatus status)
-            {
-                return status switch
-                {
-                    ViewModels.FileValidationStatus.Valid => "✓", // Checkmark
-                    ViewModels.FileValidationStatus.Missing => "⚠", // Warning
-                    ViewModels.FileValidationStatus.Invalid => "✗", // X mark
-                    _ => "▶" // Play icon for unknown/not validated
-                };
-            }
-            return "▶";
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            throw new NotImplementedException();
-        }
-    }
-
-    public class ValidationStatusToOpacityConverter : IValueConverter
-    {
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value is ViewModels.FileValidationStatus status)
-            {
-                return status == ViewModels.FileValidationStatus.Valid ? 1.0 : 0.7; // Gray out invalid files
-            }
-            return 1.0;
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            throw new NotImplementedException();
-        }
-    }
-
-    public class ValidationStatusToForegroundConverter : IValueConverter
-    {
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value is ViewModels.FileValidationStatus status)
-            {
-                return status switch
-                {
-                    ViewModels.FileValidationStatus.Valid => new SolidColorBrush(Color.FromRgb(0x90, 0xEE, 0x90)), // Soft green
-                    ViewModels.FileValidationStatus.Missing => new SolidColorBrush(Color.FromRgb(0xFF, 0x69, 0xB4)), // HotPink
-                    ViewModels.FileValidationStatus.Invalid => new SolidColorBrush(Color.FromRgb(0xFF, 0xD7, 0x00)), // Golden yellow
-                    _ => new SolidColorBrush(Color.FromRgb(0xFF, 0x69, 0xB4)) // HotPink for unknown
-                };
-            }
-            return new SolidColorBrush(Color.FromRgb(0xFF, 0x69, 0xB4));
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            throw new NotImplementedException();
-        }
-    }
-
-    public class OpacityToIntConverter : IValueConverter
-    {
-        private const double MaxOpacity = 0.90;
-
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value is double opacity)
-            {
-                // Scale 0-0.90 opacity range to 0-100 display range
-                // Cap at 100 to avoid "111" during AlwaysOpaque mode
-                int displayValue = (int)Math.Round((opacity / MaxOpacity) * 100);
-                return Math.Min(100, displayValue).ToString();
-            }
-            return "100";
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            throw new NotImplementedException();
-        }
-    }
-
-    public class OpacityScaleConverter : IValueConverter
-    {
-        private const double MaxOpacity = 0.90;
-
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            // Convert: opacity (0-0.90) -> slider value (0-1.0)
-            if (value is double opacity)
-            {
-                return opacity / MaxOpacity;
-            }
-            return 1.0;
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            // ConvertBack: slider value (0-1.0) -> opacity (0-0.90)
-            if (value is double sliderValue)
-            {
-                return sliderValue * MaxOpacity;
-            }
-            return 0.0;
-        }
-    }
-    public class InvertedBooleanToVisibilityConverter : IValueConverter
-    {
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            bool boolValue = value is bool b && b;
-            return boolValue ? Visibility.Collapsed : Visibility.Visible;
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            throw new NotImplementedException();
-        }
-    }
-
-    public class IsProgressIndeterminateConverter : IValueConverter
-    {
-        public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            if (value is double progress)
-            {
-                return progress <= 0;
-            }
-            return true;
-        }
-
-        public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
-        {
-            throw new NotImplementedException();
-        }
-    }
 }
-
-

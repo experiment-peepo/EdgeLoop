@@ -75,5 +75,16 @@ namespace EdgeLoop.Tests
 
             player.Stop();
         }
+
+        [Fact]
+        public void DurationProbe_ReadsTheClipsLength()
+        {
+            EnsureEngineStarted();
+
+            var duration = EdgeLoop.Classes.DurationProbe.ProbeWithFFmpeg(SamplePath);
+
+            duration.Should().NotBeNull();
+            duration!.Value.TotalSeconds.Should().BeApproximately(2, 0.2, "the bundled clip is 2 seconds long");
+        }
     }
 }

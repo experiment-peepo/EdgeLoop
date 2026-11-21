@@ -31,6 +31,7 @@ namespace EdgeLoop.ViewModels
                     OnPropertyChanged(nameof(IsUrl));
                     OnPropertyChanged(nameof(IsCached));
                     OnPropertyChanged(nameof(TrackingPath));
+                    OnPropertyChanged(nameof(Location));
                 }
             }
         }
@@ -162,8 +163,15 @@ namespace EdgeLoop.ViewModels
         public FileValidationStatus ValidationStatus
         {
             get => _validationStatus;
-            set => SetProperty(ref _validationStatus, value);
+            set
+            {
+                if (SetProperty(ref _validationStatus, value))
+                    OnPropertyChanged(nameof(IsMissing));
+            }
         }
+
+        /// <summary>A local file that no longer exists.</summary>
+        public bool IsMissing => ValidationStatus == FileValidationStatus.Missing;
 
         private string _validationError;
         public string ValidationError
@@ -189,6 +197,36 @@ namespace EdgeLoop.ViewModels
 
         public bool PlaybackFailed => !string.IsNullOrEmpty(PlaybackError);
 
+        private TimeSpan? _duration;
+        /// <summary>
+        /// Length of the video, or null until known. Local files are probed when added
+        /// (<see cref="DurationProbe"/>); streams get it the first time they play.
+        /// </summary>
+        public TimeSpan? Duration
+        {
+            get => _duration;
+            set
+            {
+                if (SetProperty(ref _duration, value))
+                    OnPropertyChanged(nameof(DurationText));
+            }
+        }
+
+        /// <summary>"3:07" or "1:02:45", or null while unknown.</summary>
+        public string DurationText => FormatDuration(Duration);
+
+        internal static string FormatDuration(TimeSpan? duration)
+        {
+            if (duration is not { } d || d <= TimeSpan.Zero) return null;
+            d = TimeSpan.FromSeconds(Math.Round(d.TotalSeconds));
+            return d.TotalHours >= 1
+                ? $"{(int)d.TotalHours}:{d.Minutes:00}:{d.Seconds:00}"
+                : $"{d.Minutes}:{d.Seconds:00}";
+        }
+
+        /// <summary>Where the video comes from: the page URL for web videos, otherwise the file path or stream URL.</summary>
+        public string Location => !string.IsNullOrEmpty(OriginalPageUrl) ? OriginalPageUrl : FilePath;
+
         /// <summary>
         /// The original page URL with full path (including slug). Used for re-extraction when video URLs expire.
         /// </summary>
@@ -205,6 +243,7 @@ namespace EdgeLoop.ViewModels
                     OnPropertyChanged(nameof(IsUrl));
                     OnPropertyChanged(nameof(IsCached));
                     OnPropertyChanged(nameof(TrackingPath));
+                    OnPropertyChanged(nameof(Location));
                 }
             }
         }

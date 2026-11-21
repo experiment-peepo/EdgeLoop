@@ -346,7 +346,7 @@
 
     <DrawingBrush x:Key="DashedTrackBrush" TileMode="Tile" Viewport="0,0,8,6" ViewportUnits="Absolute">
         <DrawingBrush.Drawing>
-            <GeometryDrawing Brush="#B3FF1493">
+            <GeometryDrawing Brush="{StaticResource SliderTickBrush}">
                 <GeometryDrawing.Geometry>
                     <RectangleGeometry Rect="0,0,1.5,6"/>
                 </GeometryDrawing.Geometry>
