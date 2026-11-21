@@ -50,6 +50,11 @@
     <SolidColorBrush x:Key="ScrollbarThumbHover" Color="#CCFF1493"/>
     <SolidColorBrush x:Key="SliderTickBrush" Color="#B3FF1493"/>        <!-- Dashes along a slider track -->
 
+    <!-- Playback overlay -->
+    <SolidColorBrush x:Key="VideoBackdropBrush" Color="#000000"/>        <!-- Behind the video -->
+    <Color x:Key="EnhancedColor">#00FF99</Color>                          <!-- "AI Enhanced" label -->
+    <SolidColorBrush x:Key="EnhancedBrush" Color="{StaticResource EnhancedColor}"/>
+
     <!-- Playlist cards -->
     <SolidColorBrush x:Key="CardHoverBorderBrush" Color="#99FF69B4"/>
     <SolidColorBrush x:Key="CardFailedBorderBrush" Color="#99FF4444"/>

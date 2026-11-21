@@ -58,6 +58,7 @@ namespace EdgeLoop.ViewModels
             _defaultVolume = settings.DefaultVolume;
             _alwaysOpaque = settings.AlwaysOpaque;
             _enableSuperResolution = settings.EnableSuperResolution;
+            _showPlaybackNotices = settings.ShowPlaybackNotices;
 
             // --- Library ---
             _rememberLastPlaylist = settings.RememberLastPlaylist;
@@ -212,7 +213,7 @@ namespace EdgeLoop.ViewModels
         {
             var values = new List<object>
             {
-                SelectedDefaultMonitor?.DeviceName, DefaultOpacity, DefaultVolume, AlwaysOpaque, EnableSuperResolution,
+                SelectedDefaultMonitor?.DeviceName, DefaultOpacity, DefaultVolume, AlwaysOpaque, EnableSuperResolution, ShowPlaybackNotices,
                 RememberLastPlaylist, RememberFilePosition, EnableLocalCaching, LocalCacheDirectory,
                 BrowserForCookies, CleanCookieString(HypnotubeCookies), CleanCookieString(IwaraCookies), CleanCookieString(Rule34VideoCookies),
                 StartWithWindows, EnableDiagnosticMode,
@@ -260,6 +261,14 @@ namespace EdgeLoop.ViewModels
         {
             get => _enableSuperResolution;
             set => SetProperty(ref _enableSuperResolution, value);
+        }
+
+        private bool _showPlaybackNotices;
+        /// <summary>A short notice on a screen when one of its videos can't be played.</summary>
+        public bool ShowPlaybackNotices
+        {
+            get => _showPlaybackNotices;
+            set => SetProperty(ref _showPlaybackNotices, value);
         }
 
         // ===== Library & Cache =====
@@ -635,6 +644,7 @@ namespace EdgeLoop.ViewModels
                     DefaultVolume = defaults.DefaultVolume;
                     AlwaysOpaque = defaults.AlwaysOpaque;
                     EnableSuperResolution = defaults.EnableSuperResolution;
+                    ShowPlaybackNotices = defaults.ShowPlaybackNotices;
                     break;
                 case SettingsSection.Library:
                     RememberLastPlaylist = defaults.RememberLastPlaylist;
@@ -748,6 +758,7 @@ namespace EdgeLoop.ViewModels
             settings.DefaultVolume = DefaultVolume;
             settings.AlwaysOpaque = AlwaysOpaque;
             settings.EnableSuperResolution = EnableSuperResolution;
+            settings.ShowPlaybackNotices = ShowPlaybackNotices;
 
             settings.RememberLastPlaylist = RememberLastPlaylist;
             settings.RememberFilePosition = RememberFilePosition;

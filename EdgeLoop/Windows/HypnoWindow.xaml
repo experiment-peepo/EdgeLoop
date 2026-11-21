@@ -24,10 +24,10 @@
         WindowStartupLocation="Manual"
         ShowInTaskbar="False"
         ShowActivated="False"
-        Background="Black"
+        Background="{StaticResource VideoBackdropBrush}"
         AllowsTransparency="True"
         Opacity="{Binding EffectiveOpacity}" 
-        Icon="pack://application:,,,/Images/icon.ico"
+        Icon="pack://application:,,,/EdgeLoop;component/Images/icon.ico"
         SourceInitialized="Window_SourceInitialized">
     <Window.Resources>
         <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter"/>
@@ -65,17 +65,17 @@
         <!-- Telemetry Overlay -->
         <Border HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="10" Padding="5" IsHitTestVisible="False" Opacity="0.5">
             <StackPanel Orientation="Vertical">
-                <TextBlock Text="{Binding Player.Video.ClockDriftMs, StringFormat='Drift: {0}ms'}" FontSize="10" Foreground="White" 
+                <TextBlock Text="{Binding Player.Video.ClockDriftMs, StringFormat='Drift: {0}ms'}" FontSize="10" Foreground="{StaticResource TextPrimary}" 
                            Visibility="{Binding Player.Stats, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                <TextBlock Text="{Binding Player.Video.D3DImageLatencyMs, StringFormat='D3D: {0:F1}ms'}" FontSize="10" Foreground="White"
+                <TextBlock Text="{Binding Player.Video.D3DImageLatencyMs, StringFormat='D3D: {0:F1}ms'}" FontSize="10" Foreground="{StaticResource TextPrimary}"
                            Visibility="{Binding Player.Stats, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                <TextBlock Text="{Binding Resolution, StringFormat='Res: {0}'}" FontSize="10" Foreground="White"
+                <TextBlock Text="{Binding Resolution, StringFormat='Res: {0}'}" FontSize="10" Foreground="{StaticResource TextPrimary}"
                            Visibility="{Binding Player.Stats, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                <TextBlock Text="✦ AI Enhanced" FontSize="11" FontWeight="SemiBold" Foreground="#00FF99" 
+                <TextBlock Text="✦ AI Enhanced" FontSize="11" FontWeight="SemiBold" Foreground="{StaticResource EnhancedBrush}" 
                            Visibility="{Binding Player.Renderer.SuperResolution, Converter={StaticResource BooleanToVisibilityConverter}}"
                            Margin="0,2,0,0">
                     <TextBlock.Effect>
-                        <DropShadowEffect Color="#00FF99" BlurRadius="4" ShadowDepth="0" Opacity="0.5"/>
+                        <DropShadowEffect Color="{StaticResource EnhancedColor}" BlurRadius="4" ShadowDepth="0" Opacity="0.5"/>
                     </TextBlock.Effect>
                 </TextBlock>
             </StackPanel>
@@ -83,13 +83,39 @@
 
         <!-- Controls Removed as per user request -->
 
-        <!-- Loading Overlay -->
-        <Grid Background="#E6000000" Visibility="{Binding IsLoadingStatus, Converter={StaticResource BooleanToVisibilityConverter}}" Panel.ZIndex="500">
-            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock Text="Loading Video..." Foreground="White" FontSize="24" FontWeight="Light" HorizontalAlignment="Center" Margin="0,0,0,10"/>
-                <TextBlock Text="{Binding LoadingProgressText}" Foreground="#FF69B4" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="600"/>
-            </StackPanel>
-        </Grid>
+        <!-- Loading: a small card in the top-left corner instead of covering the screen -->
+        <Border HorizontalAlignment="Left" VerticalAlignment="Top" Margin="24" Padding="12,9,14,10" MaxWidth="420"
+                CornerRadius="8" Background="{StaticResource SurfaceRaisedBrush}" BorderBrush="{StaticResource SubtleBorderBrush}" BorderThickness="1"
+                IsHitTestVisible="False" Panel.ZIndex="500"
+                Visibility="{Binding IsLoadingStatus, Converter={StaticResource BooleanToVisibilityConverter}}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                </Grid.ColumnDefinitions>
+                <Grid Width="16" Height="16" VerticalAlignment="Top" Margin="0,1,10,0">
+                    <Grid.RenderTransform>
+                        <RotateTransform x:Name="LoadingSpin" CenterX="8" CenterY="8"/>
+                    </Grid.RenderTransform>
+                    <Grid.Triggers>
+                        <EventTrigger RoutedEvent="Loaded">
+                            <BeginStoryboard>
+                                <Storyboard RepeatBehavior="Forever">
+                                    <DoubleAnimation Storyboard.TargetName="LoadingSpin" Storyboard.TargetProperty="Angle" From="0" To="360" Duration="0:0:1"/>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                    </Grid.Triggers>
+                    <Ellipse Stroke="{StaticResource TextSecondary}" StrokeThickness="2" Opacity="0.25"/>
+                    <Path Data="M 8,1 A 7,7 0 0 1 15,8" Stroke="{StaticResource AccentPrimary}" StrokeThickness="2" StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                </Grid>
+                <StackPanel Grid.Column="1">
+                    <TextBlock Text="Loading video…" FontSize="13" FontWeight="SemiBold" Foreground="{StaticResource TextPrimary}"/>
+                    <TextBlock Text="{Binding LoadingProgressText}" FontSize="12" Foreground="{StaticResource TextSecondary}" TextWrapping="Wrap" Margin="0,2,0,0"
+                               Visibility="{Binding LoadingProgressText, Converter={StaticResource StringToVisibilityConverter}}"/>
+                </StackPanel>
+            </Grid>
+        </Border>
     </Grid>
 </Window>
 

@@ -124,6 +124,10 @@
                     <controls:SettingRow Header="AI upscaling" Description="Sharper video with NVIDIA RTX Video or Intel XeSS, if your graphics card supports it">
                         <CheckBox IsChecked="{Binding EnableSuperResolution}"/>
                     </controls:SettingRow>
+
+                    <controls:SettingRow Header="Notices when a video can't play" Description="A short message in the corner of that screen, which fades after a few seconds">
+                        <CheckBox IsChecked="{Binding ShowPlaybackNotices}"/>
+                    </controls:SettingRow>
                 </StackPanel>
 
                 <!-- Library & Cache -->

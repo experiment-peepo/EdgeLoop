@@ -519,6 +519,9 @@ namespace EdgeLoop.ViewModels
         /// Event raised when the entire queue has failed and playback must stop
         /// </summary>
         public event EventHandler TerminalFailure;
+
+        /// <summary>Why this screen stopped, when <see cref="TerminalFailure"/> was raised for too many failures in a row.</summary>
+        public string StopReason { get; private set; }
         public event EventHandler<MediaErrorEventArgs> MediaFailed;
 
         public void RefreshSuperResolution()
@@ -685,6 +688,10 @@ namespace EdgeLoop.ViewModels
 
             _files = files?.ToArray() ?? Array.Empty<VideoItem>();
             _currentPos = -1;
+
+            // Start out at the first video's opacity rather than the 90% default
+            if (_files.Length > 0)
+                Opacity = _files[startIndex >= 0 && startIndex < _files.Length ? startIndex : 0].Opacity;
             _manualPauseRequested = false; // Reset pause intent for new queue
 
             UpdatePlaylistHash();
@@ -1230,6 +1237,14 @@ namespace EdgeLoop.ViewModels
                 }
 
                 CurrentItem = _files[_currentPos];
+
+                // Use this video's opacity and volume right away: resolving a web link can take seconds,
+                // and until now the screen sat at the 90% default, nearly blacked out
+                if (_currentItem != null)
+                {
+                    Opacity = _currentItem.Opacity;
+                    Volume = _currentItem.Volume;
+                }
                 // IsPlaying highlight is now handled centrally by VideoPlayerService
                 // (Event subscription handled by property setter)
                 // (Event subscription handled by property setter)
@@ -2177,7 +2192,9 @@ namespace EdgeLoop.ViewModels
             if (_consecutiveFailures >= MaxConsecutiveFailures)
             {
                 Logger.Warning($"Stopped retrying after {MaxConsecutiveFailures} consecutive failures. All videos in queue may be invalid.");
-                MediaErrorOccurred?.Invoke(this, new MediaErrorEventArgs($"Playback stopped after {MaxConsecutiveFailures} consecutive failures. Please check your video files.", _currentItem));
+                StopReason = $"{MaxConsecutiveFailures} videos in a row couldn't be played.";
+                MediaErrorOccurred?.Invoke(this, new MediaErrorEventArgs(
+                    $"Stopped playback on {PlaybackFailureText.ScreenName(MonitorName)}: {StopReason} Check that the files still exist and the links still work.", _currentItem));
                 TerminalFailure?.Invoke(this, EventArgs.Empty);
                 return;
             }

@@ -50,6 +50,7 @@ namespace EdgeLoop.Windows
             _viewModel.MediaErrorOccurred += ViewModel_MediaErrorOccurred;
             _viewModel.MediaOpened += ViewModel_MediaOpened;
             _viewModel.TerminalFailure += ViewModel_TerminalFailure;
+            _viewModel.MediaFailed += ViewModel_MediaFailed;
 
 
 
@@ -90,6 +91,7 @@ namespace EdgeLoop.Windows
                         _viewModel.MediaErrorOccurred -= ViewModel_MediaErrorOccurred;
                         _viewModel.MediaOpened -= ViewModel_MediaOpened;
                         _viewModel.TerminalFailure -= ViewModel_TerminalFailure;
+                        _viewModel.MediaFailed -= ViewModel_MediaFailed;
                         _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
                         _viewModel.Dispose();
                     }
@@ -146,9 +148,28 @@ namespace EdgeLoop.Windows
             }
         }
 
+        /// <summary>A small notice in this screen's corner: which video failed and why.</summary>
+        private void ViewModel_MediaFailed(object sender, MediaErrorEventArgs e)
+        {
+            if (_disposed || App.Settings?.ShowPlaybackNotices == false) return;
+
+            string screen = ScreenDeviceName;
+            string headline = PlaybackFailureText.Headline(e.Item?.FileName);
+            string detail = PlaybackFailureText.Detail(e.ErrorMessage);
+            Dispatcher.InvokeAsync(() => OverlayNotice.Show(screen, headline, detail));
+        }
+
         private void ViewModel_TerminalFailure(object sender, EventArgs e)
         {
             if (_disposed) return;
+
+            // Say why the screen went away. The notice is its own window, so it outlives this one.
+            if (App.Settings?.ShowPlaybackNotices != false)
+            {
+                string screen = ScreenDeviceName;
+                string reason = _viewModel.StopReason ?? "None of this screen's videos could be played.";
+                Dispatcher.InvokeAsync(() => OverlayNotice.Show(screen, "Playback stopped on this screen", reason));
+            }
 
             // Terminal failure means all videos failed. Close the window.
             // Dispatch to UI thread just in case it's called from a background task

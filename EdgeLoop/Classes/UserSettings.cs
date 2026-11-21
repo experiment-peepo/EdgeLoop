@@ -104,6 +104,9 @@ namespace EdgeLoop.Classes
         public System.Collections.Generic.Dictionary<string, ScreenSkipKeys> PerScreenSkipHotkeys { get; set; } = new();
 
         public virtual bool AlwaysOpaque { get; set; } = false;
+
+        /// <summary>Show a short notice on a screen when one of its videos can't be played.</summary>
+        public virtual bool ShowPlaybackNotices { get; set; } = true;
         public virtual bool EnableSuperResolution { get; set; } = false;
 
         // Local Censor Settings

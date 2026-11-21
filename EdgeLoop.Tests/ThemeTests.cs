@@ -222,6 +222,24 @@ namespace EdgeLoop.Tests
         }
 
         [Fact]
+        public void PlaybackOverlay_BuildsWithItsCornerLoadingCard()
+        {
+            WpfApp.Run(() =>
+            {
+                var overlay = new HypnoWindow();
+                try
+                {
+                    LayoutWindow(overlay, 800, 450);
+                    overlay.AllowsTransparency.Should().BeTrue("the overlay is see-through");
+                }
+                finally
+                {
+                    overlay.Close();
+                }
+            });
+        }
+
+        [Fact]
         public void InputDialog_DisablesOkUntilSomethingIsTyped()
         {
             WpfApp.Run(() =>

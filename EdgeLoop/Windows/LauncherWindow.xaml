@@ -491,8 +491,14 @@
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="{Binding ScreenName}" FontWeight="Bold" Foreground="{StaticResource TextPrimary}" VerticalAlignment="Center" Margin="0,0,12,0"/>
-                                    <TextBlock Grid.Column="1" Text="{Binding CurrentVideoTitle}" ToolTip="{Binding CurrentVideoTitle}" Foreground="{StaticResource TextSecondary}"
-                                               TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                                        <TextBlock Text="{Binding CurrentVideoTitle}" ToolTip="{Binding CurrentVideoTitle}" Foreground="{StaticResource TextSecondary}"
+                                                   TextTrimming="CharacterEllipsis"/>
+                                        <!-- The last failure on this screen, until the next video opens -->
+                                        <TextBlock Text="{Binding Problem}" ToolTip="{Binding Problem}" Foreground="{StaticResource ErrorTextBrush}" FontSize="11"
+                                                   TextTrimming="CharacterEllipsis" Margin="0,1,0,0"
+                                                   Visibility="{Binding Problem, Converter={StaticResource StringToVisibilityConverter}}"/>
+                                    </StackPanel>
                                     <Button Grid.Column="2" Command="{Binding PreviousCommand}" Style="{StaticResource ActivePlayerButtonStyle}" ToolTip="Previous video" AutomationProperties.Name="Previous video">
                                         <Path Data="{StaticResource Icon_Next}" Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" Stretch="Uniform" Width="13" Height="13"
                                               RenderTransformOrigin="0.5,0.5">
