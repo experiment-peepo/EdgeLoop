@@ -1,10 +1,15 @@
-using System;
+using System.Runtime.Versioning;
 using System.Windows;
-using System.Windows.Input;
+using EdgeLoop.Classes;
+using EdgeLoop.Controls;
 
 namespace EdgeLoop.Windows
 {
-    public partial class InputDialogWindow : Window
+    /// <summary>
+    /// Asks for one line of text, e.g. a URL. Use <see cref="DialogService.Prompt"/>.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    public partial class InputDialogWindow : EdgeLoopWindow
     {
         public string DialogTitle
         {
@@ -24,6 +29,26 @@ namespace EdgeLoop.Windows
         public static readonly DependencyProperty LabelTextProperty =
             DependencyProperty.Register(nameof(LabelText), typeof(string), typeof(InputDialogWindow), new PropertyMetadata("Enter value:"));
 
+        /// <summary>Greyed-out example shown inside the empty text box.</summary>
+        public string Hint
+        {
+            get => (string)GetValue(HintProperty);
+            set => SetValue(HintProperty, value);
+        }
+
+        public static readonly DependencyProperty HintProperty =
+            DependencyProperty.Register(nameof(Hint), typeof(string), typeof(InputDialogWindow), new PropertyMetadata(null));
+
+        /// <summary>Small print under the text box, e.g. the supported sites. Hidden when empty.</summary>
+        public string Note
+        {
+            get => (string)GetValue(NoteProperty);
+            set => SetValue(NoteProperty, value);
+        }
+
+        public static readonly DependencyProperty NoteProperty =
+            DependencyProperty.Register(nameof(Note), typeof(string), typeof(InputDialogWindow), new PropertyMetadata(null));
+
         public string InputText
         {
             get => (string)GetValue(InputTextProperty);
@@ -31,127 +56,31 @@ namespace EdgeLoop.Windows
         }
 
         public static readonly DependencyProperty InputTextProperty =
-            DependencyProperty.Register(nameof(InputText), typeof(string), typeof(InputDialogWindow), new PropertyMetadata(""));
+            DependencyProperty.Register(nameof(InputText), typeof(string), typeof(InputDialogWindow),
+                new PropertyMetadata("", (d, e) => ((InputDialogWindow)d).UpdateOkButton()));
 
         public InputDialogWindow()
         {
             InitializeComponent();
-            EdgeLoop.Classes.DialogKeys.Attach(this, OkButton, CancelButton);
+            DialogKeys.Attach(this, OkButton, CancelButton);
             DataContext = this;
-            Loaded += InputDialogWindow_Loaded;
-        }
-
-        private void InputDialogWindow_Loaded(object sender, RoutedEventArgs e)
-        {
-            // Focus the TextBox and select all text if there's an initial value
-            InputTextBox.Focus();
-            // Ensure text is visible by setting foreground explicitly
-            InputTextBox.Foreground = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Colors.White);
-            if (!string.IsNullOrEmpty(InputText))
+            Loaded += (s, e) =>
             {
+                InputTextBox.Focus();
                 InputTextBox.SelectAll();
-            }
-            // Initialize the clip geometry
-            UpdateMainBorderClip();
-        }
-
-        private void MainBorder_SizeChanged(object sender, SizeChangedEventArgs e)
-        {
-            UpdateMainBorderClip();
-        }
-
-        private void UpdateMainBorderClip()
-        {
-            if (MainBorderClip != null && MainBorder != null)
-            {
-                MainBorderClip.Rect = new Rect(0, 0, MainBorder.ActualWidth, MainBorder.ActualHeight);
-            }
-        }
-
-        private void Grid_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-        {
-            // Mark event as handled to prevent event bubbling issues
-            e.Handled = true;
-
-            // Call DragMove immediately while the button is definitely pressed
-            if (e.ButtonState == MouseButtonState.Pressed)
-            {
-                try
-                {
-                    this.DragMove();
-                }
-                catch (InvalidOperationException)
-                {
-                    // Silently handle the case where DragMove fails
-                    // This can happen in rare timing scenarios
-                }
-            }
-        }
-
-        private void OkButton_Click(object sender, RoutedEventArgs e)
-        {
-            DialogResult = true;
-            Close();
-        }
-
-        private void CancelButton_Click(object sender, RoutedEventArgs e)
-        {
-            DialogResult = false;
-            Close();
-        }
-
-        private void InputTextBox_KeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.Key == Key.Enter)
-            {
-                OkButton_Click(sender, e);
-                e.Handled = true;
-            }
-            else if (e.Key == Key.Escape)
-            {
-                CancelButton_Click(sender, e);
-                e.Handled = true;
-            }
-        }
-
-        public static string ShowDialog(Window owner, string title, string labelText, string initialValue = "")
-        {
-            var dialog = new InputDialogWindow
-            {
-                DialogTitle = title,
-                LabelText = labelText,
-                InputText = initialValue
             };
-
-            // Set owner window
-            if (owner != null)
-            {
-                dialog.Owner = owner;
-                dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            }
-            else
-            {
-                // Fallback to MainWindow if available
-                if (Application.Current?.MainWindow != null)
-                {
-                    dialog.Owner = Application.Current.MainWindow;
-                    dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
-                }
-                else
-                {
-                    dialog.WindowStartupLocation = WindowStartupLocation.CenterScreen;
-                }
-            }
-
-            // Show dialog and return result
-            bool? result = dialog.ShowDialog();
-            if (result == true)
-            {
-                return dialog.InputText?.Trim() ?? string.Empty;
-            }
-            return null;
+            UpdateOkButton();
         }
+
+        private void UpdateOkButton()
+        {
+            // OK means nothing until something has been typed
+            if (OkButton != null)
+                OkButton.IsEnabled = !string.IsNullOrWhiteSpace(InputText);
+        }
+
+        private void OkButton_Click(object sender, RoutedEventArgs e) => DialogResult = true;
+
+        private void CancelButton_Click(object sender, RoutedEventArgs e) => DialogResult = false;
     }
 }
-
-

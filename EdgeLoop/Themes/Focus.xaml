@@ -1,0 +1,36 @@
+<!--
+	Copyright (C) 2026 Llamasoft
+	Licensed under the GNU General Public License v3.0 or later (see LICENSE).
+
+	Keyboard focus rings. WPF draws a FocusVisualStyle only for keyboard focus (Tab, arrows), never after a mouse click.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="Colors.xaml"/>
+    </ResourceDictionary.MergedDictionaries>
+
+    <!-- For controls with 8px corners (buttons, text boxes, combo boxes) -->
+    <Style x:Key="FocusRingVisual">
+        <Setter Property="Control.Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Border Margin="-3" CornerRadius="10" BorderBrush="{StaticResource FocusRingBrush}" BorderThickness="2" SnapsToDevicePixels="True"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- For small or square controls (icon buttons, check boxes, list items) -->
+    <Style x:Key="FocusRingVisualTight">
+        <Setter Property="Control.Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Border Margin="-1" CornerRadius="4" BorderBrush="{StaticResource FocusRingBrush}" BorderThickness="2" SnapsToDevicePixels="True"/>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>

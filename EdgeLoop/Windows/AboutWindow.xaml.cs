@@ -1,39 +1,23 @@
 using System;
-using System.Windows;
+using System.Reflection;
+using System.Runtime.Versioning;
 using System.Windows.Input;
 using EdgeLoop.Classes;
-using System.Reflection;
+using EdgeLoop.Controls;
 
 namespace EdgeLoop.Windows
 {
-    public partial class AboutWindow : Window
+    [SupportedOSPlatform("windows")]
+    public partial class AboutWindow : EdgeLoopWindow
     {
         public AboutWindow()
         {
             InitializeComponent();
-            DialogKeys.Attach(this, defaultButton: null, cancelButton: CloseButton);
+            DialogKeys.Attach(this, defaultButton: null, cancelButton: null); // Esc closes
             DataContext = this;
 
             var version = Assembly.GetExecutingAssembly().GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
             VersionText.Text = $"v{version?.Split('+')[0]}";
-        }
-
-        private void Grid_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-        {
-            e.Handled = true;
-            if (e.ButtonState == MouseButtonState.Pressed)
-            {
-                try
-                {
-                    this.DragMove();
-                }
-                catch (InvalidOperationException) { }
-            }
-        }
-
-        private void CloseButton_Click(object sender, RoutedEventArgs e)
-        {
-            this.Close();
         }
 
         public ICommand OpenKoFiCommand => new RelayCommand(OpenKoFi);

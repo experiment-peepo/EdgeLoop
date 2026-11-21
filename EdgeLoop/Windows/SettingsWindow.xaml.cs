@@ -1,13 +1,13 @@
 using System;
+using System.Runtime.Versioning;
 using System.Windows;
-using System.Windows.Input;
+using EdgeLoop.Controls;
 using EdgeLoop.ViewModels;
-using System.IO;
-using System.Diagnostics;
 
 namespace EdgeLoop.Windows
 {
-    public partial class SettingsWindow : Window
+    [SupportedOSPlatform("windows")]
+    public partial class SettingsWindow : EdgeLoopWindow
     {
         private SettingsViewModel _viewModel;
 
@@ -54,32 +54,6 @@ namespace EdgeLoop.Windows
             if (IsLoaded && ActualHeight > 0 && Top + ActualHeight > areaTop + areaHeight - ScreenMargin)
                 Top = Math.Max(areaTop + ScreenMargin, areaTop + areaHeight - ScreenMargin - ActualHeight);
         }
-
-        private void Grid_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-        {
-            // Mark event as handled to prevent event bubbling issues
-            e.Handled = true;
-
-            // Call DragMove immediately while the button is definitely pressed
-            if (e.ButtonState == MouseButtonState.Pressed)
-            {
-                try
-                {
-                    this.DragMove();
-                }
-                catch (InvalidOperationException)
-                {
-                    // Silently handle the case where DragMove fails
-                    // This can happen in rare timing scenarios
-                }
-            }
-        }
-
-        private void CloseButton_Click(object sender, RoutedEventArgs e)
-        {
-            this.Close();
-        }
-
     }
 
     public class EnumToVisibilityConverter : System.Windows.Data.IValueConverter

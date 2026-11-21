@@ -9,6 +9,7 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Media;
 using EdgeLoop.Classes;
+using EdgeLoop.Controls;
 using EdgeLoop.ViewModels;
 using Point = System.Windows.Point;
 using MouseEventArgs = System.Windows.Input.MouseEventArgs;
@@ -18,7 +19,7 @@ using DragEventArgs = System.Windows.DragEventArgs;
 namespace EdgeLoop.Windows
 {
     [System.Runtime.Versioning.SupportedOSPlatform("windows")]
-    public partial class LauncherWindow : Window
+    public partial class LauncherWindow : EdgeLoopWindow
     {
         private LauncherViewModel ViewModel => DataContext as LauncherViewModel;
 
@@ -240,172 +241,7 @@ namespace EdgeLoop.Windows
         {
             base.OnSourceInitialized(e);
             InitializeHotkeys();
-
-            ((System.Windows.Interop.HwndSource)PresentationSource.FromVisual(this)).AddHook(HookProc);
         }
-
-        private IntPtr HookProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
-        {
-            if (msg == 0x0024)
-            { // WM_GETMINMAXINFO
-                WmGetMinMaxInfo(hwnd, lParam);
-                handled = true;
-            }
-            return IntPtr.Zero;
-        }
-
-        private void WmGetMinMaxInfo(IntPtr hwnd, IntPtr lParam)
-        {
-            var mmi = (MINMAXINFO)System.Runtime.InteropServices.Marshal.PtrToStructure(lParam, typeof(MINMAXINFO));
-            var currentScreen = System.Windows.Forms.Screen.FromHandle(hwnd);
-            var workArea = currentScreen.WorkingArea;
-            var monitorArea = currentScreen.Bounds;
-
-            // Maximized position should be relative to the monitor it's on
-            mmi.ptMaxPosition.x = Math.Abs(workArea.Left - monitorArea.Left);
-            mmi.ptMaxPosition.y = Math.Abs(workArea.Top - monitorArea.Top);
-
-            // Max size is the work area size (excludes taskbar)
-            mmi.ptMaxSize.x = Math.Abs(workArea.Right - workArea.Left);
-            mmi.ptMaxSize.y = Math.Abs(workArea.Bottom - workArea.Top);
-
-            // Crucial: Set max track size to allow the window to actually reach the max size
-            // If this isn't set, Windows might caps it at the primary monitor's dimensions.
-            mmi.ptMaxTrackSize.x = mmi.ptMaxSize.x;
-            mmi.ptMaxTrackSize.y = mmi.ptMaxSize.y;
-
-            System.Runtime.InteropServices.Marshal.StructureToPtr(mmi, lParam, true);
-        }
-
-        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-        public struct POINT
-        {
-            public int x;
-            public int y;
-        }
-
-        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]
-        public struct MINMAXINFO
-        {
-            public POINT ptReserved;
-            public POINT ptMaxSize;
-            public POINT ptMaxPosition;
-            public POINT ptMinTrackSize;
-            public POINT ptMaxTrackSize;
-        }
-
-        private void Grid_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-        {
-            // Mark event as handled to prevent event bubbling issues
-            e.Handled = true;
-
-            // Allow dragging even when maximized - restore first then drag
-            if (WindowState == WindowState.Maximized)
-            {
-                // Calculate the position to restore to based on mouse position
-                var point = PointToScreen(e.GetPosition(this));
-                WindowState = WindowState.Normal;
-
-                // Set window position relative to mouse
-                Left = point.X - (RestoreBounds.Width * 0.5);
-                Top = point.Y - 10; // Small offset from top
-            }
-
-            // Call DragMove immediately while the button is definitely pressed
-            // Use the event args button state which is guaranteed to be pressed at this point
-            if (e.ButtonState == MouseButtonState.Pressed)
-            {
-                try
-                {
-                    this.DragMove();
-                }
-                catch (InvalidOperationException)
-                {
-                    // Silently handle the case where DragMove fails
-                    // This can happen in rare timing scenarios
-                }
-            }
-        }
-
-        // Make the entire window draggable, not just the header
-        private void Window_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-        {
-            // Only drag if clicking on the window background, not on controls
-            if (e.OriginalSource is FrameworkElement element)
-            {
-                // Don't drag if clicking on buttons, textboxes, or other interactive controls
-                if (element is Button || element is TextBox || element is ComboBox ||
-                    element is Slider || element is ListView || element is ListViewItem ||
-                    element is ScrollViewer || element is System.Windows.Controls.Primitives.ScrollBar)
-                {
-                    return;
-                }
-
-                // Check if we're clicking on a child of an interactive control
-                var parent = VisualTreeHelper.GetParent(element);
-                while (parent != null)
-                {
-                    if (parent is Button || parent is TextBox || parent is ComboBox ||
-                        parent is Slider || parent is ListView || parent is ListViewItem ||
-                        parent is ScrollViewer || parent is System.Windows.Controls.Primitives.ScrollBar)
-                    {
-                        return;
-                    }
-                    parent = VisualTreeHelper.GetParent(parent);
-                }
-            }
-
-            // Mark event as handled to prevent event bubbling issues
-            e.Handled = true;
-
-            // Allow dragging even when maximized - restore first then drag
-            if (WindowState == WindowState.Maximized)
-            {
-                // Calculate the position to restore to based on mouse position
-                var point = PointToScreen(e.GetPosition(this));
-                WindowState = WindowState.Normal;
-
-                // Set window position relative to mouse, ensuring it's visible
-                var windowWidth = ActualWidth > 0 ? ActualWidth : Width;
-                var windowHeight = ActualHeight > 0 ? ActualHeight : Height;
-
-                // Center window on mouse cursor
-                Left = Math.Max(0, point.X - (windowWidth * 0.5));
-                Top = Math.Max(0, point.Y - 10); // Small offset from top
-
-                // Ensure window doesn't go off screen
-                var screen = System.Windows.Forms.Screen.FromPoint(new System.Drawing.Point((int)point.X, (int)point.Y));
-                if (screen != null)
-                {
-                    var screenBounds = screen.WorkingArea;
-                    if (Left + windowWidth > screenBounds.Right)
-                    {
-                        Left = screenBounds.Right - windowWidth;
-                    }
-                    if (Top + windowHeight > screenBounds.Bottom)
-                    {
-                        Top = screenBounds.Bottom - windowHeight;
-                    }
-                }
-            }
-
-            // Call DragMove immediately while the button is definitely pressed
-            // Use the event args button state which is guaranteed to be pressed at this point
-            if (e.ButtonState == MouseButtonState.Pressed)
-            {
-                try
-                {
-                    this.DragMove();
-                }
-                catch (InvalidOperationException)
-                {
-                    // Silently handle the case where DragMove fails
-                    // This can happen in rare timing scenarios
-                }
-            }
-        }
-
-
 
         private Point _startPoint;
         private InsertionAdorner _insertionAdorner;
@@ -775,47 +611,6 @@ namespace EdgeLoop.Windows
             };
             aboutWindow.ShowDialog();
         }
-
-        private void MaximizeButton_Click(object sender, RoutedEventArgs e)
-        {
-            if (WindowState == WindowState.Maximized)
-            {
-                WindowState = WindowState.Normal;
-            }
-            else
-            {
-                WindowState = WindowState.Maximized;
-            }
-        }
-
-        protected override void OnStateChanged(EventArgs e)
-        {
-            base.OnStateChanged(e);
-
-            // Update border corner radius based on window state
-            if (WindowState == WindowState.Maximized)
-            {
-                if (MainBorder != null)
-                {
-                    MainBorder.CornerRadius = new CornerRadius(0);
-                }
-                if (HeaderBorder != null)
-                {
-                    HeaderBorder.CornerRadius = new CornerRadius(0);
-                }
-            }
-            else
-            {
-                if (MainBorder != null)
-                {
-                    MainBorder.CornerRadius = new CornerRadius(8);
-                }
-                if (HeaderBorder != null)
-                {
-                    HeaderBorder.CornerRadius = new CornerRadius(8, 8, 0, 0);
-                }
-            }
-        }
     }
 
     public class StringToVisibilityConverter : IValueConverter
@@ -927,17 +722,13 @@ namespace EdgeLoop.Windows
 
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            if (value is ViewModels.StatusMessageType messageType)
+            return (value as ViewModels.StatusMessageType?) switch
             {
-                return messageType switch
-                {
-                    ViewModels.StatusMessageType.Success => new SolidColorBrush(Color.FromArgb(0x33, 0x90, 0xEE, 0x90)), // Soft green with transparency
-                    ViewModels.StatusMessageType.Warning => new SolidColorBrush(Color.FromArgb(0x33, 0xFF, 0xD7, 0x00)), // Golden yellow with transparency
-                    ViewModels.StatusMessageType.Error => new SolidColorBrush(Color.FromArgb(0x40, 0xFF, 0x44, 0x44)),   // ErrorColor tint: errors must not look like the pink accent
-                    _ => new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xB6, 0xD9)) // Info: TextSecondary tint, visible on the dark background
-                };
-            }
-            return new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xB6, 0xD9));
+                ViewModels.StatusMessageType.Success => ThemeBrushes.Get("SuccessBannerBrush", Color.FromArgb(0x33, 0x90, 0xEE, 0x90)),
+                ViewModels.StatusMessageType.Warning => ThemeBrushes.Get("WarningBannerBrush", Color.FromArgb(0x33, 0xFF, 0xD7, 0x00)),
+                ViewModels.StatusMessageType.Error => ThemeBrushes.Get("ErrorBannerBrush", Color.FromArgb(0x40, 0xFF, 0x44, 0x44)),
+                _ => ThemeBrushes.Get("InfoBannerBrush", Color.FromArgb(0x26, 0xFF, 0xB6, 0xD9))
+            };
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
@@ -952,17 +743,13 @@ namespace EdgeLoop.Windows
 
         public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
         {
-            if (value is ViewModels.StatusMessageType messageType)
+            return (value as ViewModels.StatusMessageType?) switch
             {
-                return messageType switch
-                {
-                    ViewModels.StatusMessageType.Success => new SolidColorBrush(Color.FromArgb(0xCC, 0x90, 0xEE, 0x90)), // Light green
-                    ViewModels.StatusMessageType.Warning => new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xD7, 0x00)), // Golden yellow
-                    ViewModels.StatusMessageType.Error => new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0x7A, 0x7A)),   // Light red, readable on the dark background
-                    _ => new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF)) // Default: white
-                };
-            }
-            return new SolidColorBrush(Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF));
+                ViewModels.StatusMessageType.Success => ThemeBrushes.Get("SuccessTextBrush", Color.FromArgb(0xCC, 0x90, 0xEE, 0x90)),
+                ViewModels.StatusMessageType.Warning => ThemeBrushes.Get("WarningTextBrush", Color.FromArgb(0xCC, 0xFF, 0xD7, 0x00)),
+                ViewModels.StatusMessageType.Error => ThemeBrushes.Get("ErrorTextBrush", Color.FromRgb(0xFF, 0x7A, 0x7A)),
+                _ => ThemeBrushes.Get("InfoTextBrush", Color.FromArgb(0xCC, 0xFF, 0xFF, 0xFF))
+            };
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)

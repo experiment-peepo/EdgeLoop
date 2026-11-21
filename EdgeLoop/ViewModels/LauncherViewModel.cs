@@ -641,16 +641,14 @@ namespace EdgeLoop.ViewModels
             }, TaskContinuationOptions.OnlyOnFaulted);
         }
 
+        private const string SupportedSitesNote = "Supported: Hypnotube, Iwara, PMVHaven, Rule34Video";
+
         private async Task AddUrlAsync()
         {
             try
             {
-                // Show input dialog
-                var inputUrl = InputDialogWindow.ShowDialog(
-                    Application.Current?.MainWindow,
-                    "Add Video URL",
-                    "Video URL:"
-                );
+                var inputUrl = DialogService.Prompt("Add video URL", "Video URL",
+                    hint: "https://", note: SupportedSitesNote);
                 if (string.IsNullOrWhiteSpace(inputUrl))
                     return;
 
@@ -964,12 +962,8 @@ namespace EdgeLoop.ViewModels
         {
             try
             {
-                // Show input dialog
-                var playlistUrl = InputDialogWindow.ShowDialog(
-                    Application.Current.MainWindow,
-                    "Import Playlist",
-                    "Playlist URL:"
-                );
+                var playlistUrl = DialogService.Prompt("Import playlist", "Playlist URL",
+                    hint: "https://", note: "A playlist or collection page from a supported site");
                 if (string.IsNullOrWhiteSpace(playlistUrl))
                     return;
 
@@ -1099,12 +1093,8 @@ namespace EdgeLoop.ViewModels
         {
             try
             {
-                // Show input dialog
-                var inputUrl = InputDialogWindow.ShowDialog(
-                    Application.Current.MainWindow,
-                    "Add URL or Playlist",
-                    "Video or Playlist URL:"
-                );
+                var inputUrl = DialogService.Prompt("Add URL or playlist", "Video or playlist URL",
+                    hint: "https://", note: SupportedSitesNote);
                 if (string.IsNullOrWhiteSpace(inputUrl))
                     return;
 
@@ -1388,7 +1378,7 @@ namespace EdgeLoop.ViewModels
 
         private void Exit(object obj)
         {
-            if (ConfirmationWindow.Show(Application.Current.MainWindow, "Exit program", "Exit program? The EdgeLoop session will be terminated :("))
+            if (DialogService.Confirm("Exit EdgeLoop", "Exit EdgeLoop? Playback stops on every screen.", "Exit", "Cancel"))
             {
                 SaveSession(runInBackground: false);
                 Application.Current.Shutdown();
@@ -1937,8 +1927,7 @@ namespace EdgeLoop.ViewModels
             var ambiguity = PlaylistImporter.DetectUrlAmbiguity(url);
             if (ambiguity.IsAmbiguous)
             {
-                var choice = ChoiceDialogWindow.ShowDialog(
-                    Application.Current?.MainWindow,
+                var choice = DialogService.Choose(
                     $"Crawl video {ambiguity.VideoId} or playlist {ambiguity.PlaylistId}",
                     $"This {ambiguity.SiteName} link contains both a video and a playlist. What do you want to import?",
                     "Only video",

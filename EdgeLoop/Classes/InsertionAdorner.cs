@@ -16,8 +16,7 @@ namespace EdgeLoop.Classes
             _isAfter = isAfter;
             _adornerLayer = adornerLayer;
 
-            // Pink accent color matching app theme
-            _pen = new Pen(new SolidColorBrush(Color.FromRgb(0xFF, 0x69, 0xB4)), 3);
+            _pen = new Pen(ThemeBrushes.Get("AccentSecondary", Color.FromRgb(0xFF, 0x69, 0xB4)), 3);
             _pen.Freeze();
 
             IsHitTestVisible = false;

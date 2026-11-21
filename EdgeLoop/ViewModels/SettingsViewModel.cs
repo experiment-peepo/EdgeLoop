@@ -299,7 +299,8 @@ namespace EdgeLoop.ViewModels
 
         private void ResetPositions(object obj)
         {
-            if (Windows.ConfirmationDialog.Show("Are you sure you want to clear all saved video positions? This cannot be undone.", "Reset Playback History"))
+            if (DialogService.Confirm("Reset playback history", "Clear the saved position of every video? This can't be undone.",
+                    "Clear positions", "Cancel", destructive: true))
             {
                 PlaybackPositionTracker.Instance.ClearAllPositions();
             }

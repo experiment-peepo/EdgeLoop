@@ -1,0 +1,95 @@
+<!--
+	Copyright (C) 2026 Llamasoft
+	Licensed under the GNU General Public License v3.0 or later (see LICENSE).
+
+	Fonts and the type scale. Windows set BodyFontFamily (see Windows.xaml) and everything inside
+	inherits it; Segoe UI Variable is the Windows 11 system font, Segoe UI the fallback on Windows 10.
+-->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
+
+    <ResourceDictionary.MergedDictionaries>
+        <ResourceDictionary Source="Colors.xaml"/>
+    </ResourceDictionary.MergedDictionaries>
+
+    <FontFamily x:Key="BodyFontFamily">Segoe UI Variable Text, Segoe UI</FontFamily>
+    <FontFamily x:Key="DisplayFontFamily">Segoe UI Variable Display, Segoe UI</FontFamily>
+
+    <!-- Type scale -->
+    <sys:Double x:Key="FontSizeCaption">12</sys:Double>
+    <sys:Double x:Key="FontSizeSmall">13</sys:Double>
+    <sys:Double x:Key="FontSizeBody">14</sys:Double>
+    <sys:Double x:Key="FontSizeSubtitle">16</sys:Double>
+    <sys:Double x:Key="FontSizeTitle">20</sys:Double>
+    <sys:Double x:Key="FontSizeDisplay">28</sys:Double>
+
+    <!-- Spacing (4px base unit) -->
+    <sys:Double x:Key="SpacingSmall">8</sys:Double>
+    <sys:Double x:Key="SpacingMedium">12</sys:Double>
+    <sys:Double x:Key="SpacingBase">16</sys:Double>
+    <sys:Double x:Key="SpacingLarge">24</sys:Double>
+    <Thickness x:Key="PagePadding">24,20,24,24</Thickness>
+    <Thickness x:Key="CardPadding">16,12</Thickness>
+
+    <Style TargetType="Label" x:Key="GlowingTitleStyle">
+        <Setter Property="FontFamily" Value="{StaticResource DisplayFontFamily}"/>
+        <Setter Property="Foreground" Value="{StaticResource AccentPrimary}"/>
+        <Setter Property="HorizontalContentAlignment" Value="Center"/>
+        <Setter Property="FontSize" Value="32"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Margin" Value="0,0,0,8"/>
+        <Setter Property="Effect">
+            <Setter.Value>
+                <DropShadowEffect Color="{StaticResource AccentColor}" BlurRadius="25" ShadowDepth="0" Opacity="0.8"/>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="LowerTitle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource DisplayFontFamily}"/>
+        <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeBody}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Margin" Value="0,0,0,4"/>
+    </Style>
+
+    <Style x:Key="CaptionText" TargetType="TextBlock">
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+        <Setter Property="FontWeight" Value="Regular"/>
+        <Setter Property="LineHeight" Value="17"/>
+        <Setter Property="Foreground" Value="{StaticResource TextTertiary}"/>
+    </Style>
+
+    <Style x:Key="WindowHeaderTitleStyle" TargetType="TextBlock">
+        <Setter Property="FontFamily" Value="{StaticResource DisplayFontFamily}"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeTitle}"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+    </Style>
+
+    <Style x:Key="WindowHeaderSubtitleStyle" TargetType="TextBlock">
+        <Setter Property="TextWrapping" Value="Wrap"/>
+        <Setter Property="FontSize" Value="{StaticResource FontSizeCaption}"/>
+        <Setter Property="FontWeight" Value="Regular"/>
+        <Setter Property="Foreground" Value="{StaticResource TextTertiary}"/>
+        <Setter Property="Margin" Value="0,4,0,0"/>
+    </Style>
+
+    <!-- Uppercase section labels inside a page, e.g. "SESSION PERSISTENCE" -->
+    <Style x:Key="SectionLabelText" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="11"/>
+        <Setter Property="FontWeight" Value="Bold"/>
+        <Setter Property="Foreground" Value="{StaticResource AccentPrimary}"/>
+        <Setter Property="Opacity" Value="0.85"/>
+    </Style>
+
+    <!-- A setting's name in a settings row -->
+    <Style x:Key="SettingLabelText" TargetType="TextBlock">
+        <Setter Property="FontSize" Value="{StaticResource FontSizeSmall}"/>
+        <Setter Property="FontWeight" Value="SemiBold"/>
+        <Setter Property="Foreground" Value="{StaticResource TextPrimary}"/>
+    </Style>
+
+</ResourceDictionary>

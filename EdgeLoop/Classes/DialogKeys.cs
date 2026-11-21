@@ -14,24 +14,46 @@ namespace EdgeLoop.Classes
     {
         /// <param name="window">The dialog.</param>
         /// <param name="defaultButton">Invoked by Enter, or null for no Enter action (e.g. destructive confirmations).</param>
-        /// <param name="cancelButton">Invoked by Esc.</param>
+        /// <param name="cancelButton">Invoked by Esc, or null to have Esc close the window.</param>
         /// <param name="enterFromTextBoxes">Whether Enter inside a text box also invokes the default button.</param>
         public static void Attach(Window window, ButtonBase defaultButton, ButtonBase cancelButton, bool enterFromTextBoxes = true)
         {
             window.PreviewKeyDown += (s, e) =>
             {
-                if (e.Key == Key.Escape && cancelButton != null)
+                // An open drop-down uses Enter and Esc itself
+                if (IsInOpenDropDown(Keyboard.FocusedElement as DependencyObject))
+                    return;
+
+                if (e.Key == Key.Escape)
                 {
-                    e.Handled = Invoke(cancelButton);
+                    if (cancelButton != null)
+                    {
+                        e.Handled = Invoke(cancelButton);
+                    }
+                    else
+                    {
+                        window.Close();
+                        e.Handled = true;
+                    }
                 }
                 else if (e.Key == Key.Enter && defaultButton != null)
                 {
+                    // A focused button (reached with Tab) presses itself
+                    if (Keyboard.FocusedElement is ButtonBase)
+                        return;
                     if (Keyboard.FocusedElement is TextBox textBox && (textBox.AcceptsReturn || !enterFromTextBoxes))
                         return;
                     e.Handled = Invoke(defaultButton);
                 }
             };
         }
+
+        private static bool IsInOpenDropDown(DependencyObject focused) => focused switch
+        {
+            ComboBox comboBox => comboBox.IsDropDownOpen,
+            ComboBoxItem item => ItemsControl.ItemsControlFromItemContainer(item) is ComboBox { IsDropDownOpen: true },
+            _ => false
+        };
 
         private static bool Invoke(ButtonBase button)
         {

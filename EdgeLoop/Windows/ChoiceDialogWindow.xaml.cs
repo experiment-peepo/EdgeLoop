@@ -1,14 +1,24 @@
 using System;
+using System.Runtime.Versioning;
 using System.Windows;
-using System.Windows.Input;
 using System.Windows.Threading;
+using EdgeLoop.Classes;
+using EdgeLoop.Controls;
 
 namespace EdgeLoop.Windows
 {
-    public partial class ChoiceDialogWindow : Window
+    /// <summary>
+    /// A choice between two options that picks the second one after <see cref="AutoSelectSeconds"/>
+    /// unless the user stops the countdown. Use <see cref="DialogService.Choose"/>.
+    /// </summary>
+    [SupportedOSPlatform("windows")]
+    public partial class ChoiceDialogWindow : EdgeLoopWindow
     {
-        private DispatcherTimer _timer;
-        private int _secondsRemaining = 20;
+        public const int AutoSelectSeconds = 20;
+
+        private readonly DispatcherTimer _timer;
+        private int _secondsRemaining = AutoSelectSeconds;
+        private bool _countdownStopped;
 
         public string DialogTitle
         {
@@ -16,7 +26,7 @@ namespace EdgeLoop.Windows
             set => SetValue(DialogTitleProperty, value);
         }
         public static readonly DependencyProperty DialogTitleProperty =
-            DependencyProperty.Register(nameof(DialogTitle), typeof(string), typeof(ChoiceDialogWindow), new PropertyMetadata("Choice Required"));
+            DependencyProperty.Register(nameof(DialogTitle), typeof(string), typeof(ChoiceDialogWindow), new PropertyMetadata("Choose"));
 
         public string Message
         {
@@ -40,7 +50,8 @@ namespace EdgeLoop.Windows
             set => SetValue(Option2TextProperty, value);
         }
         public static readonly DependencyProperty Option2TextProperty =
-            DependencyProperty.Register(nameof(Option2Text), typeof(string), typeof(ChoiceDialogWindow), new PropertyMetadata("Option 2"));
+            DependencyProperty.Register(nameof(Option2Text), typeof(string), typeof(ChoiceDialogWindow),
+                new PropertyMetadata("Option 2", (d, e) => ((ChoiceDialogWindow)d).UpdateCountdownText()));
 
         public string CountdownText
         {
@@ -50,116 +61,61 @@ namespace EdgeLoop.Windows
         public static readonly DependencyProperty CountdownTextProperty =
             DependencyProperty.Register(nameof(CountdownText), typeof(string), typeof(ChoiceDialogWindow), new PropertyMetadata(""));
 
-        public int SelectedOption { get; private set; } = 0; // 0=Cancel, 1=Option1, 2=Option2
+        /// <summary>0 = cancelled, 1 = first option, 2 = second option.</summary>
+        public int SelectedOption { get; private set; }
 
         public ChoiceDialogWindow()
         {
             InitializeComponent();
-            EdgeLoop.Classes.DialogKeys.Attach(this, Option2Button, CancelButton);
+            // Esc and the title bar's close button cancel
+            DialogKeys.Attach(this, Option2Button, cancelButton: null);
             DataContext = this;
-            Loaded += ChoiceDialogWindow_Loaded;
 
             _timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
             _timer.Tick += Timer_Tick;
+            Loaded += (s, e) =>
+            {
+                if (IsVisible)
+                    _timer.Start();
+                Option2Button.Focus();
+            };
+            Closed += (s, e) => _timer.Stop();
             UpdateCountdownText();
-        }
-
-        private void ChoiceDialogWindow_Loaded(object sender, RoutedEventArgs e)
-        {
-            UpdateMainBorderClip();
-            _timer.Start();
         }
 
         private void Timer_Tick(object sender, EventArgs e)
         {
             _secondsRemaining--;
             if (_secondsRemaining <= 0)
-            {
-                _timer.Stop();
-                // Default to Option 2 (usually the "Full Collection" or safer default)
-                SelectedOption = 2;
-                DialogResult = true;
-                Close();
-            }
+                Choose(2);
             else
-            {
                 UpdateCountdownText();
-            }
         }
 
         private void UpdateCountdownText()
         {
-            CountdownText = $"{_secondsRemaining}s remaining (Defaulting to {Option2Text})";
+            if (!_countdownStopped)
+                CountdownText = $"Choosing “{Option2Text}” in {_secondsRemaining} s";
         }
 
-        private void MainBorder_SizeChanged(object sender, SizeChangedEventArgs e)
-        {
-            UpdateMainBorderClip();
-        }
-
-        private void UpdateMainBorderClip()
-        {
-            if (MainBorderClip != null && MainBorder != null)
-            {
-                MainBorderClip.Rect = new Rect(0, 0, MainBorder.ActualWidth, MainBorder.ActualHeight);
-            }
-        }
-
-        private void Grid_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
-        {
-            if (e.ButtonState == MouseButtonState.Pressed)
-            {
-                try { this.DragMove(); } catch { }
-            }
-        }
-
-        private void Option1Button_Click(object sender, RoutedEventArgs e)
+        private void PauseButton_Click(object sender, RoutedEventArgs e)
         {
             _timer.Stop();
-            SelectedOption = 1;
+            _countdownStopped = true;
+            CountdownText = "Countdown stopped";
+            PauseButton.Visibility = Visibility.Collapsed;
+            Option2Button.Focus();
+        }
+
+        private void Option1Button_Click(object sender, RoutedEventArgs e) => Choose(1);
+
+        private void Option2Button_Click(object sender, RoutedEventArgs e) => Choose(2);
+
+        private void Choose(int option)
+        {
+            _timer.Stop();
+            SelectedOption = option;
             DialogResult = true;
-            Close();
-        }
-
-        private void Option2Button_Click(object sender, RoutedEventArgs e)
-        {
-            _timer.Stop();
-            SelectedOption = 2;
-            DialogResult = true;
-            Close();
-        }
-
-        private void CancelButton_Click(object sender, RoutedEventArgs e)
-        {
-            _timer.Stop();
-            SelectedOption = 0;
-            DialogResult = false;
-            Close();
-        }
-
-        public static int ShowDialog(Window owner, string title, string message, string option1, string option2)
-        {
-            var dialog = new ChoiceDialogWindow
-            {
-                DialogTitle = title,
-                Message = message,
-                Option1Text = option1,
-                Option2Text = option2
-            };
-
-            if (owner != null)
-            {
-                dialog.Owner = owner;
-                dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            }
-            else if (Application.Current?.MainWindow != null)
-            {
-                dialog.Owner = Application.Current.MainWindow;
-                dialog.WindowStartupLocation = WindowStartupLocation.CenterOwner;
-            }
-
-            bool? result = dialog.ShowDialog();
-            return result == true ? dialog.SelectedOption : 0;
         }
     }
 }
