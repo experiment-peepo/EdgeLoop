@@ -250,6 +250,12 @@ public unsafe partial class Renderer
         // TBR: Currently Bitmap Subs only (possible ChildRenderer too - might separate them or create separate PS for it)
         blendStateAlpha = device.CreateBlendState(blendDesc);
         psShader["rgba"] = ShaderCompiler.CompilePS(device, "rgba", "color = float4(Texture1.Sample(Sampler, input.Texture).rgba);");
+        // Fork: the upscaled picture onto the 8-bit screen, with a little noise so its 16-bit gradients don't band
+        // (interleaved gradient noise, Jimenez 2014)
+        psShader["rgbaDither"] = ShaderCompiler.CompilePS(device, "rgbaDither", @"
+color = Texture1.Sample(Sampler, input.Texture);
+float noise = frac(52.9829189 * frac(dot(input.Position.xy, float2(0.06711056, 0.00583715))));
+color.rgb += (noise - 0.5) / 255.0;");
 
         iccTxt = device.CreateTexture2D(Format.R16G16B16A16_UNorm, 33 * 33, 33);
         iccSrv = device.CreateShaderResourceView(iccTxt);

@@ -141,8 +141,8 @@ public unsafe partial class Renderer
         if (Pano360._enabled)
             return canFL ? VideoProcessors.Flyleaf : VideoProcessors.SwsScale;
 
-        // Fork: shader upscaling runs in the Flyleaf processor, whichever one is preferred
-        if (ucfg.ShaderUpscaling && canFL)
+        // Fork: shader upscaling and debanding run in the Flyleaf processor, whichever one is preferred
+        if ((ucfg.ShaderUpscaling || ucfg.ShaderDeband) && canFL)
             return VideoProcessors.Flyleaf;
 
         if (PreferredVideoProcessor == VideoProcessors.D3D11 && canD3)

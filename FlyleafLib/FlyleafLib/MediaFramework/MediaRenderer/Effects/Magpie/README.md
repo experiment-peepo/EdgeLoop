@@ -13,5 +13,7 @@ compiler and drawer.
 | `FSR_RCAS.hlsl` | AMD FidelityFX FSR 1 sharpening | GPUOpen-Effects/FidelityFX-FSR, MIT |
 | `SSimDownscaler.hlsl` | Perception-based shrinking | [igv's SSimDownscaler](https://gist.github.com/igv/36508af3ffc84410fe39761d6969be10), LGPL-3.0 |
 
+`../EdgeLoop/Deband.hlsl` is EdgeLoop's own effect in the same format (GPL-3.0), embedded the same way.
+
 To update one, copy the new file from Magpie over it and run the tests (`MagpieEffectTests`): they read and
 compile every bundled effect and check the upscalers' output on the GPU.

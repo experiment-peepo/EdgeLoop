@@ -122,8 +122,8 @@
                     </controls:SettingRow>
 
                     <controls:SettingRow Header="Upscaling" Description="{Binding UpscalingDescription}">
-                        <ComboBox Width="190" ItemsSource="{Binding UpscalingChoices}" DisplayMemberPath="Value" SelectedValuePath="Key"
-                                  SelectedValue="{Binding Upscaling}"
+                        <ComboBox Width="190" ItemsSource="{Binding UpscalingModes}" DisplayMemberPath="Value" SelectedValuePath="Key"
+                                  SelectedValue="{Binding UpscalingMode}"
                                   ToolTip="Only videos smaller than the screen are upscaled"/>
                     </controls:SettingRow>
 
@@ -349,7 +349,7 @@
                     </controls:SettingRow>
 
                     <TextBlock Text="TROUBLESHOOTING" Style="{StaticResource SettingsGroupHeader}"/>
-                    <controls:SettingRow Header="Diagnostic mode" Description="Writes a detailed diagnostics.log next to the normal log, with file paths and engine events, for bug reports">
+                    <controls:SettingRow Header="Diagnostic mode" Description="Shows playback and upscaling details in the corner of each screen, and writes a detailed diagnostics.log next to the normal log for bug reports">
                         <CheckBox IsChecked="{Binding EnableDiagnosticMode}"/>
                     </controls:SettingRow>
                     <controls:SettingRow Header="Log files" Description="Opens the folder with EdgeLoop's logs">

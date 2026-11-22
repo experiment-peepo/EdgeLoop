@@ -51,6 +51,7 @@ namespace EdgeLoop.Windows
             _viewModel.MediaOpened += ViewModel_MediaOpened;
             _viewModel.TerminalFailure += ViewModel_TerminalFailure;
             _viewModel.MediaFailed += ViewModel_MediaFailed;
+            _viewModel.UpscalingLowered += ViewModel_UpscalingLowered;
 
 
 
@@ -92,6 +93,7 @@ namespace EdgeLoop.Windows
                         _viewModel.MediaOpened -= ViewModel_MediaOpened;
                         _viewModel.TerminalFailure -= ViewModel_TerminalFailure;
                         _viewModel.MediaFailed -= ViewModel_MediaFailed;
+                        _viewModel.UpscalingLowered -= ViewModel_UpscalingLowered;
                         _viewModel.PropertyChanged -= ViewModel_PropertyChanged;
                         _viewModel.Dispose();
                     }
@@ -157,6 +159,16 @@ namespace EdgeLoop.Windows
             string headline = PlaybackFailureText.Headline(e.Item?.FileName);
             string detail = PlaybackFailureText.Detail(e.ErrorMessage);
             Dispatcher.InvokeAsync(() => OverlayNotice.Show(screen, headline, detail));
+        }
+
+        /// <summary>A notice in this screen's corner when it stepped upscaling down for a slow graphics card.</summary>
+        private void ViewModel_UpscalingLowered(object sender, string level)
+        {
+            if (_disposed || App.Settings?.ShowPlaybackNotices == false) return;
+
+            string screen = ScreenDeviceName;
+            var (headline, detail) = UpscalingSupport.LoweredNotice(level);
+            Dispatcher.InvokeAsync(() => OverlayNotice.Show(screen, headline, detail, isError: false));
         }
 
         private void ViewModel_TerminalFailure(object sender, EventArgs e)

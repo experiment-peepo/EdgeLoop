@@ -524,10 +524,13 @@ namespace EdgeLoop.ViewModels
         public string StopReason { get; private set; }
         public event EventHandler<MediaErrorEventArgs> MediaFailed;
 
+        /// <summary>Applies the upscaling settings, and Diagnostic mode's corner details, to this player while it plays.</summary>
         public void RefreshSuperResolution()
         {
             if (_disposed || Player == null) return;
             UpscalingSupport.Apply(Player.Config.Video, App.Settings);
+            Player.Stats = App.Settings?.EnableDiagnosticMode ?? false;
+            RefreshUpscalingStatus();
         }
 
         private readonly IVideoUrlExtractor _urlExtractor;
@@ -1673,16 +1676,26 @@ namespace EdgeLoop.ViewModels
         {
             nameof(FlyleafLib.MediaFramework.MediaRenderer.Renderer.ShaderUpscaling),
             nameof(FlyleafLib.MediaFramework.MediaRenderer.Renderer.ShaderUpscalingIdleReason),
-            nameof(FlyleafLib.MediaFramework.MediaRenderer.Renderer.UpscaledSize),
+            nameof(FlyleafLib.MediaFramework.MediaRenderer.Renderer.UpscalingSteps),
             nameof(FlyleafLib.MediaFramework.MediaRenderer.Renderer.UpscalingMs)
         };
 
-        /// <summary>The overlay's upscaling line: to what size, at what GPU cost, or why it isn't running. Null when it's off.</summary>
+        /// <summary>The overlay's upscaling line (Diagnostic mode only): what runs and its GPU time, or why it isn't running.</summary>
         public string UpscalingStatus { get; private set; }
+
+        /// <summary>This screen stepped upscaling down (to the level given) because the graphics card couldn't keep up.</summary>
+        public event EventHandler<string> UpscalingLowered;
 
         private void Renderer_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
-            if (!_disposed && UpscalingProperties.Contains(e.PropertyName))
+            if (_disposed) return;
+
+            if (e.PropertyName == nameof(FlyleafLib.MediaFramework.MediaRenderer.Renderer.ShaderUpscalingLowered))
+            {
+                if (Player?.Renderer?.ShaderUpscalingLowered is string level)
+                    UpscalingLowered?.Invoke(this, level);
+            }
+            else if (UpscalingProperties.Contains(e.PropertyName))
                 RefreshUpscalingStatus();
         }
 
@@ -1691,7 +1704,9 @@ namespace EdgeLoop.ViewModels
             var renderer = Player?.Renderer;
             if (renderer == null) return;
 
-            var status = UpscalingSupport.Status(renderer.ShaderUpscaling, renderer.UpscaledSize, renderer.UpscalingMs, renderer.ShaderUpscalingIdleReason);
+            var status = Player.Stats
+                ? UpscalingSupport.Status(renderer.ShaderUpscaling, renderer.UpscalingSteps, renderer.UpscalingMs, renderer.ShaderUpscalingIdleReason)
+                : null;
             if (status == UpscalingStatus) return;
 
             UpscalingStatus = status;

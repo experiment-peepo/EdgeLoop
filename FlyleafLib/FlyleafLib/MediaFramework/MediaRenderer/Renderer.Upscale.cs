@@ -6,8 +6,8 @@ public partial class Renderer
     /// <summary>Fork: GPU time the upscaling shaders take per frame in milliseconds, averaged over 60 frames. Zero until measured or when not running.</summary>
     public double UpscalingMs { get; private set; }
 
-    /// <summary>Fork: the size the video is upscaled to before it's fitted to the screen (e.g. "2560x1440"). Null when not upscaling.</summary>
-    public string UpscaledSize { get; private set; }
+    /// <summary>Fork: the chain of effects running, in words (e.g. "FSRCNNX 2560x1440 → shrink 1920x1080"). Null when none runs.</summary>
+    public string UpscalingSteps { get; private set; }
 
     GpuTimer upTimer;
 
@@ -17,7 +17,10 @@ public partial class Renderer
         {
             upTimer ??= new GpuTimer(device);
             if (upTimer.Collect(context) is double ms)
+            {
                 SetUpscalingMs(Math.Round(ms, 2));
+                FLUpscaleCheckBudget(ms);
+            }
             return upTimer.Begin(context);
         }
         catch (Exception e)
@@ -45,13 +48,13 @@ public partial class Renderer
         SetUpscalingMs(0);
     }
 
-    void SetUpscaledSize(string size)
+    void SetUpscalingSteps(string steps)
     {
-        if (UpscaledSize == size)
+        if (UpscalingSteps == steps)
             return;
 
-        UpscaledSize = size;
-        RaiseUI(nameof(UpscaledSize));
+        UpscalingSteps = steps;
+        RaiseUI(nameof(UpscalingSteps));
         ResetUpscalingMs(); // A different amount of work
     }
 

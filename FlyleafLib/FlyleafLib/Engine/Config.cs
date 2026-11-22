@@ -1,5 +1,6 @@
 ﻿using FlyleafLib.MediaFramework.MediaFrame;
 using FlyleafLib.MediaFramework.MediaRenderer;
+using FlyleafLib.MediaFramework.MediaRenderer.Effects;
 using FlyleafLib.MediaPlayer;
 using FlyleafLib.Plugins;
 using System.Linq;
@@ -574,6 +575,18 @@ public class Config : NotifyPropertyChanged
         /// <summary>Fork: shader upscaling only runs on video up to this many lines tall (e.g. 1080). Zero means any size.</summary>
         public int ShaderUpscalingMaxHeight { get => _ShaderUpscalingMaxHeight; set => Set(ref _ShaderUpscalingMaxHeight, value); }
         internal int _ShaderUpscalingMaxHeight;
+
+        /// <summary>Fork: how shader upscaling enlarges video: FSR 1, FSRCNNX, or FSRCNNX for line art.</summary>
+        public ShaderUpscaler ShaderUpscaler { get => _ShaderUpscaler; set => Set(ref _ShaderUpscaler, value); }
+        internal ShaderUpscaler _ShaderUpscaler = ShaderUpscaler.Sharp;
+
+        /// <summary>Fork: sharpening after shader upscaling (FSR 1's RCAS), from 0 (none) to 1. Only while upscaling.</summary>
+        public float ShaderSharpening { get => _ShaderSharpening; set => Set(ref _ShaderSharpening, Math.Clamp(value, 0, 1)); }
+        internal float _ShaderSharpening;
+
+        /// <summary>Fork: smooths banding in gradients with EdgeLoop's deband shader, at any size. Uses the Flyleaf processor.</summary>
+        public bool ShaderDeband { get => _ShaderDeband; set { if (Set(ref _ShaderDeband, value)) player?.Renderer?.VPSwitchCheck(); } }
+        internal bool _ShaderDeband;
 
         /// <summary>Requests hardware video decoding on decoder setup. <see cref="MediaPlayer.Video.HWAcceleration"/> reports the effective result.</summary>
         public bool HWAcceleration { get; set; } = true;

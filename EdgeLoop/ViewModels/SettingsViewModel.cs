@@ -57,7 +57,8 @@ namespace EdgeLoop.ViewModels
             _defaultOpacity = settings.DefaultOpacity;
             _defaultVolume = settings.DefaultVolume;
             _alwaysOpaque = settings.AlwaysOpaque;
-            _upscaling = !settings.EnableSuperResolution ? -1 : Math.Max(0, settings.SuperResolutionMaxHeight);
+            _upscalingMode = !settings.EnableSuperResolution ? UpscalingSupport.Off
+                : UpscalingSupport.IsMode(settings.UpscalingQuality) && settings.UpscalingQuality != UpscalingSupport.Off ? settings.UpscalingQuality : "Sharp";
             _showPlaybackNotices = settings.ShowPlaybackNotices;
 
             // --- Library ---
@@ -213,7 +214,7 @@ namespace EdgeLoop.ViewModels
         {
             var values = new List<object>
             {
-                SelectedDefaultMonitor?.DeviceName, DefaultOpacity, DefaultVolume, AlwaysOpaque, Upscaling, ShowPlaybackNotices,
+                SelectedDefaultMonitor?.DeviceName, DefaultOpacity, DefaultVolume, AlwaysOpaque, UpscalingMode, ShowPlaybackNotices,
                 RememberLastPlaylist, RememberFilePosition, EnableLocalCaching, LocalCacheDirectory,
                 BrowserForCookies, CleanCookieString(HypnotubeCookies), CleanCookieString(IwaraCookies), CleanCookieString(Rule34VideoCookies),
                 StartWithWindows, EnableDiagnosticMode,
@@ -256,16 +257,18 @@ namespace EdgeLoop.ViewModels
             set => SetProperty(ref _alwaysOpaque, value);
         }
 
-        private int _upscaling;
-        /// <summary>Upscaling: -1 off, otherwise the tallest video to upscale (0 = any). See <see cref="UpscalingSupport.Choices"/>.</summary>
-        public int Upscaling
+        private string _upscalingMode;
+        /// <summary>Upscaling: "Off", or how (see <see cref="UpscalingSupport.Modes"/>).</summary>
+        public string UpscalingMode
         {
-            get => _upscaling;
-            set => SetProperty(ref _upscaling, value);
+            get => _upscalingMode;
+            set => SetProperty(ref _upscalingMode, value);
         }
 
-        public IEnumerable<KeyValuePair<int, string>> UpscalingChoices =>
-            UpscalingSupport.Choices.Select(c => new KeyValuePair<int, string>(c.MaxHeight, c.Label));
+        public bool IsUpscalingOn => UpscalingMode != UpscalingSupport.Off;
+
+        public IEnumerable<KeyValuePair<string, string>> UpscalingModes =>
+            UpscalingSupport.Modes.Select(m => new KeyValuePair<string, string>(m.Mode, m.Label));
 
         /// <summary>What upscaling does.</summary>
         public string UpscalingDescription => UpscalingSupport.Description;
@@ -650,7 +653,7 @@ namespace EdgeLoop.ViewModels
                     DefaultOpacity = defaults.DefaultOpacity;
                     DefaultVolume = defaults.DefaultVolume;
                     AlwaysOpaque = defaults.AlwaysOpaque;
-                    Upscaling = defaults.EnableSuperResolution ? Math.Max(0, defaults.SuperResolutionMaxHeight) : -1;
+                    UpscalingMode = defaults.EnableSuperResolution ? defaults.UpscalingQuality : UpscalingSupport.Off;
                     ShowPlaybackNotices = defaults.ShowPlaybackNotices;
                     break;
                 case SettingsSection.Library:
@@ -764,8 +767,9 @@ namespace EdgeLoop.ViewModels
             settings.DefaultOpacity = DefaultOpacity;
             settings.DefaultVolume = DefaultVolume;
             settings.AlwaysOpaque = AlwaysOpaque;
-            settings.EnableSuperResolution = Upscaling >= 0;
-            settings.SuperResolutionMaxHeight = Math.Max(0, Upscaling);
+            settings.EnableSuperResolution = IsUpscalingOn;
+            if (IsUpscalingOn)
+                settings.UpscalingQuality = UpscalingMode;
             settings.ShowPlaybackNotices = ShowPlaybackNotices;
 
             settings.RememberLastPlaylist = RememberLastPlaylist;

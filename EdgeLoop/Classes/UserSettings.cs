@@ -109,8 +109,8 @@ namespace EdgeLoop.Classes
         public virtual bool ShowPlaybackNotices { get; set; } = true;
         public virtual bool EnableSuperResolution { get; set; } = false;
 
-        /// <summary>Only upscale videos up to this many lines tall (720, 1080); 0 means any size.</summary>
-        public virtual int SuperResolutionMaxHeight { get; set; } = 0;
+        /// <summary>How upscaling enlarges video: "Fast" (FSR 1), "Sharp" (FSRCNNX) or "LineArt" (FSRCNNX for line art).</summary>
+        public virtual string UpscalingQuality { get; set; } = "Sharp";
 
         // Local Censor Settings
         //
@@ -297,6 +297,12 @@ namespace EdgeLoop.Classes
         private void ValidateAndClampValues()
         {
             bool valuesCorrected = false;
+
+            if (!UpscalingSupport.IsMode(UpscalingQuality) || UpscalingQuality == UpscalingSupport.Off)
+            {
+                UpscalingQuality = "Sharp";
+                valuesCorrected = true;
+            }
 
             if (Opacity < 0.0 || Opacity > 1.0)
             {

@@ -17,8 +17,8 @@ namespace FlyleafLib.MediaFramework.MediaRenderer.Effects;
 internal sealed record CompiledMagpieEffect(MagpieEffect Effect, Blob[] Passes);
 
 /// <summary>
-/// Fork: the Magpie effects bundled with FlyleafLib (Effects/Magpie/*.hlsl, from https://github.com/Blinue/Magpie,
-/// GPL-3.0), read from the assembly and compiled once per process on a worker thread.
+/// Fork: the effects bundled with FlyleafLib, read from the assembly and compiled once per process on a worker thread:
+/// Magpie's (Effects/Magpie/*.hlsl, from https://github.com/Blinue/Magpie, GPL-3.0) and EdgeLoop's own (Effects/EdgeLoop).
 /// </summary>
 internal static class MagpieEffects
 {
@@ -27,8 +27,10 @@ internal static class MagpieEffects
     public const string Easu = "FSR_EASU";
     public const string Rcas = "FSR_RCAS";
     public const string SSimDownscaler = "SSimDownscaler";
+    /// <summary>EdgeLoop's own (Effects/EdgeLoop/Deband.hlsl).</summary>
+    public const string Deband = "Deband";
 
-    public static readonly IReadOnlyList<string> Bundled = [FSRCNNX, FSRCNNXLineArt, Easu, Rcas, SSimDownscaler];
+    public static readonly IReadOnlyList<string> Bundled = [FSRCNNX, FSRCNNXLineArt, Easu, Rcas, SSimDownscaler, Deband];
 
     static readonly Dictionary<string, Task<CompiledMagpieEffect>> compiled = [];
 

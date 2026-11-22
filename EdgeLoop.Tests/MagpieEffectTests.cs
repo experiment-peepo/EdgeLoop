@@ -172,6 +172,42 @@ namespace EdgeLoop.Tests
             Math.Abs(soft[24, 31][0] - sharp[24, 31][0]).Should().BeGreaterThan(0.01f);
         }
 
+        [Fact]
+        public async Task Deband_SmoothsTheBandsInAGradient()
+        {
+            // A gentle gradient stored in 8 bits shows stair-step bands, one 8-bit step each
+            const uint width = 128, height = 32;
+            static float Ideal(float x) => 0.3f + 0.05f * x / width;
+            static float Banded(float x) => MathF.Round(Ideal(x) * 255) / 255;
+
+            var output = await Run(MagpieEffects.Deband, (x, y) => [Banded(x), Banded(x), Banded(x)], width, height, width, height, ("grain", 0f));
+
+            double before = 0, after = 0;
+            int count = 0;
+            for (int y = 4; y < height - 4; y++)
+            {
+                for (int x = 20; x < width - 20; x++)
+                {
+                    before += Math.Abs(Banded(x) - Ideal(x));
+                    after += Math.Abs(output[y, x][0] - Ideal(x));
+                    count++;
+                }
+            }
+
+            (after / count).Should().BeLessThan(before / count * 0.7, "the steps are smoothed back towards the real gradient");
+        }
+
+        [Fact]
+        public async Task Deband_KeepsRealEdges()
+        {
+            static float[] Edge(float x, float y) => x < 32 ? [0.2f, 0.2f, 0.2f] : [0.8f, 0.8f, 0.8f];
+
+            var output = await Run(MagpieEffects.Deband, Edge, 64, 32, 64, 32, ("grain", 0f));
+
+            output[16, 28][0].Should().BeApproximately(0.2f, 0.002f, "an edge isn't a band");
+            output[16, 36][0].Should().BeApproximately(0.8f, 0.002f);
+        }
+
         /// <summary>Runs an effect on a picture given as colour at pixel (x, y). Returns [row, column][r, g, b, a].</summary>
         private static async Task<float[,][]> Run(string name, Func<float, float, float[]> picture, uint inWidth, uint inHeight,
             uint targetWidth, uint targetHeight, params (string Name, float Value)[] settings)
