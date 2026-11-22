@@ -23,6 +23,9 @@ namespace EdgeLoop.Classes
         private const int MaxRetries = 2;
         private static readonly TimeSpan ExtractionTimeout = TimeSpan.FromSeconds(60);
 
+        /// <summary>Longest a self-update may take. It downloads all of yt-dlp (about 18 MB), so allow slow connections.</summary>
+        private static readonly TimeSpan UpdateTimeout = TimeSpan.FromMinutes(3);
+
         public YtDlpService(string ytDlpPath = null)
         {
             // Try to find yt-dlp.exe in common locations
@@ -70,7 +73,7 @@ namespace EdgeLoop.Classes
 
             for (int attempt = 0; attempt <= MaxRetries; attempt++)
             {
-                string cookieFile = null;
+                TempFiles tempFiles = null;
                 try
                 {
                     if (attempt > 0)
@@ -84,7 +87,7 @@ namespace EdgeLoop.Classes
                     // Clean URL for Hypnotube/Iwara (strip playlist params that break yt-dlp)
                     var fetchUrl = SiteRules.NormalizePageUrl(url);
 
-                    OptionSet options = BuildOptionsForUrl(fetchUrl, out cookieFile);
+                    OptionSet options = BuildOptionsForUrl(fetchUrl, out tempFiles);
 
                     // Enforce a timeout to prevent hung processes
                     using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -98,11 +101,11 @@ namespace EdgeLoop.Classes
                         Logger.Warning($"[yt-dlp] Extraction failed for {url}: {errorMsg}");
 
                         // FALLBACK: If cookie database is locked, retry WITHOUT cookies
-                        if (options.CookiesFromBrowser != null && IsCookieLockError(errorMsg))
+                        if (options.CookiesFromBrowser != null && IsCookieLockError(AllErrors(result.ErrorOutput)))
                         {
                             Logger.Info($"[yt-dlp] Cookie database locked (browser open?). Retrying without cookies...");
                             options.CookiesFromBrowser = null;
-                            result = await _ytdl.RunVideoDataFetch(url, ct: timeoutCts.Token, overrideOptions: options);
+                            result = await _ytdl.RunVideoDataFetch(fetchUrl, ct: timeoutCts.Token, overrideOptions: options);
                             if (result.Success)
                             {
                                 Logger.Debug($"[yt-dlp] Fallback successful (fetched without cookies)");
@@ -113,10 +116,16 @@ namespace EdgeLoop.Classes
                             }
                         }
 
+                        // An account problem (Iwara) or a missing JavaScript runtime (YouTube) won't change on a retry
+                        if (!result.Success && NoteSiteProblem(fetchUrl, result.ErrorOutput))
+                        {
+                            break;
+                        }
+
                         if (!result.Success)
                         {
                             // Don't retry on definitive errors (e.g., "Video unavailable" or "Video requires login")
-                            if (IsDefinitiveError(errorMsg) || errorMsg.Contains("requires login", StringComparison.OrdinalIgnoreCase))
+                            if (IsDefinitiveError(AllErrors(result.ErrorOutput)) || errorMsg.Contains("requires login", StringComparison.OrdinalIgnoreCase))
                             {
                                 if (errorMsg.Contains("requires login", StringComparison.OrdinalIgnoreCase))
                                 {
@@ -143,10 +152,16 @@ namespace EdgeLoop.Classes
 
                     if (!string.IsNullOrEmpty(videoUrl))
                     {
+                        SiteRestrictions.Record(fetchUrl, SiteRestriction.None);
                         Logger.Debug($"[yt-dlp] Successfully extracted URL");
                         LogVideoQuality(videoData);
                         return videoUrl;
                     }
+
+                    // yt-dlp answered, but with separate video and audio to merge: there's no single
+                    // link to play, and asking again gives the same answer
+                    Logger.Warning($"[yt-dlp] No single playable link for {url} (only separate video and audio)");
+                    break;
                 }
                 catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
                 {
@@ -164,20 +179,22 @@ namespace EdgeLoop.Classes
                 }
                 finally
                 {
-                    CleanupCookieFile(cookieFile);
+                    tempFiles?.Dispose();
                 }
             }
             return null;
         }
 
-        private OptionSet BuildOptionsForUrl(string url, out string cookieFile)
+        internal OptionSet BuildOptionsForUrl(string url, out TempFiles tempFiles)
         {
-            cookieFile = null;
+            tempFiles = new TempFiles();
+            string cookieFile = null;
             OptionSet options = new OptionSet();
 
-            // Request best combined stream for player compatibility (for streaming path)
-            // Use format selection that favors single files but allows for better quality than just "best"
-            options.Format = "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best";
+            // One link the player can open: the best single file with both picture and sound ("best").
+            // Asking for "bestvideo+bestaudio" makes yt-dlp answer with two files to merge, which only
+            // the download path (DownloadBestQualityAsync) can use, so streaming YouTube found nothing.
+            options.Format = "best";
 
             if (!string.IsNullOrEmpty(App.Settings?.UserAgent))
             {
@@ -224,8 +241,10 @@ namespace EdgeLoop.Classes
                     }
                     else
                     {
+                        // Set through the option itself (not a raw custom option) so a locked-database
+                        // retry can clear it again
                         var browser = SiteRules.CookieBrowser;
-                        options.AddCustomOption<string>("--cookies-from-browser", browser);
+                        options.CookiesFromBrowser = browser;
                         Logger.Debug($"[yt-dlp] Using --cookies-from-browser {browser} for {host}");
                     }
                 }
@@ -238,9 +257,26 @@ namespace EdgeLoop.Classes
                     }
                 }
 
+                tempFiles.Add(cookieFile);
                 if (!string.IsNullOrEmpty(cookieFile) && File.Exists(cookieFile))
                 {
                     options.Cookies = cookieFile;
+                }
+
+                // Iwara shows explicit videos only to signed-in accounts. yt-dlp signs in with the
+                // account from Settings and keeps the session in its own cache for about three weeks.
+                // The account goes in a short-lived config file only this Windows user can read, never on
+                // the command line, where other programs and Windows' process audit log (event 4688) see it.
+                if (profile.Site == Site.Iwara && App.Settings is { } settings &&
+                    !string.IsNullOrWhiteSpace(settings.IwaraEmail) && settings.IwaraPassword is { Length: > 0 } password)
+                {
+                    var accountFile = CreateTempAccountConfig(settings.IwaraEmail.Trim(), password);
+                    if (accountFile != null)
+                    {
+                        tempFiles.Add(accountFile);
+                        tempFiles.AccountFile = accountFile;
+                        options.ConfigLocations = accountFile;
+                    }
                 }
 
                 // Fix for Iwara Cloudflare JSONDecodeError and Quality Selection
@@ -264,21 +300,30 @@ namespace EdgeLoop.Classes
         {
             if (!_isAvailable) return null;
 
-            string cookieFile = null;
+            TempFiles tempFiles = null;
             try
             {
                 Logger.Debug($"[yt-dlp] Extracting video info: {url}");
 
-                OptionSet options = BuildOptionsForUrl(url, out cookieFile);
+                OptionSet options = BuildOptionsForUrl(url, out tempFiles);
 
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 timeoutCts.CancelAfter(ExtractionTimeout);
 
                 var result = await _ytdl.RunVideoDataFetch(url, ct: timeoutCts.Token, overrideOptions: options);
 
+                // The browser's cookie database is locked while it's open (Chrome especially): retry without it
+                if (!result.Success && options.CookiesFromBrowser != null && IsCookieLockError(AllErrors(result.ErrorOutput)))
+                {
+                    Logger.Info("[yt-dlp] Cookie database locked (browser open?). Retrying info extraction without cookies...");
+                    options.CookiesFromBrowser = null;
+                    result = await _ytdl.RunVideoDataFetch(url, ct: timeoutCts.Token, overrideOptions: options);
+                }
+
                 if (!result.Success || result.Data == null)
                 {
                     Logger.Warning($"[yt-dlp] Info extraction failed: {result.ErrorOutput?.FirstOrDefault()}");
+                    NoteSiteProblem(url, result.ErrorOutput);
                     return null;
                 }
 
@@ -308,7 +353,7 @@ namespace EdgeLoop.Classes
             }
             finally
             {
-                CleanupCookieFile(cookieFile);
+                tempFiles?.Dispose();
             }
         }
 
@@ -320,7 +365,7 @@ namespace EdgeLoop.Classes
             var results = new Dictionary<string, string>();
             if (!_isAvailable) return results;
 
-            string cookieFile = null;
+            TempFiles tempFiles = null;
             try
             {
                 // Clean URL for Hypnotube/Iwara (strip playlist params that break things)
@@ -339,14 +384,14 @@ namespace EdgeLoop.Classes
                 };
 
                 // Build options (includes cookies and headers)
-                OptionSet options = BuildOptionsForUrl(playlistUrl, out cookieFile);
+                OptionSet options = BuildOptionsForUrl(playlistUrl, out tempFiles);
                 if (!string.IsNullOrEmpty(options.Cookies))
                 {
                     args.Add("--cookies");
                     args.Add(options.Cookies);
                 }
 
-                AddSiteArgs(args, SiteRules.Get(playlistUrl), options);
+                AddSiteArgs(args, SiteRules.Get(playlistUrl), options, tempFiles);
 
                 args.Add(playlistUrl);
 
@@ -407,7 +452,7 @@ namespace EdgeLoop.Classes
             }
             finally
             {
-                CleanupCookieFile(cookieFile);
+                tempFiles?.Dispose();
             }
 
             return results;
@@ -428,12 +473,19 @@ namespace EdgeLoop.Classes
         /// Adds a site's yt-dlp headers, and falls back to the browser's cookies for sites
         /// that benefit from being logged in when no cookie file was built.
         /// </summary>
-        private static void AddSiteArgs(List<string> args, SiteProfile profile, OptionSet options)
+        private static void AddSiteArgs(List<string> args, SiteProfile profile, OptionSet options, TempFiles tempFiles)
         {
             foreach (var header in profile.YtDlpHeaders)
             {
                 args.Add("--add-header");
                 args.Add(header);
+            }
+
+            // The site account (Iwara), in the config file BuildOptionsForUrl wrote: never on the command line
+            if (!string.IsNullOrEmpty(tempFiles?.AccountFile))
+            {
+                args.Add("--config-locations");
+                args.Add(tempFiles.AccountFile);
             }
 
             if (string.IsNullOrEmpty(options.Cookies) && profile.UseBrowserCookiesFallback)
@@ -451,14 +503,15 @@ namespace EdgeLoop.Classes
         };
 
         /// <summary>
-        /// Sites that serve separate video+audio streams, requiring download+mux for best quality.
-        /// Other sites work via streaming.
+        /// Sites that serve video and audio as separate streams, so yt-dlp has to download and
+        /// merge them for full quality. Everything else streams, and is cached in the background
+        /// while it plays (Iwara, Hypnotube and Rule34Video serve single MP4 files).
         /// </summary>
         public static bool IsDownloadRequiredSite(string host)
         {
             if (string.IsNullOrEmpty(host)) return false;
 
-            return SiteRules.Identify(host) is Site.YouTube or Site.Iwara or Site.Hypnotube or Site.Rule34Video
+            return SiteRules.Identify(host) == Site.YouTube
                 || OtherDownloadRequiredDomains.Any(domain => SiteRules.HostMatches(host, domain));
         }
 
@@ -554,13 +607,13 @@ namespace EdgeLoop.Classes
             }
 
             // Add cookies and site headers if configured
-            OptionSet options = BuildOptionsForUrl(url, out string cookieFile);
+            OptionSet options = BuildOptionsForUrl(url, out TempFiles tempFiles);
             if (!string.IsNullOrEmpty(options.Cookies))
             {
                 args.Add("--cookies");
                 args.Add(options.Cookies);
             }
-            AddSiteArgs(args, profile, options);
+            AddSiteArgs(args, profile, options, tempFiles);
 
             args.Add(url);
 
@@ -579,6 +632,7 @@ namespace EdgeLoop.Classes
 
                 using var proc = Process.Start(psi);
                 if (proc == null) return null;
+                var errorLines = new List<string>();
 
                 using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
                 timeoutCts.CancelAfter(TimeSpan.FromMinutes(30));  // 30-minute download timeout
@@ -606,12 +660,13 @@ namespace EdgeLoop.Classes
                         }
                     });
 
-                    // Log stderr for errors
+                    // Log stderr for errors, and keep it to name the reason if the download fails
                     var stderrTask = Task.Run(async () =>
                     {
                         string line;
                         while ((line = await proc.StandardError.ReadLineAsync()) != null)
                         {
+                            lock (errorLines) errorLines.Add(line);
                             if (line.Contains("ERROR")) Logger.Warning($"[yt-dlp] {line.Trim()}");
                         }
                     });
@@ -623,6 +678,7 @@ namespace EdgeLoop.Classes
                 if (proc.ExitCode != 0)
                 {
                     Logger.Warning($"[yt-dlp] Download failed with exit code {proc.ExitCode}");
+                    NoteSiteProblem(url, errorLines);
                     return null;
                 }
 
@@ -661,7 +717,7 @@ namespace EdgeLoop.Classes
             }
             finally
             {
-                CleanupCookieFile(cookieFile);
+                tempFiles?.Dispose();
                 // Clean up temp file on failure
                 try { if (File.Exists(tempPath)) File.Delete(tempPath); } catch { }
             }
@@ -869,13 +925,29 @@ namespace EdgeLoop.Classes
                 using var proc = Process.Start(psi);
                 if (proc == null) return false;
 
-                var outputTask = proc.StandardOutput.ReadToEndAsync();
-                var errorTask = proc.StandardError.ReadToEndAsync();
-                await Task.WhenAll(outputTask, errorTask);
+                // The time limit covers the whole update. Reading the output to the end first waited
+                // for yt-dlp to exit, however long its download took, so the limit never applied.
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeoutCts.CancelAfter(UpdateTimeout);
 
-                var output = outputTask.Result;
-                var error = errorTask.Result;
-                var completed = proc.WaitForExit(30000); // 30s timeout for update
+                var outputTask = proc.StandardOutput.ReadToEndAsync(timeoutCts.Token);
+                var errorTask = proc.StandardError.ReadToEndAsync(timeoutCts.Token);
+                bool completed;
+                try
+                {
+                    await proc.WaitForExitAsync(timeoutCts.Token);
+                    await Task.WhenAll(outputTask, errorTask);
+                    completed = true;
+                }
+                catch (OperationCanceledException)
+                {
+                    completed = false;
+                    try { if (!proc.HasExited) proc.Kill(entireProcessTree: true); } catch { }
+                    Logger.Warning($"[yt-dlp] Update stopped after {UpdateTimeout.TotalMinutes:0} minutes");
+                }
+
+                var output = outputTask.IsCompletedSuccessfully ? outputTask.Result : string.Empty;
+                var error = errorTask.IsCompletedSuccessfully ? errorTask.Result : string.Empty;
 
                 if (completed && proc.ExitCode == 0)
                 {
@@ -944,7 +1016,25 @@ namespace EdgeLoop.Classes
             catch { /* ignore quality logging errors — non-critical */ }
         }
 
-        private bool IsCookieLockError(string errorMsg)
+        /// <summary>
+        /// Records a problem a yt-dlp error reports that a retry won't fix (Iwara: needs signing in or
+        /// rejected the password; YouTube: no JavaScript runtime to unlock it), so the player and
+        /// launcher can say so. True when there was one.
+        /// </summary>
+        private static bool NoteSiteProblem(string url, IEnumerable<string> errorOutput)
+        {
+            var restriction = SiteRestrictions.FromYtDlpError(SiteRules.Identify(url), AllErrors(errorOutput));
+            if (restriction == SiteRestriction.None) return false;
+
+            SiteRestrictions.Record(url, restriction);
+            Logger.Warning($"[yt-dlp] {restriction}: {url}");
+            return true;
+        }
+
+        private static string AllErrors(IEnumerable<string> errorOutput) =>
+            errorOutput == null ? string.Empty : string.Join("\n", errorOutput);
+
+        internal static bool IsCookieLockError(string errorMsg)
         {
             if (string.IsNullOrEmpty(errorMsg)) return false;
             return errorMsg.Contains("Could not copy", StringComparison.OrdinalIgnoreCase) &&
@@ -963,19 +1053,64 @@ namespace EdgeLoop.Classes
                    errorMsg.Contains("unsupported url", StringComparison.OrdinalIgnoreCase) ||
                    errorMsg.Contains("has been terminated", StringComparison.OrdinalIgnoreCase) ||
                    errorMsg.Contains("geo restricted", StringComparison.OrdinalIgnoreCase) ||
-                   errorMsg.Contains("no video formats found", StringComparison.OrdinalIgnoreCase);
+                   errorMsg.Contains("no video formats found", StringComparison.OrdinalIgnoreCase) ||
+                   errorMsg.Contains("HTTP Error 404", StringComparison.OrdinalIgnoreCase) ||
+                   errorMsg.Contains("HTTP Error 410", StringComparison.OrdinalIgnoreCase);
         }
 
         /// <summary>
         /// Safely cleans up a temporary cookie file.
         /// </summary>
-        private static void CleanupCookieFile(string cookieFile)
+        /// <summary>Temporary files a yt-dlp call needs (cookies, an account), deleted together when it's done.</summary>
+        internal sealed class TempFiles : IDisposable
         {
-            if (!string.IsNullOrEmpty(cookieFile) && File.Exists(cookieFile))
+            private readonly List<string> _paths = new();
+
+            public IReadOnlyList<string> Paths => _paths;
+
+            /// <summary>The config file holding the site account (Iwara), if one was written.</summary>
+            public string AccountFile { get; set; }
+
+            public void Add(string path)
             {
-                try { File.Delete(cookieFile); } catch { /* ignore */ }
+                if (!string.IsNullOrEmpty(path)) _paths.Add(path);
+            }
+
+            public void Dispose()
+            {
+                foreach (var path in _paths)
+                {
+                    try { if (File.Exists(path)) File.Delete(path); } catch { /* ignore */ }
+                }
+                _paths.Clear();
             }
         }
+
+        /// <summary>
+        /// Writes "--username"/"--password" to a yt-dlp config file in the user's temp folder (readable only
+        /// by this Windows user) and returns its path, or null. yt-dlp reads config files with shell
+        /// quoting (shlex), so each value is single-quoted with any ' written as '"'"'.
+        /// </summary>
+        internal static string CreateTempAccountConfig(string username, string password)
+        {
+            try
+            {
+                var path = Path.Combine(Path.GetTempPath(), $"edgeloop_account_{Guid.NewGuid():N}.conf");
+                var config = $"--username {ConfigQuote(username)}\n--password {ConfigQuote(password)}\n";
+                // With a UTF-8 byte-order mark: without one yt-dlp decodes the file with Windows' code page,
+                // which garbles a password with letters such as "ä"
+                File.WriteAllText(path, config, new System.Text.UTF8Encoding(encoderShouldEmitUTF8Identifier: true));
+                return path;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[yt-dlp] Couldn't write the account file: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>A value quoted for a yt-dlp config file (POSIX shell quoting).</summary>
+        internal static string ConfigQuote(string value) => "'" + (value ?? "").Replace("'", "'\"'\"'") + "'";
 
         public async Task CheckForUpdateAsync()
         {

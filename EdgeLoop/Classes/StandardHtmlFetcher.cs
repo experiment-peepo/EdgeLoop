@@ -41,8 +41,14 @@ namespace EdgeLoop.Classes
             {
                 if (string.IsNullOrWhiteSpace(url)) return null;
 
+                // A page depends on who's asking: after signing in (new session cookies) don't reuse the signed-out copy
+                var profile = SiteRules.Get(url);
+                var cacheKey = profile.GetCookies() is string sessionCookies
+                    ? url + "\u001F" + sessionCookies.GetHashCode().ToString("x")
+                    : url;
+
                 // Check cache first
-                if (_htmlCache.TryGetValue(url, out string cachedHtml))
+                if (_htmlCache.TryGetValue(cacheKey, out string cachedHtml))
                 {
                     Logger.Debug($"Using cached HTML for: {url}");
                     return cachedHtml;
@@ -52,7 +58,6 @@ namespace EdgeLoop.Classes
 
                 using (var request = new HttpRequestMessage(HttpMethod.Get, url))
                 {
-                    var profile = SiteRules.Get(url);
                     var siteCookies = ApplySiteHeaders(request, profile);
 
                     var response = await _httpClient.SendAsync(request, cancellationToken);
@@ -63,13 +68,11 @@ namespace EdgeLoop.Classes
                     // Log Hypnotube authentication status
                     if (profile.Site == Site.Hypnotube && siteCookies != null)
                     {
-                        // Check for indicators of authenticated session (e.g., logout link, user profile)
-                        var isAuthenticated = html.Contains("logout") || html.Contains("my_profile") || html.Contains("user-menu");
-                        Logger.Debug($"[Hypnotube] Authentication status: {(isAuthenticated ? "Authenticated" : "Guest/Unauthenticated")}");
+                        Logger.Debug($"[Hypnotube] Authentication status: {(SiteSignIn.ShowsSignedIn(html) ? "Authenticated" : "Guest/Unauthenticated")}");
                     }
 
                     // Cache the result
-                    _htmlCache.Set(url, html);
+                    _htmlCache.Set(cacheKey, html);
 
                     return html;
                 }

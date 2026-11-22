@@ -108,12 +108,12 @@ namespace EdgeLoop.Classes
         /// Downloads a video to the cache directory. Returns the local file path on success.
         /// Highest quality is always downloaded (determined by yt-dlp which provides the URL).
         /// </summary>
-        public async Task<string> DownloadVideoAsync(string url, System.Collections.Generic.Dictionary<string, string> headers = null, CancellationToken cancellationToken = default)
+        public async Task<string> DownloadVideoAsync(string url, System.Collections.Generic.Dictionary<string, string> headers = null, CancellationToken cancellationToken = default, string cacheKey = null)
         {
             if (string.IsNullOrEmpty(url)) return null;
             if (EdgeLoop.App.Settings?.EnableLocalCaching != true) return null;
 
-            var cachePath = GetCachePath(url);
+            var cachePath = GetCachePath(string.IsNullOrEmpty(cacheKey) ? url : cacheKey);
             if (cachePath == null) return null;
 
             // Already cached
@@ -195,12 +195,12 @@ namespace EdgeLoop.Classes
             }
         }
 
-        public async Task<string> DownloadPartialAsync(string url, long maxBytes = 150 * 1024 * 1024, System.Collections.Generic.Dictionary<string, string> headers = null, CancellationToken cancellationToken = default)
+        public async Task<string> DownloadPartialAsync(string url, long maxBytes = 150 * 1024 * 1024, System.Collections.Generic.Dictionary<string, string> headers = null, CancellationToken cancellationToken = default, string cacheKey = null)
         {
             if (string.IsNullOrEmpty(url)) return null;
             if (EdgeLoop.App.Settings?.EnableLocalCaching != true) return null;
 
-            var cachePath = GetCachePath(url);
+            var cachePath = GetCachePath(string.IsNullOrEmpty(cacheKey) ? url : cacheKey);
             if (cachePath == null) return null;
             var partialPath = cachePath + ".partial";
 

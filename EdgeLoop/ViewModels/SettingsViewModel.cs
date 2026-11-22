@@ -18,6 +18,7 @@ namespace EdgeLoop.ViewModels
     public class SettingsViewModel : ObservableObject
     {
         private readonly UserSettings _settings;
+        private readonly IwaraApi _iwaraApi;
         private readonly Func<HotkeyCombo, bool?> _checkAvailability;
         private readonly Dictionary<string, bool?> _availabilityCache = new();
         private readonly Dictionary<string, ScreenSkipKeys> _disconnectedScreenKeys = new(StringComparer.OrdinalIgnoreCase);
@@ -27,9 +28,12 @@ namespace EdgeLoop.ViewModels
 
         /// <param name="checkAvailability">Whether keys are free to register; defaults to asking Windows. Tests pass a fake.</param>
         /// <param name="screens">The connected screens; defaults to the real ones.</param>
-        public SettingsViewModel(Func<HotkeyCombo, bool?> checkAvailability = null, IEnumerable<ScreenViewer> screens = null)
+        /// <param name="iwaraApi">Checks an Iwara sign-in; defaults to the real API. Tests pass a fake.</param>
+        public SettingsViewModel(Func<HotkeyCombo, bool?> checkAvailability = null, IEnumerable<ScreenViewer> screens = null, IwaraApi iwaraApi = null, SiteSignIn siteSignIn = null)
         {
             _settings = App.Settings;
+            _iwaraApi = iwaraApi ?? IwaraApi.Shared;
+            var signIn = siteSignIn ?? SiteSignIn.Shared;
             _checkAvailability = checkAvailability ?? (combo => App.Hotkeys?.IsAvailable(combo.Modifiers, combo.Key));
             var settings = _settings;
             var defaults = new UserSettings();
@@ -71,8 +75,24 @@ namespace EdgeLoop.ViewModels
             // --- Privacy ---
             _browserForCookies = settings.BrowserForCookies ?? defaults.BrowserForCookies;
             _hypnotubeCookies = settings.HypnotubeCookies;
-            _iwaraCookies = settings.IwaraCookies;
             _rule34VideoCookies = settings.Rule34VideoCookies;
+            _iwaraEmail = settings.IwaraEmail;
+            _iwaraPassword = settings.IwaraPassword;
+            HypnotubeAccount = new SiteAccountSetting(Site.Hypnotube, settings.HypnotubeUsername, settings.HypnotubePassword,
+                signIn.LastError(Site.Hypnotube), (user, pass) => signIn.SignInAsync(Site.Hypnotube, user, pass));
+            Rule34VideoAccount = new SiteAccountSetting(Site.Rule34Video, settings.Rule34VideoUsername, settings.Rule34VideoPassword,
+                signIn.LastError(Site.Rule34Video), (user, pass) => signIn.SignInAsync(Site.Rule34Video, user, pass));
+            // The cookie backup starts open when it's in use, or when signing in last failed
+            _showCookieFallback = !string.IsNullOrWhiteSpace(_hypnotubeCookies) || !string.IsNullOrWhiteSpace(_rule34VideoCookies)
+                || signIn.LastError(Site.Hypnotube) != null || signIn.LastError(Site.Rule34Video) != null;
+            foreach (var account in new[] { HypnotubeAccount, Rule34VideoAccount })
+            {
+                account.PropertyChanged += (s, e) =>
+                {
+                    if (!_loading && e.PropertyName is nameof(SiteAccountSetting.Username) or nameof(SiteAccountSetting.Password))
+                        UpdateHasChanges();
+                };
+            }
             CookieEncryptionAvailable = CookieProtector.IsEncryptionAvailable();
 
             // --- Hotkeys ---
@@ -123,9 +143,10 @@ namespace EdgeLoop.ViewModels
             CancelCommand = new RelayCommand(_ => RequestClose?.Invoke(this, EventArgs.Empty));
             ResetSectionCommand = new RelayCommand(ResetSection);
             ResetPositionsCommand = new RelayCommand(ResetPositions);
-            CopyCookieScriptCommand = new RelayCommand(CopyCookieScript);
-            PasteCookiesCommand = new RelayCommand(site => SetCookies(site as string, System.Windows.Clipboard.GetText()));
-            ClearCookiesCommand = new RelayCommand(site => SetCookies(site as string, null));
+            PasteCookiesCommand = new RelayCommand(site => PasteCookies(site as string, System.Windows.Clipboard.GetText()));
+            ClearCookiesCommand = new RelayCommand(site => { SetCookies(site as string, null); SetPasteSummary(site as string, null); });
+            ToggleCookieFallbackCommand = new RelayCommand(_ => ShowCookieFallback = !ShowCookieFallback);
+            CheckIwaraSignInCommand = new RelayCommand(async _ => await CheckIwaraSignInAsync(), _ => !IsCheckingIwaraSignIn);
             OpenDiagnosticsFolderCommand = new RelayCommand(OpenDiagnosticsFolder);
             BrowseCacheDirectoryCommand = new RelayCommand(BrowseCacheDirectory);
             IdentifyScreensCommand = new RelayCommand(_ => ScreenIdentifier.Show());
@@ -194,7 +215,8 @@ namespace EdgeLoop.ViewModels
         private static readonly HashSet<string> NotSettings = new()
         {
             nameof(HasChanges), nameof(SelectedSection), nameof(HasHotkeyConflicts), nameof(ShowCookies),
-            nameof(CookieScriptCopied), nameof(CensorModelStatus), nameof(DisconnectedScreensNote)
+            nameof(ShowCookieFallback), nameof(HypnotubeCookiesNote), nameof(Rule34VideoCookiesNote), nameof(HypnotubePasteSummary), nameof(Rule34VideoPasteSummary), nameof(CensorModelStatus), nameof(DisconnectedScreensNote),
+            nameof(IwaraSignInStatus), nameof(IwaraSignInSucceeded), nameof(IsCheckingIwaraSignIn)
         };
 
         protected override void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string propertyName = null)
@@ -217,7 +239,10 @@ namespace EdgeLoop.ViewModels
             {
                 SelectedDefaultMonitor?.DeviceName, DefaultOpacity, DefaultVolume, AlwaysOpaque, UpscalingMode, ShowPlaybackNotices, UseHdr,
                 RememberLastPlaylist, RememberFilePosition, EnableLocalCaching, LocalCacheDirectory,
-                BrowserForCookies, CleanCookieString(HypnotubeCookies), CleanCookieString(IwaraCookies), CleanCookieString(Rule34VideoCookies),
+                BrowserForCookies, CleanCookieString(HypnotubeCookies), CleanCookieString(Rule34VideoCookies),
+                CleanAccountText(IwaraEmail), IwaraPassword ?? string.Empty,
+                SiteAccountSetting.Clean(HypnotubeAccount.Username), HypnotubeAccount.Password ?? string.Empty,
+                SiteAccountSetting.Clean(Rule34VideoAccount.Username), Rule34VideoAccount.Password ?? string.Empty,
                 StartWithWindows, EnableDiagnosticMode,
                 EnableLocalCensor, CensorModelPath, CensorConfidence, CensorIntervalMs, CensorHoldMs, CensorPadding, CensorShowLabels, BuildCensorClassMask()
             };
@@ -336,21 +361,131 @@ namespace EdgeLoop.ViewModels
         public string HypnotubeCookies
         {
             get => _hypnotubeCookies;
-            set => SetProperty(ref _hypnotubeCookies, value);
+            set
+            {
+                if (SetProperty(ref _hypnotubeCookies, value)) OnPropertyChanged(nameof(HypnotubeCookiesNote));
+            }
         }
 
-        private string _iwaraCookies;
-        public string IwaraCookies
+        /// <summary>A warning under the Hypnotube box when its cookies can't sign you in, or null.</summary>
+        public string HypnotubeCookiesNote => SignInCookieNote(HypnotubeCookies);
+
+        // Iwara signs in with an account, not cookies: explicit videos need it
+        private string _iwaraEmail;
+        public string IwaraEmail
         {
-            get => _iwaraCookies;
-            set => SetProperty(ref _iwaraCookies, value);
+            get => _iwaraEmail;
+            set
+            {
+                if (SetProperty(ref _iwaraEmail, value)) ClearIwaraSignInStatus();
+            }
         }
+
+        private string _iwaraPassword;
+        /// <summary>Set from the window's password box (a password box can't be bound).</summary>
+        public string IwaraPassword
+        {
+            get => _iwaraPassword;
+            set
+            {
+                if (SetProperty(ref _iwaraPassword, value)) ClearIwaraSignInStatus();
+            }
+        }
+
+        private string _iwaraSignInStatus;
+        /// <summary>What the last "Check sign-in" found, or null.</summary>
+        public string IwaraSignInStatus
+        {
+            get => _iwaraSignInStatus;
+            private set => SetProperty(ref _iwaraSignInStatus, value);
+        }
+
+        private bool? _iwaraSignInSucceeded;
+        /// <summary>Whether the last check signed in: true, false, or null while unchecked.</summary>
+        public bool? IwaraSignInSucceeded
+        {
+            get => _iwaraSignInSucceeded;
+            private set => SetProperty(ref _iwaraSignInSucceeded, value);
+        }
+
+        private bool _isCheckingIwaraSignIn;
+        public bool IsCheckingIwaraSignIn
+        {
+            get => _isCheckingIwaraSignIn;
+            private set => SetProperty(ref _isCheckingIwaraSignIn, value);
+        }
+
+        private void ClearIwaraSignInStatus()
+        {
+            IwaraSignInStatus = null;
+            IwaraSignInSucceeded = null;
+        }
+
+        /// <summary>Signs in to Iwara with the email and password as typed, to show whether they work.</summary>
+        internal async System.Threading.Tasks.Task CheckIwaraSignInAsync()
+        {
+            if (IsCheckingIwaraSignIn) return;
+            IsCheckingIwaraSignIn = true;
+            IwaraSignInSucceeded = null;
+            IwaraSignInStatus = "Checking…";
+            try
+            {
+                var result = await _iwaraApi.CheckSignInAsync(IwaraEmail, IwaraPassword);
+                IwaraSignInSucceeded = result.Success;
+                IwaraSignInStatus = result.Message;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[Settings] Iwara sign-in check failed: {ex.Message}");
+                IwaraSignInSucceeded = false;
+                IwaraSignInStatus = $"Couldn't check: {ex.Message}";
+            }
+            finally
+            {
+                IsCheckingIwaraSignIn = false;
+            }
+        }
+
+        private static string CleanAccountText(string value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+
+        /// <summary>The Hypnotube account EdgeLoop signs in with (signed-in accounts get 720p).</summary>
+        public SiteAccountSetting HypnotubeAccount { get; }
+
+        /// <summary>The Rule34Video account EdgeLoop signs in with.</summary>
+        public SiteAccountSetting Rule34VideoAccount { get; }
 
         private string _rule34VideoCookies;
         public string Rule34VideoCookies
         {
             get => _rule34VideoCookies;
-            set => SetProperty(ref _rule34VideoCookies, value);
+            set
+            {
+                if (SetProperty(ref _rule34VideoCookies, value)) OnPropertyChanged(nameof(Rule34VideoCookiesNote));
+            }
+        }
+
+        /// <summary>A warning under the Rule34Video box when its cookies can't sign you in, or null.</summary>
+        public string Rule34VideoCookiesNote => SignInCookieNote(Rule34VideoCookies);
+
+        /// <summary>
+        /// Hypnotube and Rule34Video keep the sign-in in PHPSESSID, a cookie hidden from page scripts.
+        /// Cookies copied with document.cookie (the browser Console) leave it out and sign nobody in.
+        /// </summary>
+        internal static string SignInCookieNote(string cookies) =>
+            CleanCookieString(cookies) is string cleaned &&
+            !System.Text.RegularExpressions.Regex.IsMatch(cleaned, @"(^|;)\s*PHPSESSID=", System.Text.RegularExpressions.RegexOptions.IgnoreCase)
+                ? "These have no PHPSESSID, the cookie that signs you in, so the site will still see you as signed out. Copy them from the Network tab as described below."
+                : null;
+
+        private bool _showCookieFallback;
+        /// <summary>
+        /// Whether the pasted-cookie section is open. It's only a backup for when signing in with an account
+        /// doesn't work (e.g. a captcha), so it starts closed unless cookies are set or the last sign-in failed.
+        /// </summary>
+        public bool ShowCookieFallback
+        {
+            get => _showCookieFallback;
+            set => SetProperty(ref _showCookieFallback, value);
         }
 
         private bool _showCookies;
@@ -364,12 +499,48 @@ namespace EdgeLoop.ViewModels
         /// <summary>False when Windows can't encrypt cookies here, so they'd be saved as plain text.</summary>
         public bool CookieEncryptionAvailable { get; }
 
-        private bool _cookieScriptCopied;
-        /// <summary>Briefly true after the cookie helper was copied, to confirm it.</summary>
-        public bool CookieScriptCopied
+        private string _hypnotubePasteSummary;
+        /// <summary>What the last Paste found for Hypnotube ("Found 3 cookies for hypnotube.com in a cURL command"), or null.</summary>
+        public string HypnotubePasteSummary
         {
-            get => _cookieScriptCopied;
-            private set => SetProperty(ref _cookieScriptCopied, value);
+            get => _hypnotubePasteSummary;
+            private set => SetProperty(ref _hypnotubePasteSummary, value);
+        }
+
+        private string _rule34VideoPasteSummary;
+        /// <summary>What the last Paste found for Rule34Video, or null.</summary>
+        public string Rule34VideoPasteSummary
+        {
+            get => _rule34VideoPasteSummary;
+            private set => SetProperty(ref _rule34VideoPasteSummary, value);
+        }
+
+        /// <summary>The site's domain, for keeping only its cookies from a paste.</summary>
+        private static string CookieDomain(string site) => site == "Rule34Video" ? "rule34video.com" : "hypnotube.com";
+
+        /// <summary>
+        /// Reads the site's cookies from whatever was copied (cURL, cookies.txt, JSON, headers, ...), keeps
+        /// only that site's, and says what it found. Nothing usable leaves the box as it was.
+        /// </summary>
+        internal void PasteCookies(string site, string text)
+        {
+            var pasted = CookiePaste.Parse(text, CookieDomain(site));
+            if (pasted.Found) SetCookies(site, pasted.Header);
+            SetPasteSummary(site, pasted.Summary);
+        }
+
+        private void SetPasteSummary(string site, string summary)
+        {
+            if (site == "Hypnotube") HypnotubePasteSummary = summary;
+            else if (site == "Rule34Video") Rule34VideoPasteSummary = summary;
+        }
+
+        /// <summary>The box's text as cookies to save: read like a paste, so a typed-in cURL or cookies.txt works too.</summary>
+        private static string CookiesToSave(string text, string site)
+        {
+            if (CleanCookieString(text) == null) return null;
+            var pasted = CookiePaste.Parse(CleanCookieString(text), CookieDomain(site));
+            return pasted.Found ? pasted.Header : CleanCookieString(text);
         }
 
         private void SetCookies(string site, string value)
@@ -377,7 +548,6 @@ namespace EdgeLoop.ViewModels
             switch (site)
             {
                 case "Hypnotube": HypnotubeCookies = value; break;
-                case "Iwara": IwaraCookies = value; break;
                 case "Rule34Video": Rule34VideoCookies = value; break;
             }
         }
@@ -391,29 +561,6 @@ namespace EdgeLoop.ViewModels
             if (cleaned.StartsWith("Cookie:", StringComparison.OrdinalIgnoreCase))
                 cleaned = cleaned.Substring(7).Trim();
             return cleaned.Length == 0 ? null : cleaned;
-        }
-
-        private void CopyCookieScript(object obj)
-        {
-            try
-            {
-                // Run in the browser console on the signed-in site: copies document.cookie to the clipboard
-                string script = "(function(){copy(document.cookie);alert('EdgeLoop Cookie Helper:\\nCookies copied to clipboard!\\n\\nNow return to EdgeLoop and click Paste.');})();";
-                System.Windows.Clipboard.SetText(script);
-
-                CookieScriptCopied = true;
-                var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
-                timer.Tick += (s, e) =>
-                {
-                    timer.Stop();
-                    CookieScriptCopied = false;
-                };
-                timer.Start();
-            }
-            catch (Exception ex)
-            {
-                Logger.Error("Failed to copy cookie script to clipboard", ex);
-            }
         }
 
         // ===== Hotkeys =====
@@ -750,9 +897,10 @@ namespace EdgeLoop.ViewModels
         public ICommand CancelCommand { get; }
         public ICommand ResetSectionCommand { get; }
         public ICommand ResetPositionsCommand { get; }
-        public ICommand CopyCookieScriptCommand { get; }
         public ICommand PasteCookiesCommand { get; }
         public ICommand ClearCookiesCommand { get; }
+        public ICommand CheckIwaraSignInCommand { get; }
+        public ICommand ToggleCookieFallbackCommand { get; }
         public ICommand OpenDiagnosticsFolderCommand { get; }
         public ICommand BrowseCacheDirectoryCommand { get; }
         public ICommand IdentifyScreensCommand { get; }
@@ -789,9 +937,20 @@ namespace EdgeLoop.ViewModels
             settings.LocalCacheDirectory = LocalCacheDirectory;
 
             settings.BrowserForCookies = BrowserForCookies;
-            settings.HypnotubeCookies = CleanCookieString(HypnotubeCookies);
-            settings.IwaraCookies = CleanCookieString(IwaraCookies);
-            settings.Rule34VideoCookies = CleanCookieString(Rule34VideoCookies);
+            settings.HypnotubeCookies = CookiesToSave(HypnotubeCookies, "Hypnotube");
+            settings.Rule34VideoCookies = CookiesToSave(Rule34VideoCookies, "Rule34Video");
+            settings.IwaraEmail = CleanAccountText(IwaraEmail);
+            settings.IwaraPassword = string.IsNullOrEmpty(IwaraPassword) ? null : IwaraPassword;
+
+            // A changed account starts a fresh session: the stored one belongs to the old account
+            if (HypnotubeAccount.Changed) settings.HypnotubeSession = null;
+            settings.HypnotubeUsername = SiteAccountSetting.Clean(HypnotubeAccount.Username);
+            settings.HypnotubePassword = string.IsNullOrEmpty(HypnotubeAccount.Password) ? null : HypnotubeAccount.Password;
+            if (Rule34VideoAccount.Changed) settings.Rule34VideoSession = null;
+            settings.Rule34VideoUsername = SiteAccountSetting.Clean(Rule34VideoAccount.Username);
+            settings.Rule34VideoPassword = string.IsNullOrEmpty(Rule34VideoAccount.Password) ? null : Rule34VideoAccount.Password;
+            // Iwara cookies never signed anyone in (its API uses an account token): don't keep them
+            settings.IwaraCookies = null;
 
             settings.PanicHotkeyModifiers = PanicHotkey.Modifiers;
             settings.PanicHotkeyKey = PanicHotkey.Key;

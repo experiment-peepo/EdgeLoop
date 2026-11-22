@@ -137,26 +137,16 @@ namespace EdgeLoop.Classes
 
                         url = ResolveUrl(url, baseUrl);
 
-                        // Priority 1: Check URL for quality
-                        var quality = QualitySelector.DetectQualityFromUrl(url);
-
-                        // Priority 2: Check attributes commonly used for quality
-                        if (quality <= 0)
+                        // Priority 1: what the tag says (Hypnotube: sizes='480' / sizes='720'), since it's explicit
+                        int quality = 0;
+                        foreach (var attribute in new[] { "label", "title", "res", "data-res", "sizes", "size" })
                         {
-                            var label = source.GetAttributeValue("label", "");
-                            var title = source.GetAttributeValue("title", "");
-                            var res = source.GetAttributeValue("res", "");
-                            var dataRes = source.GetAttributeValue("data-res", "");
-                            var sizes = source.GetAttributeValue("sizes", "");
-                            var size = source.GetAttributeValue("size", "");
-
-                            quality = QualitySelector.DetectQualityFromString(label);
-                            if (quality <= 0) quality = QualitySelector.DetectQualityFromString(title);
-                            if (quality <= 0) quality = QualitySelector.DetectQualityFromString(res);
-                            if (quality <= 0) quality = QualitySelector.DetectQualityFromString(dataRes);
-                            if (quality <= 0) quality = QualitySelector.DetectQualityFromString(sizes);
-                            if (quality <= 0) quality = QualitySelector.DetectQualityFromString(size);
+                            quality = QualitySelector.DetectQualityFromString(source.GetAttributeValue(attribute, ""));
+                            if (quality > 0) break;
                         }
+
+                        // Priority 2: what the link's path says ("…_720p.mp4")
+                        if (quality <= 0) quality = QualitySelector.DetectQualityFromUrl(url);
 
                         // Include everything
                         var detectedQuality = quality > 0 ? quality : 1;

@@ -33,6 +33,70 @@ namespace EdgeLoop.Classes
         [JsonPropertyName("Cookies")]
         public virtual string CookiesEncrypted { get; set; } = null;
 
+        /// <summary>The Iwara account's email. Iwara shows explicit videos only to signed-in accounts.</summary>
+        public virtual string IwaraEmail { get; set; } = null;
+
+        [JsonPropertyName("IwaraPassword")]
+        public virtual string IwaraPasswordEncrypted { get; set; } = null;
+
+        /// <summary>The Iwara account's password, encrypted at rest (never saved as plain text).</summary>
+        [JsonIgnore]
+        public string IwaraPassword
+        {
+            get => CookieProtector.Unprotect(IwaraPasswordEncrypted);
+            set => IwaraPasswordEncrypted = CookieProtector.ProtectSecret(value);
+        }
+
+        // --- Hypnotube and Rule34Video accounts: EdgeLoop signs in with them and keeps the session ---
+
+        /// <summary>The Hypnotube username (its login form takes a username, not an email).</summary>
+        public virtual string HypnotubeUsername { get; set; } = null;
+
+        [JsonPropertyName("HypnotubePassword")]
+        public virtual string HypnotubePasswordEncrypted { get; set; } = null;
+
+        [JsonIgnore]
+        public string HypnotubePassword
+        {
+            get => CookieProtector.Unprotect(HypnotubePasswordEncrypted);
+            set => HypnotubePasswordEncrypted = CookieProtector.ProtectSecret(value);
+        }
+
+        [JsonPropertyName("HypnotubeSession")]
+        public virtual string HypnotubeSessionEncrypted { get; set; } = null;
+
+        /// <summary>Cookies from EdgeLoop's own sign-in with the account above (not the pasted cookies).</summary>
+        [JsonIgnore]
+        public string HypnotubeSession
+        {
+            get => CookieProtector.Unprotect(HypnotubeSessionEncrypted);
+            set => HypnotubeSessionEncrypted = CookieProtector.Protect(value);
+        }
+
+        /// <summary>The Rule34Video email or username.</summary>
+        public virtual string Rule34VideoUsername { get; set; } = null;
+
+        [JsonPropertyName("Rule34VideoPassword")]
+        public virtual string Rule34VideoPasswordEncrypted { get; set; } = null;
+
+        [JsonIgnore]
+        public string Rule34VideoPassword
+        {
+            get => CookieProtector.Unprotect(Rule34VideoPasswordEncrypted);
+            set => Rule34VideoPasswordEncrypted = CookieProtector.ProtectSecret(value);
+        }
+
+        [JsonPropertyName("Rule34VideoSession")]
+        public virtual string Rule34VideoSessionEncrypted { get; set; } = null;
+
+        /// <summary>Cookies from EdgeLoop's own sign-in with the account above (not the pasted cookies).</summary>
+        [JsonIgnore]
+        public string Rule34VideoSession
+        {
+            get => CookieProtector.Unprotect(Rule34VideoSessionEncrypted);
+            set => Rule34VideoSessionEncrypted = CookieProtector.Protect(value);
+        }
+
         public virtual string UserAgent { get; set; } = null;
         public virtual string BrowserForCookies { get; set; } = "Firefox";
 
@@ -390,9 +454,7 @@ namespace EdgeLoop.Classes
                 try
                 {
                     string json = JsonSerializer.Serialize(this, _jsonOptions);
-                    string tempPath = SettingsFilePath + ".tmp";
-                    File.WriteAllText(tempPath, json);
-                    File.Move(tempPath, SettingsFilePath, true);
+                    AtomicFile.WriteAllText(SettingsFilePath, json);
                 }
                 finally
                 {
@@ -413,9 +475,7 @@ namespace EdgeLoop.Classes
                 try
                 {
                     string json = JsonSerializer.Serialize(this, _jsonOptions);
-                    string tempPath = SettingsFilePath + ".tmp";
-                    await File.WriteAllTextAsync(tempPath, json);
-                    File.Move(tempPath, SettingsFilePath, true);
+                    await AtomicFile.WriteAllTextAsync(SettingsFilePath, json);
                 }
                 finally
                 {
@@ -452,9 +512,7 @@ namespace EdgeLoop.Classes
                 try
                 {
                     string json = JsonSerializer.Serialize(CurrentSessionPlaylist, _jsonOptions);
-                    string tempPath = SessionFilePath + ".tmp";
-                    await File.WriteAllTextAsync(tempPath, json);
-                    File.Move(tempPath, SessionFilePath, true);
+                    await AtomicFile.WriteAllTextAsync(SessionFilePath, json);
                 }
                 finally
                 {
@@ -476,9 +534,7 @@ namespace EdgeLoop.Classes
                 try
                 {
                     string json = JsonSerializer.Serialize(CurrentSessionPlaylist, _jsonOptions);
-                    string tempPath = SessionFilePath + ".tmp";
-                    File.WriteAllText(tempPath, json);
-                    File.Move(tempPath, SessionFilePath, true);
+                    AtomicFile.WriteAllText(SessionFilePath, json);
                 }
                 finally
                 {

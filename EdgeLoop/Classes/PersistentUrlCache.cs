@@ -94,11 +94,7 @@ namespace EdgeLoop.Classes
 
                     var json = JsonSerializer.Serialize(cleanCache);
 
-                    // Atomic write: write to temp file then move to final path
-                    string tempFile = _cacheFilePath + ".tmp";
-                    File.WriteAllText(tempFile, json);
-                    if (File.Exists(_cacheFilePath)) File.Delete(_cacheFilePath);
-                    File.Move(tempFile, _cacheFilePath);
+                    AtomicFile.WriteAllText(_cacheFilePath, json);
 
                     _isDirty = false;
                     // Update in-memory cache to match cleaned version (optional, but good for memory)
@@ -129,6 +125,10 @@ namespace EdgeLoop.Classes
             return null;
         }
 
+        /// <summary>When a cached entry expires (UTC), or null if there's none.</summary>
+        internal DateTime? GetExpiry(string pageUrl) =>
+            pageUrl != null && _cache.TryGetValue(pageUrl, out var entry) ? entry.ExpireTime : null;
+
         public void Set(string pageUrl, string resolvedUrl, DateTime? expireTime = null)
         {
             if (string.IsNullOrEmpty(pageUrl) || string.IsNullOrEmpty(resolvedUrl)) return;
@@ -137,6 +137,12 @@ namespace EdgeLoop.Classes
             if (!expireTime.HasValue)
             {
                 expireTime = ParseExpiration(resolvedUrl) ?? DateTime.UtcNow.AddMinutes(60);
+            }
+
+            // Some sites' links die sooner than they say, so never keep them past the site's limit
+            if (SiteRules.Get(pageUrl).ResolvedUrlLifetime is TimeSpan siteLimit && expireTime.Value > DateTime.UtcNow + siteLimit)
+            {
+                expireTime = DateTime.UtcNow + siteLimit;
             }
 
             // Don't cache if already expired

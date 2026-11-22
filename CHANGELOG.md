@@ -20,6 +20,12 @@
 - A short notice in the corner of a screen says which video couldn't play and why; it can be turned off in Settings.
 - Cookie fields no longer delete spaces while you type; they're cleaned up when saved.
 - Enter and Esc work in every dialog.
+- Downloaded Hypnotube, Rule34Video and Iwara videos are found again the next time they play, instead of being downloaded again each time their link changes. Downloads are now stored under the video's page.
+- With Shuffle on, the video downloaded in the background is the one that plays next, and Previous goes back to the video you just watched instead of the one before it in the playlist.
+- A web video whose downloaded copy was cleaned up after 10 days is played from its page again, instead of showing as MISSING and being skipped.
+- The saved playlist appears straight away at start-up; the daily yt-dlp update no longer holds it up, and an update that hangs is stopped after 3 minutes.
+- The playlist, positions, history and link cache are saved so a crash can't leave them half-written or missing, and the last change before Exit is always saved.
+- PMVHaven streams no longer keep connections open between segments, as intended for their stability.
 
 ## [1.0.0-prerelease] - 2026-04-26
 

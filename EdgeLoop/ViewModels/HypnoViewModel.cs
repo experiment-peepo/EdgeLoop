@@ -46,9 +46,7 @@ namespace EdgeLoop.ViewModels
         private int _recursionDepth = 0; // Track recursion depth to prevent stack overflow
         private const int MaxRecursionDepth = 50; // Maximum recursion depth before aborting
         private CancellationTokenSource _loadCts; // Added to cancel ongoing URL extraction on Skip
-        private static readonly Random _shuffleRandom = new Random(); // Shared Random for better randomness
-        private int[] _shuffledIndices;
-        private int _shuffledIndexPointer = -1;
+        private readonly ShuffleOrder _shuffle = new ShuffleOrder();
 
         // Pre-buffering for instant playback
         private readonly IVideoDownloadService _downloadService;
@@ -573,7 +571,7 @@ namespace EdgeLoop.ViewModels
             Config.Demuxer.FormatOpt["reconnect_streamed"] = "1";
             Config.Demuxer.FormatOpt["reconnect_delay_max"] = "5";
             Config.Demuxer.FormatOpt["seg_max_retry"] = "10";
-            Config.Demuxer.FormatOpt["http_persistent"] = "0"; // Disabled for HLS stability (PMVHaven CDN rotates endpoints between segments)
+            // http_persistent is set per video in LoadCurrentVideo (SiteProfile.PersistentMediaConnections)
 
             // Re-enabling Video Acceleration as requested
             Config.Video.HWAcceleration = true;
@@ -711,8 +709,7 @@ namespace EdgeLoop.ViewModels
             _consecutiveFailures = 0;
 
             // Reset shuffle when queue changes
-            _shuffledIndices = null;
-            _shuffledIndexPointer = -1;
+            _shuffle.Reset();
 
             // Cancel any pending pre-buffer when queue changes
             _preBufferCts?.Cancel();
@@ -724,8 +721,7 @@ namespace EdgeLoop.ViewModels
             {
                 if (IsShuffle)
                 {
-                    InitializeShuffle(startIndex);
-                    _shuffledIndexPointer = 0; // The first index is already being played by JumpToIndex
+                    _shuffle.StartAt(_files.Length, startIndex); // JumpToIndex below plays it
                 }
                 JumpToIndex(startIndex);
             }
@@ -775,8 +771,7 @@ namespace EdgeLoop.ViewModels
                 UpdatePlaylistHash();
 
                 // Invalidate shuffle bag as indices have changed
-                _shuffledIndices = null;
-                _shuffledIndexPointer = -1;
+                _shuffle.Reset();
             }
 
             if (_files.Length == 0)
@@ -819,65 +814,20 @@ namespace EdgeLoop.ViewModels
             }
         }
 
-        private void InitializeShuffle(int firstIndex = -1)
+        /// <summary>
+        /// The videos that play after this one, in order: the shuffle order when shuffle is on,
+        /// otherwise the playlist order.
+        /// </summary>
+        internal List<int> UpcomingIndices(int count)
         {
-            if (_files == null || _files.Length == 0) return;
+            if (_files == null || _files.Length == 0 || count <= 0) return new List<int>();
 
-            Logger.Debug($"[Shuffle] Initializing new shuffle bag for {_files.Length} videos on {MonitorName} (FirstIndex={firstIndex})");
+            var upcoming = IsShuffle && _files.Length > 1
+                ? _shuffle.Upcoming(_files.Length, count)
+                : Enumerable.Range(1, Math.Min(count, _files.Length)).Select(i => (_currentPos + i) % _files.Length).ToList();
 
-            int lastIndex = -1;
-            if (firstIndex != -1)
-            {
-                lastIndex = firstIndex;
-            }
-            else if (_shuffledIndices != null && _shuffledIndexPointer >= 0 && _shuffledIndexPointer < _shuffledIndices.Length)
-            {
-                lastIndex = _shuffledIndices[_shuffledIndexPointer];
-            }
-
-            _shuffledIndices = Enumerable.Range(0, _files.Length).ToArray();
-
-            // Fisher-Yates shuffle
-            for (int i = _shuffledIndices.Length - 1; i > 0; i--)
-            {
-                int j = _shuffleRandom.Next(i + 1);
-                int temp = _shuffledIndices[i];
-                _shuffledIndices[i] = _shuffledIndices[j];
-                _shuffledIndices[j] = temp;
-            }
-
-            // Ensure the requested firstIndex (or lastIndex from previous bag) is handled
-            if (lastIndex != -1 && _shuffledIndices.Length > 0)
-            {
-                // Find where lastIndex ended up
-                int idx = Array.IndexOf(_shuffledIndices, lastIndex);
-                if (idx != -1)
-                {
-                    if (firstIndex != -1)
-                    {
-                        // Move firstIndex to the front
-                        int temp = _shuffledIndices[0];
-                        _shuffledIndices[0] = _shuffledIndices[idx];
-                        _shuffledIndices[idx] = temp;
-                    }
-                    else
-                    {
-                        // We are starting a new bag, ensure the first item isn't the same as the last bag's last item
-                        if (_shuffledIndices[0] == lastIndex && _shuffledIndices.Length > 1)
-                        {
-                            int swapIdx = _shuffleRandom.Next(1, _shuffledIndices.Length);
-                            int temp = _shuffledIndices[0];
-                            _shuffledIndices[0] = _shuffledIndices[swapIdx];
-                            _shuffledIndices[swapIdx] = temp;
-                        }
-                    }
-                }
-            }
-
-            _shuffledIndexPointer = -1;
+            return upcoming.Where(i => i != _currentPos).Distinct().ToList();
         }
-
-
 
         public void JumpToIndex(int index, bool force = false)
         {
@@ -909,20 +859,10 @@ namespace EdgeLoop.ViewModels
             _currentPos = index;
 
             // Align shuffle pointer if enabled
-            if (IsShuffle && _shuffledIndices != null)
+            if (IsShuffle)
             {
-                int idx = Array.IndexOf(_shuffledIndices, index);
-                if (idx != -1)
-                {
-                    _shuffledIndexPointer = idx;
-                    Logger.Debug($"[Shuffle] Manually jumped to index {index}, aligning shuffle pointer to position {idx + 1}/{_shuffledIndices.Length}");
-                }
-                else
-                {
-                    // This shouldn't happen unless the queue changed without re-initializing shuffle
-                    InitializeShuffle(index);
-                    _shuffledIndexPointer = 0;
-                }
+                _shuffle.MoveTo(_files.Length, index);
+                Logger.Debug($"[Shuffle] Manually jumped to index {index}, shuffle position {_shuffle.Position + 1}/{_shuffle.RoundLength}");
             }
 
             _ = LoadCurrentVideo();
@@ -1002,14 +942,8 @@ namespace EdgeLoop.ViewModels
                 {
                     if (IsShuffle && _files.Length > 1)
                     {
-                        if (_shuffledIndices == null || _shuffledIndices.Length != _files.Length || _shuffledIndexPointer >= _shuffledIndices.Length - 1)
-                        {
-                            InitializeShuffle();
-                        }
-
-                        _shuffledIndexPointer++;
-                        _currentPos = _shuffledIndices[_shuffledIndexPointer];
-                        Logger.Debug($"[Shuffle] Picked index {_currentPos} (Bag Position: {_shuffledIndexPointer + 1}/{_shuffledIndices.Length})");
+                        _currentPos = _shuffle.Next(_files.Length, _currentPos);
+                        Logger.Debug($"[Shuffle] Picked index {_currentPos} (Bag Position: {_shuffle.Position + 1}/{_shuffle.RoundLength})");
                     }
                     else
                     {
@@ -1105,9 +1039,10 @@ namespace EdgeLoop.ViewModels
                 int attempts = 0;
                 do
                 {
-                    // Previous always goes sequentially backwards even if shuffle is on
-                    // This is more intuitive for users (going back to what they just saw)
-                    _currentPos = (_currentPos - 1 + _files.Length) % _files.Length;
+                    // With shuffle on, go back to the video that played before this one;
+                    // otherwise (or when nothing earlier is known), the one before it in the playlist
+                    int previous = IsShuffle && _files.Length > 1 ? _shuffle.Back(_files.Length) : -1;
+                    _currentPos = previous >= 0 ? previous : (_currentPos - 1 + _files.Length) % _files.Length;
 
                     if (!string.IsNullOrEmpty(SyncGroupId) && IsSyncMaster)
                     {
@@ -1257,6 +1192,14 @@ namespace EdgeLoop.ViewModels
                 var path = _currentItem.FilePath;
                 Logger.Debug($"LoadCurrentVideo: Processing item '{_currentItem.FileName}' with path: {path}");
 
+                // A web video that played from the cache points at the cached file. Once the cache
+                // cleanup has deleted that file, go back to the video's page instead of skipping it.
+                if (RevertDeletedCacheFile(_currentItem))
+                {
+                    path = _currentItem.FilePath;
+                    Logger.Debug($"LoadCurrentVideo: Cached file is gone, using the video's page again: {path}");
+                }
+
                 // NEW: If we have an original page URL that requires download (like YouTube), 
                 // and we don't have a local cache file yet, prioritize the page URL for JIT resolution.
                 // This ensures we trigger the download+mux path instead of trying to play a low-quality streaming URL.
@@ -1305,11 +1248,16 @@ namespace EdgeLoop.ViewModels
                     }
                     Logger.Debug($"LoadCurrentVideo: URL validation passed for: {path}");
 
-                    // RESOLVE PAGE URLS: If it's a page URL and not already cached, resolve it now
+                    // Cached copies are named after the video's page, not its media link
+                    string cacheKey = CacheKeyFor(_currentItem, path);
+
+                    // RESOLVE PAGE URLS: If it's a page URL and not already cached, resolve it now.
+                    // A copy still downloading counts as not cached: if it can't be used (see below)
+                    // the player needs the media link.
                     if (FileValidator.IsPageUrl(path))
                     {
-                        var cached = _downloadService.GetCachedFilePath(path);
-                        if (string.IsNullOrEmpty(cached) || cached.EndsWith(".partial"))
+                        var cached = _downloadService.GetCachedFilePath(cacheKey);
+                        if (!IsCompleteCacheFile(cached))
                         {
                             if (token.IsCancellationRequested) return;
                             Logger.Debug($"LoadCurrentVideo: Page URL detected, resolving: {path}");
@@ -1379,7 +1327,8 @@ namespace EdgeLoop.ViewModels
                                     return;
                                 }
 
-                                string errorDetail = completedTask == timeoutTask ? $"Resolution timed out ({(resolutionTimeoutMs / 1000)}s)" : "Extraction failed";
+                                string errorDetail = completedTask == timeoutTask ? $"Resolution timed out ({(resolutionTimeoutMs / 1000)}s)"
+                                    : SiteRestrictions.Describe(path) ?? "Extraction failed";
                                 Logger.Warning($"LoadCurrentVideo: {errorDetail} for page URL: {path}. Reporting failure.");
 
                                 // Increment failure count for this URL
@@ -1392,8 +1341,11 @@ namespace EdgeLoop.ViewModels
                         }
                     }
 
-                    // Check if this URL is cached locally for instant playback
-                    var cachedPath = _downloadService.GetCachedFilePath(path);
+                    // Check if this URL is cached locally for instant playback.
+                    // Copies from before the cache was named after pages carry the media link's name.
+                    var cachedPath = _downloadService.GetCachedFilePath(cacheKey);
+                    if (string.IsNullOrEmpty(cachedPath) && cacheKey != path)
+                        cachedPath = _downloadService.GetCachedFilePath(path);
                     if (!string.IsNullOrEmpty(cachedPath) && !cachedPath.EndsWith(".partial"))
                     {
                         // Concurrent Playback Safetey Check:
@@ -1419,6 +1371,13 @@ namespace EdgeLoop.ViewModels
                             {
                                 Logger.Warning($"[PreBuffer] Cached file is corrupted or a manifest: {cachedPath}. Deleting and falling back to streaming.");
                                 try { File.Delete(cachedPath); } catch { }
+
+                                // The page was never looked up because the cached copy was going to be used
+                                if (FileValidator.IsPageUrl(path))
+                                {
+                                    OnMediaFailed(new IOException("The cached copy was damaged and has been deleted. It will be fetched again."), token);
+                                    return;
+                                }
                             }
                             else
                             {
@@ -1565,7 +1524,6 @@ namespace EdgeLoop.ViewModels
                     Config.Demuxer.FormatOpt["reconnect_delay_max"] = "5";
                     Config.Demuxer.FormatOpt["reconnect_on_network_error"] = "1";
                     Config.Demuxer.FormatOpt["reconnect_on_http_error"] = "1";
-                    Config.Demuxer.FormatOpt["http_persistent"] = "1";
                     Config.Demuxer.FormatOpt["tls_verify"] = "0"; // Helps with handshake failures on some CDNs
                     Config.Demuxer.FormatOpt["rw_timeout"] = "15000000"; // 15s socket timeout (in microseconds)
 
@@ -1575,6 +1533,12 @@ namespace EdgeLoop.ViewModels
                     // Iwara media can come from hosts outside iwara.tv, so also recognise it by its page
                     if (site == Site.Unknown && SiteRules.Is(_currentItem.OriginalPageUrl, Site.Iwara)) site = Site.Iwara;
                     var siteProfile = SiteRules.Get(site);
+
+                    // Kept-open connections, unless the video's site turns them off. Judged by the page
+                    // too, since PMVHaven's media is on a storage host that isn't pmvhaven.com.
+                    var pageUrl = !string.IsNullOrEmpty(_currentItem.OriginalPageUrl) ? _currentItem.OriginalPageUrl : _currentItem.FilePath;
+                    var connectionProfile = mediaSite != Site.Unknown ? SiteRules.Get(mediaSite) : SiteRules.Get(pageUrl);
+                    Config.Demuxer.FormatOpt["http_persistent"] = connectionProfile.PersistentMediaConnections ? "1" : "0";
 
                     string referer = siteProfile.MediaReferer ?? _currentItem.OriginalPageUrl;
 
@@ -1657,6 +1621,41 @@ namespace EdgeLoop.ViewModels
                     _recursionDepth = Math.Max(0, _recursionDepth - 1);
                 }
             }
+        }
+
+        /// <summary>
+        /// The name a video's cached copy is stored under: its page URL when it has one, because
+        /// signed media links (Hypnotube, Rule34Video, Iwara) change every time they're looked up.
+        /// </summary>
+        internal static string CacheKeyFor(VideoItem item, string mediaOrPageUrl)
+        {
+            var page = item?.OriginalPageUrl?.Trim();
+            if (!string.IsNullOrEmpty(page)) return page;
+            var path = item?.FilePath;
+            if (!string.IsNullOrEmpty(path) && FileValidator.IsPageUrl(path)) return path;
+            return mediaOrPageUrl;
+        }
+
+        /// <summary>A finished cached copy, not one still downloading or a partial one.</summary>
+        private static bool IsCompleteCacheFile(string cachedPath) =>
+            !string.IsNullOrEmpty(cachedPath)
+            && !cachedPath.EndsWith(".partial", StringComparison.OrdinalIgnoreCase)
+            && !cachedPath.EndsWith(".downloading", StringComparison.OrdinalIgnoreCase);
+
+        /// <summary>
+        /// When a web video points at a cached copy that no longer exists, points it back at its
+        /// page so it can be streamed or downloaded again. Returns true if it did.
+        /// </summary>
+        internal static bool RevertDeletedCacheFile(VideoItem item)
+        {
+            if (item == null || item.IsUrl || string.IsNullOrEmpty(item.OriginalPageUrl)) return false;
+            var path = item.FilePath;
+            // Includes a ".downloading" copy that has since finished: the page finds the finished file
+            if (string.IsNullOrEmpty(path) || File.Exists(path)) return false;
+
+            item.FilePath = item.OriginalPageUrl;
+            item.Validate();
+            return true;
         }
 
         private void CurrentItem_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -1939,13 +1938,10 @@ namespace EdgeLoop.ViewModels
 
             if (_files == null || _files.Length == 0) return;
 
-            // Look ahead up to 3 videos and collect candidates for pre-buffering
+            // Look ahead up to 3 videos, in the order they'll play (shuffled or not), and collect candidates for pre-buffering
             var candidates = new System.Collections.Generic.List<(VideoItem item, int quality, int position)>();
-            for (int i = 1; i <= Math.Min(3, _files.Length); i++)
+            foreach (int pos in UpcomingIndices(3))
             {
-                int pos = (_currentPos + i) % _files.Length;
-                if (pos == _currentPos) continue; // Don't buffer current video
-
                 var item = _files[pos];
                 if (item?.IsUrl == true)
                 {
@@ -1988,10 +1984,12 @@ namespace EdgeLoop.ViewModels
             }
 
             var videoUrl = nextItem.FilePath;
+            // Named after the video's page, so the copy is found again after its signed link has changed
+            var cacheKey = CacheKeyFor(nextItem, videoUrl);
 
             // Already cached (full)?
             // We ignore .partial files here to ensure we resolve the URL correctly
-            var cachedPath = _downloadService.GetCachedFilePath(videoUrl);
+            var cachedPath = _downloadService.GetCachedFilePath(cacheKey);
             if (!string.IsNullOrEmpty(cachedPath) && !cachedPath.EndsWith(".partial"))
             {
                 _preBufferedUrl = videoUrl;
@@ -2016,6 +2014,9 @@ namespace EdgeLoop.ViewModels
                         var resolved = await _urlExtractor.ExtractVideoUrlAsync(videoUrl, cancellationToken);
                         if (!string.IsNullOrEmpty(resolved) && !cancellationToken.IsCancellationRequested)
                         {
+                            // Keep the page, so the link can be looked up again when it expires
+                            if (string.IsNullOrEmpty(nextItem.OriginalPageUrl)) nextItem.OriginalPageUrl = videoUrl;
+
                             if (resolved.Contains(".m3u8") || resolved.Contains(".mpd"))
                             {
                                 Logger.Debug($"[PreBuffer] Resolved to stream ({Path.GetExtension(resolved)}), skipping caching: {nextItem.FileName}");
@@ -2046,7 +2047,7 @@ namespace EdgeLoop.ViewModels
                     // we MUST download to disk immediately or extraction is wasted.
                     // We use DownloadVideoAsync (full) to avoid Flyleaf hitches with partial files.
                     // If the file is massive, it might take a while, but it's the most reliable way.
-                    var localPath = await _downloadService.DownloadVideoAsync(finalUrl, headers, cancellationToken);
+                    var localPath = await _downloadService.DownloadVideoAsync(finalUrl, headers, cancellationToken, cacheKey);
 
                     if (_disposed) return;
                     if (!string.IsNullOrEmpty(localPath) && !cancellationToken.IsCancellationRequested)

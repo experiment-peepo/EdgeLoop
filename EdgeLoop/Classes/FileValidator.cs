@@ -248,6 +248,27 @@ namespace EdgeLoop.Classes
         }
 
         /// <summary>
+        /// A link straight to a video file or stream: its path ends in a video extension (".mp4",
+        /// ".m3u8", ...), or a file server names the file in the query instead
+        /// (Iwara: "https://hime.iwara.tv/view?hash=…&amp;filename=…_Source.mp4&amp;expires=…").
+        /// </summary>
+        public static bool IsDirectMediaUrl(string url)
+        {
+            if (string.IsNullOrWhiteSpace(url) || !Uri.TryCreate(url, UriKind.Absolute, out var uri)) return false;
+            if (HasMediaExtension(uri.AbsolutePath.TrimEnd('/'))) return true;
+            if (string.IsNullOrEmpty(uri.Query)) return false;
+
+            var query = System.Web.HttpUtility.ParseQueryString(uri.Query);
+            return HasMediaExtension(query["filename"]) || HasMediaExtension(query["file"]);
+        }
+
+        private static bool HasMediaExtension(string path) =>
+            !string.IsNullOrEmpty(path) &&
+            (path.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase) ||
+             path.EndsWith(".mpd", StringComparison.OrdinalIgnoreCase) ||
+             Constants.VideoExtensions.Any(ext => path.EndsWith(ext, StringComparison.OrdinalIgnoreCase)));
+
+        /// <summary>
         /// Determines if a URL is a page URL (needs extraction) vs a direct video URL
         /// </summary>
         /// <param name="url">The URL to check</param>
@@ -259,18 +280,10 @@ namespace EdgeLoop.Classes
             try
             {
                 var uri = new Uri(url);
-                var host = uri.Host.ToLowerInvariant();
-
-                // Check if URL has a video file extension (direct video URL)
                 var path = uri.AbsolutePath.ToLowerInvariant().TrimEnd('/');
 
-                // EXPLICIT CHECK for streaming protocols to avoid extraction loop (redundant with Constants but safe)
-                if (path.EndsWith(".m3u8") || path.EndsWith(".mpd")) return false;
-
-                bool hasVideoExtension = Constants.VideoExtensions.Any(ext =>
-                    path.EndsWith(ext, StringComparison.OrdinalIgnoreCase));
-
-                if (hasVideoExtension) return false;
+                // A video file or stream itself, not a page to extract one from
+                if (IsDirectMediaUrl(url)) return false;
 
                 // Exclude common web assets from being treated as page URLs
                 var assetExtensions = new[] {
@@ -340,11 +353,9 @@ namespace EdgeLoop.Classes
             try
             {
                 var uri = new Uri(url);
-                var path = uri.AbsolutePath.ToLowerInvariant();
 
-                // Check if URL has a video file extension
-                bool hasVideoExtension = Constants.VideoExtensions.Any(ext =>
-                    path.EndsWith(ext, StringComparison.OrdinalIgnoreCase));
+                // A video file or stream (by its path, or a file named in its query)
+                bool hasVideoExtension = IsDirectMediaUrl(url);
 
                 // Check if URL is from a supported domain
                 var host = uri.Host.ToLowerInvariant();

@@ -44,6 +44,8 @@ namespace EdgeLoop.Tests
         [Theory]
         [InlineData("https://hypnotube.com/video/x-1.html?playlist=5", "https://hypnotube.com/video/x-1.html")]
         [InlineData("https://www.iwara.tv/video/abc/slug?sort=date", "https://www.iwara.tv/video/abc/slug")]
+        [InlineData("https://pmvhaven.com/video/a_6b02?from=home", "https://pmvhaven.com/video/a_6b02")]
+        [InlineData("https://media.hypnotube.com/videos/a.mp4?token=t&expires=1", "https://media.hypnotube.com/videos/a.mp4?token=t&expires=1")] // a media file's signature stays
         [InlineData("https://www.youtube.com/watch?v=abc", "https://www.youtube.com/watch?v=abc")]
         public void NormalizePageUrl_StripsQueryOnlyWhereNeeded(string url, string expected)
         {
@@ -90,17 +92,19 @@ namespace EdgeLoop.Tests
         [Fact]
         public void GetCookies_TrimsAndTreatsBlankAsNone()
         {
-            MockSettings.Setup(s => s.IwaraCookiesEncrypted).Returns("  token=1  ");
+            MockSettings.Setup(s => s.HypnotubeCookiesEncrypted).Returns("  token=1  ");
             MockSettings.Setup(s => s.Rule34VideoCookiesEncrypted).Returns("   ");
+            MockSettings.Setup(s => s.IwaraCookiesEncrypted).Returns("sid=1");
 
-            SiteRules.Get(Site.Iwara).GetCookies().Should().Be("token=1");
+            SiteRules.Get(Site.Hypnotube).GetCookies().Should().Be("token=1");
             SiteRules.Get(Site.Rule34Video).GetCookies().Should().BeNull();
             SiteRules.Get(Site.PmvHaven).GetCookies().Should().BeNull();
+            SiteRules.Get(Site.Iwara).GetCookies().Should().BeNull("Iwara signs in with an account, not cookies");
         }
 
         [Theory]
         [InlineData("www.youtube.com", true)]
-        [InlineData("www.iwara.tv", true)]
+        [InlineData("www.iwara.tv", false)] // streams a single MP4 file
         [InlineData("x.com", true)]
         [InlineData("www.netflix.com", false)] // used to match because it ends in "x.com"
         [InlineData("pmvhaven.com", false)]

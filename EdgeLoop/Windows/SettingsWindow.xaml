@@ -185,95 +185,199 @@
                                    Text="Windows couldn't encrypt data on this PC, so cookies you enter here are saved as plain text in settings.json."/>
                     </Border>
 
-                    <controls:SettingRow Header="Browser to sign in with" Description="EdgeLoop borrows this browser's sign-ins for sites such as Iwara">
+                    <controls:SettingRow Header="Browser to sign in with" Description="yt-dlp borrows this browser's sign-ins for sites such as YouTube">
                         <ComboBox Width="160" ItemsSource="{Binding AvailableBrowsers}" SelectedItem="{Binding BrowserForCookies}"/>
                     </controls:SettingRow>
 
-                    <Grid Margin="0,6,0,12">
-                        <TextBlock Text="SITE COOKIES" Style="{StaticResource SectionLabelText}" VerticalAlignment="Center"/>
-                        <CheckBox HorizontalAlignment="Right" IsChecked="{Binding ShowCookies}" Content="Show" FontSize="12"
-                                  ToolTip="Cookies sign you in to the site: keep them private"/>
-                    </Grid>
+                    <TextBlock Text="IWARA ACCOUNT" Style="{StaticResource SettingsGroupHeader}"/>
+                    <TextBlock Style="{StaticResource CaptionText}" Margin="0,0,0,14" TextWrapping="Wrap"
+                               Text="Iwara shows explicit videos only to signed-in accounts. EdgeLoop signs in with this account and keeps the password encrypted for your Windows account."/>
 
-                    <TextBlock Style="{StaticResource CaptionText}" Margin="0,0,0,14"
-                               Text="Paste a site's cookies here if signing in through the browser doesn't work. They're stored encrypted for your Windows account."/>
-
-                    <controls:SettingRow Header="Hypnotube" Description="Looks like PHPSESSID=…; other=…" IsStacked="True">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <Border Style="{StaticResource SecretBox}" Visibility="{Binding ShowCookies, Converter={StaticResource InvertedBooleanToVisibilityConverter}}">
-                                <TextBlock Text="{Binding HypnotubeCookies, Converter={StaticResource SecretMaskConverter}}" VerticalAlignment="Center" Foreground="{StaticResource TextTertiary}"/>
-                            </Border>
-                            <TextBox Text="{Binding HypnotubeCookies, UpdateSourceTrigger=PropertyChanged}" Height="32" Padding="10,0" FontSize="12"
-                                     AutomationProperties.Name="Hypnotube cookies"
-                                     Visibility="{Binding ShowCookies, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                            <Button Grid.Column="1" Command="{Binding PasteCookiesCommand}" CommandParameter="Hypnotube" Style="{StaticResource SecondaryButtonStyle}"
-                                    Content="Paste" Height="32" Padding="12,0" Margin="8,0,0,0"/>
-                            <Button Grid.Column="2" Command="{Binding ClearCookiesCommand}" CommandParameter="Hypnotube" Style="{StaticResource SecondaryButtonStyle}"
-                                    Content="Clear" Height="32" Padding="12,0" Margin="6,0,0,0"/>
-                        </Grid>
+                    <controls:SettingRow Header="Email">
+                        <TextBox Width="260" Height="32" Padding="10,0" FontSize="12"
+                                 Text="{Binding IwaraEmail, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="Iwara email"/>
                     </controls:SettingRow>
 
-                    <controls:SettingRow Header="Iwara" Description="Looks like sid=…; other=…" IsStacked="True">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <Border Style="{StaticResource SecretBox}" Visibility="{Binding ShowCookies, Converter={StaticResource InvertedBooleanToVisibilityConverter}}">
-                                <TextBlock Text="{Binding IwaraCookies, Converter={StaticResource SecretMaskConverter}}" VerticalAlignment="Center" Foreground="{StaticResource TextTertiary}"/>
-                            </Border>
-                            <TextBox Text="{Binding IwaraCookies, UpdateSourceTrigger=PropertyChanged}" Height="32" Padding="10,0" FontSize="12"
-                                     AutomationProperties.Name="Iwara cookies"
-                                     Visibility="{Binding ShowCookies, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                            <Button Grid.Column="1" Command="{Binding PasteCookiesCommand}" CommandParameter="Iwara" Style="{StaticResource SecondaryButtonStyle}"
-                                    Content="Paste" Height="32" Padding="12,0" Margin="8,0,0,0"/>
-                            <Button Grid.Column="2" Command="{Binding ClearCookiesCommand}" CommandParameter="Iwara" Style="{StaticResource SecondaryButtonStyle}"
-                                    Content="Clear" Height="32" Padding="12,0" Margin="6,0,0,0"/>
-                        </Grid>
+                    <controls:SettingRow Header="Password">
+                        <PasswordBox x:Name="IwaraPasswordBox" Width="260" Height="32" Padding="10,0" FontSize="12"
+                                     AutomationProperties.Name="Iwara password"/>
                     </controls:SettingRow>
 
-                    <controls:SettingRow Header="Rule34Video" Description="Looks like PHPSESSID=…; other=…" IsStacked="True">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <Border Style="{StaticResource SecretBox}" Visibility="{Binding ShowCookies, Converter={StaticResource InvertedBooleanToVisibilityConverter}}">
-                                <TextBlock Text="{Binding Rule34VideoCookies, Converter={StaticResource SecretMaskConverter}}" VerticalAlignment="Center" Foreground="{StaticResource TextTertiary}"/>
-                            </Border>
-                            <TextBox Text="{Binding Rule34VideoCookies, UpdateSourceTrigger=PropertyChanged}" Height="32" Padding="10,0" FontSize="12"
-                                     AutomationProperties.Name="Rule34Video cookies"
-                                     Visibility="{Binding ShowCookies, Converter={StaticResource BooleanToVisibilityConverter}}"/>
-                            <Button Grid.Column="1" Command="{Binding PasteCookiesCommand}" CommandParameter="Rule34Video" Style="{StaticResource SecondaryButtonStyle}"
-                                    Content="Paste" Height="32" Padding="12,0" Margin="8,0,0,0"/>
-                            <Button Grid.Column="2" Command="{Binding ClearCookiesCommand}" CommandParameter="Rule34Video" Style="{StaticResource SecondaryButtonStyle}"
-                                    Content="Clear" Height="32" Padding="12,0" Margin="6,0,0,0"/>
-                        </Grid>
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,18">
+                        <Button Command="{Binding CheckIwaraSignInCommand}" Style="{StaticResource SecondaryButtonStyle}"
+                                Content="Check sign-in" Height="32" Padding="12,0"/>
+                        <TextBlock Text="{Binding IwaraSignInStatus}" VerticalAlignment="Center" Margin="12,0,0,0"
+                                   FontSize="12" TextWrapping="Wrap" MaxWidth="360">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding IwaraSignInSucceeded}" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource SuccessTextBrush}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding IwaraSignInSucceeded}" Value="False">
+                                            <Setter Property="Foreground" Value="{StaticResource ErrorTextBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+
+                    <TextBlock Text="HYPNOTUBE ACCOUNT" Style="{StaticResource SettingsGroupHeader}"/>
+                    <TextBlock Style="{StaticResource CaptionText}" Margin="0,0,0,14" TextWrapping="Wrap"
+                               Text="Signed-in accounts get 720p. EdgeLoop signs in with your Hypnotube username (not your email), keeps the password encrypted for your Windows account, and signs in again by itself when the session runs out."/>
+
+                    <controls:SettingRow Header="Username">
+                        <TextBox Width="260" Height="32" Padding="10,0" FontSize="12" Tag="Your Hypnotube username"
+                                 Text="{Binding HypnotubeAccount.Username, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="Hypnotube username"/>
                     </controls:SettingRow>
 
-                    <TextBlock Text="GETTING YOUR COOKIES" Style="{StaticResource SettingsGroupHeader}"/>
-                    <TextBlock Style="{StaticResource CaptionText}" Margin="0,0,0,10" LineHeight="19">
-                        <Run Text="1. Copy the helper below."/><LineBreak/>
-                        <Run Text="2. In your browser, open the site while signed in, press F12 and choose the Console tab."/><LineBreak/>
-                        <Run Text="3. Paste the helper there and press Enter."/><LineBreak/>
-                        <Run Text="4. Come back here and click Paste next to the site."/>
-                    </TextBlock>
-                    <StackPanel Orientation="Horizontal" Margin="0,0,0,18">
-                        <Button Command="{Binding CopyCookieScriptCommand}" Style="{StaticResource SecondaryButtonStyle}" Height="32" Padding="12,0">
-                            <StackPanel Orientation="Horizontal">
-                                <Path Data="M14.6,16.6L19.2,12L14.6,7.4L16,6L22,12L16,18L14.6,16.6M9.4,16.6L4.8,12L9.4,7.4L8,6L2,12L8,18L9.4,16.6Z" Stretch="Uniform" Width="12" Height="12" Margin="0,0,8,0"/>
-                                <TextBlock Text="Copy cookie helper" FontWeight="SemiBold"/>
-                            </StackPanel>
-                        </Button>
-                        <TextBlock Text="✓ Copied" Foreground="{StaticResource SuccessTextBrush}" FontWeight="SemiBold" VerticalAlignment="Center" Margin="12,0,0,0"
-                                   Visibility="{Binding CookieScriptCopied, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                    <controls:SettingRow Header="Password">
+                        <PasswordBox x:Name="HypnotubePasswordBox" Width="260" Height="32" Padding="10,0" FontSize="12"
+                                     AutomationProperties.Name="Hypnotube password"/>
+                    </controls:SettingRow>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,18" DataContext="{Binding HypnotubeAccount}">
+                        <Button Command="{Binding CheckCommand}" Style="{StaticResource SecondaryButtonStyle}"
+                                Content="Check sign-in" Height="32" Padding="12,0"/>
+                        <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="12,0,0,0"
+                                   FontSize="12" TextWrapping="Wrap" MaxWidth="360">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Succeeded}" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource SuccessTextBrush}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Succeeded}" Value="False">
+                                            <Setter Property="Foreground" Value="{StaticResource ErrorTextBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+
+                    <TextBlock Text="RULE34VIDEO ACCOUNT" Style="{StaticResource SettingsGroupHeader}"/>
+                    <TextBlock Style="{StaticResource CaptionText}" Margin="0,0,0,14" TextWrapping="Wrap"
+                               Text="EdgeLoop signs in with this account, keeps the password encrypted for your Windows account, and signs in again by itself when the session runs out."/>
+
+                    <controls:SettingRow Header="Email or username">
+                        <TextBox Width="260" Height="32" Padding="10,0" FontSize="12" Tag="you@example.com"
+                                 Text="{Binding Rule34VideoAccount.Username, UpdateSourceTrigger=PropertyChanged}"
+                                 AutomationProperties.Name="Rule34Video email or username"/>
+                    </controls:SettingRow>
+
+                    <controls:SettingRow Header="Password">
+                        <PasswordBox x:Name="Rule34VideoPasswordBox" Width="260" Height="32" Padding="10,0" FontSize="12"
+                                     AutomationProperties.Name="Rule34Video password"/>
+                    </controls:SettingRow>
+
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,18" DataContext="{Binding Rule34VideoAccount}">
+                        <Button Command="{Binding CheckCommand}" Style="{StaticResource SecondaryButtonStyle}"
+                                Content="Check sign-in" Height="32" Padding="12,0"/>
+                        <TextBlock Text="{Binding Status}" VerticalAlignment="Center" Margin="12,0,0,0"
+                                   FontSize="12" TextWrapping="Wrap" MaxWidth="360">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Foreground" Value="{StaticResource TextSecondary}"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Succeeded}" Value="True">
+                                            <Setter Property="Foreground" Value="{StaticResource SuccessTextBrush}"/>
+                                        </DataTrigger>
+                                        <DataTrigger Binding="{Binding Succeeded}" Value="False">
+                                            <Setter Property="Foreground" Value="{StaticResource ErrorTextBrush}"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </StackPanel>
+
+                    <!-- Pasted cookies: only a backup for when signing in with an account doesn't work -->
+                    <Button Command="{Binding ToggleCookieFallbackCommand}" HorizontalAlignment="Left" Margin="-6,2,0,14"
+                            AutomationProperties.Name="Show or hide the cookie backup">
+                        <Button.Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource LinkButtonStyle}">
+                                <Setter Property="Content" Value="Sign-in not working? Use cookies instead ▸"/>
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding ShowCookieFallback}" Value="True">
+                                        <Setter Property="Content" Value="Hide the cookie backup ▾"/>
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Button.Style>
+                    </Button>
+                    <StackPanel Visibility="{Binding ShowCookieFallback, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Grid Margin="0,6,0,12">
+                            <TextBlock Text="SITE COOKIES" Style="{StaticResource SectionLabelText}" VerticalAlignment="Center"/>
+                            <CheckBox HorizontalAlignment="Right" IsChecked="{Binding ShowCookies}" Content="Show" FontSize="12"
+                                      ToolTip="Cookies sign you in to the site: keep them private"/>
+                        </Grid>
+
+                        <TextBlock Style="{StaticResource CaptionText}" Margin="0,0,0,14" TextWrapping="Wrap"
+                                   Text="The fallback for when signing in with an account above doesn't work, for example when a site asks for a captcha. An account's own sign-in takes priority over cookies pasted here. They're stored encrypted for your Windows account."/>
+
+                        <controls:SettingRow Header="Hypnotube" Description="Looks like PHPSESSID=…; other=…" IsStacked="True">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Style="{StaticResource SecretBox}" Visibility="{Binding ShowCookies, Converter={StaticResource InvertedBooleanToVisibilityConverter}}">
+                                    <TextBlock Text="{Binding HypnotubeCookies, Converter={StaticResource SecretMaskConverter}}" VerticalAlignment="Center" Foreground="{StaticResource TextTertiary}"/>
+                                </Border>
+                                <TextBox Text="{Binding HypnotubeCookies, UpdateSourceTrigger=PropertyChanged}" Height="32" Padding="10,0" FontSize="12"
+                                         AutomationProperties.Name="Hypnotube cookies"
+                                         Visibility="{Binding ShowCookies, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                <Button Grid.Column="1" Command="{Binding PasteCookiesCommand}" CommandParameter="Hypnotube" Style="{StaticResource SecondaryButtonStyle}"
+                                        Content="Paste" Height="32" Padding="12,0" Margin="8,0,0,0"/>
+                                <Button Grid.Column="2" Command="{Binding ClearCookiesCommand}" CommandParameter="Hypnotube" Style="{StaticResource SecondaryButtonStyle}"
+                                        Content="Clear" Height="32" Padding="12,0" Margin="6,0,0,0"/>
+                            </Grid>
+                        </controls:SettingRow>
+                        <TextBlock Text="{Binding HypnotubePasteSummary}" Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,-6,0,10"
+                                   Visibility="{Binding HypnotubePasteSummary, Converter={StaticResource StringToVisibilityConverter}}"/>
+                        <TextBlock Text="{Binding HypnotubeCookiesNote}" Foreground="{StaticResource WarningTextBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,-6,0,12"
+                                   Visibility="{Binding HypnotubeCookiesNote, Converter={StaticResource StringToVisibilityConverter}}"/>
+
+                        <controls:SettingRow Header="Rule34Video" Description="Looks like PHPSESSID=…; other=…" IsStacked="True">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <Border Style="{StaticResource SecretBox}" Visibility="{Binding ShowCookies, Converter={StaticResource InvertedBooleanToVisibilityConverter}}">
+                                    <TextBlock Text="{Binding Rule34VideoCookies, Converter={StaticResource SecretMaskConverter}}" VerticalAlignment="Center" Foreground="{StaticResource TextTertiary}"/>
+                                </Border>
+                                <TextBox Text="{Binding Rule34VideoCookies, UpdateSourceTrigger=PropertyChanged}" Height="32" Padding="10,0" FontSize="12"
+                                         AutomationProperties.Name="Rule34Video cookies"
+                                         Visibility="{Binding ShowCookies, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                <Button Grid.Column="1" Command="{Binding PasteCookiesCommand}" CommandParameter="Rule34Video" Style="{StaticResource SecondaryButtonStyle}"
+                                        Content="Paste" Height="32" Padding="12,0" Margin="8,0,0,0"/>
+                                <Button Grid.Column="2" Command="{Binding ClearCookiesCommand}" CommandParameter="Rule34Video" Style="{StaticResource SecondaryButtonStyle}"
+                                        Content="Clear" Height="32" Padding="12,0" Margin="6,0,0,0"/>
+                            </Grid>
+                        </controls:SettingRow>
+                        <TextBlock Text="{Binding Rule34VideoPasteSummary}" Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,-6,0,10"
+                                   Visibility="{Binding Rule34VideoPasteSummary, Converter={StaticResource StringToVisibilityConverter}}"/>
+                        <TextBlock Text="{Binding Rule34VideoCookiesNote}" Foreground="{StaticResource WarningTextBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,-6,0,12"
+                                   Visibility="{Binding Rule34VideoCookiesNote, Converter={StaticResource StringToVisibilityConverter}}"/>
+
+                        <TextBlock Text="GETTING YOUR COOKIES" Style="{StaticResource SettingsGroupHeader}"/>
+                        <TextBlock Style="{StaticResource CaptionText}" Margin="0,0,0,10" LineHeight="19" TextWrapping="Wrap">
+                            <Run Text="1. In your browser, open the site while signed in, press F12 and choose the Network tab."/><LineBreak/>
+                            <Run Text="2. Reload the page (F5), then right-click the first request in the list: the page itself."/><LineBreak/>
+                            <Run Text="3. Choose Copy Value › Copy as cURL (Firefox) or Copy › Copy as cURL (Chrome, Edge)."/><LineBreak/>
+                            <Run Text="4. Come back here and click Paste next to the site, then Save."/>
+                        </TextBlock>
+                        <TextBlock Style="{StaticResource CaptionText}" Margin="0,0,0,18" TextWrapping="Wrap"
+                                   Text="Paste also takes a cookies.txt file, an extension's JSON export, the Cookie header on its own, or just the PHPSESSID value, and keeps only that site's cookies. Copy from the Network tab, not the Console: the cookie that signs you in is hidden from page scripts, so document.cookie leaves it out."/>
                     </StackPanel>
                 </StackPanel>
 

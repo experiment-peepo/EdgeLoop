@@ -138,6 +138,9 @@ namespace EdgeLoop.Classes
         {
             if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return null;
 
+            // YouTube links carry an ID, not a slug ("watch", "shorts/abc"): nothing to make a title from
+            if (SiteRules.Identify(uri) == Site.YouTube) return null;
+
             var parts = uri.AbsolutePath.Trim('/').Split('/', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length == 0) return null;
 

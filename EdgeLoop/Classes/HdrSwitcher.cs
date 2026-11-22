@@ -178,7 +178,7 @@ namespace EdgeLoop.Classes
                     return;
                 }
                 Directory.CreateDirectory(Path.GetDirectoryName(_recordPath)!);
-                File.WriteAllText(_recordPath, JsonSerializer.Serialize(paths));
+                AtomicFile.WriteAllText(_recordPath, JsonSerializer.Serialize(paths));
             }
             catch (Exception ex)
             {

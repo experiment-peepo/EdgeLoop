@@ -21,10 +21,12 @@ namespace EdgeLoop.Classes
         private readonly IHtmlFetcher _htmlFetcher;
         // private readonly LruCache<string, string> _urlCache; // Replaced by PersistentUrlCache
         private readonly YtDlpService _ytDlpService;
+        private readonly SiteSignIn _signIn;
         private readonly System.Collections.Concurrent.ConcurrentDictionary<string, Task<string>> _activeExtractions = new System.Collections.Concurrent.ConcurrentDictionary<string, Task<string>>();
 
-        public VideoUrlExtractor(IHtmlFetcher htmlFetcher = null, YtDlpService ytDlpService = null)
+        public VideoUrlExtractor(IHtmlFetcher htmlFetcher = null, YtDlpService ytDlpService = null, SiteSignIn signIn = null)
         {
+            _signIn = signIn ?? SiteSignIn.Shared;
             _htmlFetcher = htmlFetcher ?? new StandardHtmlFetcher();
             _ytDlpService = ytDlpService ?? (ServiceContainer.TryGet<YtDlpService>(out var service) ? service : null);
             // _urlCache = new LruCache<string, string>(Constants.MaxFileCacheSize, ttl);
@@ -41,7 +43,7 @@ namespace EdgeLoop.Classes
             var uri = new Uri(normalizedUrl);
             var host = uri.Host.ToLowerInvariant();
 
-            if (Constants.VideoExtensions.Any(ext => uri.AbsolutePath.EndsWith(ext, StringComparison.OrdinalIgnoreCase)))
+            if (FileValidator.IsDirectMediaUrl(normalizedUrl))
             {
                 return new VideoMetadata(normalizedUrl, Path.GetFileNameWithoutExtension(uri.AbsolutePath), normalizedUrl);
             }
@@ -73,16 +75,15 @@ namespace EdgeLoop.Classes
                 string html = null;
                 bool hasHtml = false;
 
-                // Use yt-dlp for video metadata if site is supported by it and blocks scraping
-                bool useYtDlpFirst = SiteRules.Is(host, Site.Rule34Video) || SiteRules.Is(host, Site.Iwara);
+                // Never downloads: this runs for every video in an imported playlist. Sites that need a
+                // download (YouTube, Vimeo, ...) are downloaded when they play; here they only give a title.
+                bool downloadRequired = YtDlpService.IsDownloadRequiredSite(host);
+                bool ytDlpAvailable = _ytDlpService != null && _ytDlpService.IsAvailable;
 
-                // Download+mux takes precedence if the site requires it (YouTube, Vimeo, etc.)
-                if (_ytDlpService != null && _ytDlpService.IsAvailable && YtDlpService.IsDownloadRequiredSite(host))
-                {
-                    useYtDlpFirst = true;
-                }
+                // yt-dlp for Iwara (its pages are an app with no video in the HTML) and download-required sites
+                bool useYtDlpFirst = ytDlpAvailable && (SiteRules.Is(host, Site.Iwara) || downloadRequired);
 
-                // Optimization: If we're going to use yt-dlp first (e.g. YouTube), don't scrape with HttpClient first to avoid 429s
+                // If we're going to use yt-dlp first (e.g. YouTube), don't scrape with HttpClient first to avoid 429s
                 if (!useYtDlpFirst)
                 {
                     html = await FetchHtmlAsync(normalizedUrl, cancellationToken);
@@ -90,61 +91,36 @@ namespace EdgeLoop.Classes
                     Logger.Debug($"[VideoUrlExtractor] Fetched HTML for {host}, success: {hasHtml}, length: {html?.Length ?? 0}");
                 }
 
-                if (useYtDlpFirst && _ytDlpService != null && _ytDlpService.IsAvailable)
+                if (useYtDlpFirst)
                 {
                     try
                     {
-                        Logger.Debug($"[VideoUrlExtractor] Extracting full metadata using yt-dlp for {host}");
-
-                        if (YtDlpService.IsDownloadRequiredSite(host))
+                        Logger.Debug($"[VideoUrlExtractor] Extracting metadata using yt-dlp for {host}");
+                        var info = await _ytDlpService.ExtractVideoInfoAsync(normalizedUrl, cancellationToken);
+                        if (info != null)
                         {
-                            // NEW: For sites requiring muxing (YouTube/Vimeo), trigger the high-quality download flow immediately.
-                            // This returns a local file path which ensures 1080p+ resolution instead of 360p streaming.
-                            Logger.Debug($"[VideoUrlExtractor] Site requires download+mux. Triggering high-quality download pipeline for: {host}");
-                            videoUrl = await _ytDlpService.DownloadBestQualityAsync(normalizedUrl, cancellationToken);
-
-                            // If download worked, we still need the title
-                            if (!string.IsNullOrEmpty(videoUrl))
-                            {
-                                var info = await _ytDlpService.ExtractVideoInfoAsync(normalizedUrl, cancellationToken);
-                                title = TitleSanitizer.Clean(info?.Title, host);
-                            }
-                        }
-                        else
-                        {
-                            var info = await _ytDlpService.ExtractVideoInfoAsync(normalizedUrl, cancellationToken);
-                            if (info != null)
-                            {
-                                if (!string.IsNullOrWhiteSpace(info.Url)) videoUrl = info.Url;
-                                // Clean() drops generic titles like "view" often returned by iwara's media server
-                                title = TitleSanitizer.Clean(info.Title, host);
-                            }
+                            // A download-required site's streaming link is low quality; it's downloaded when it plays
+                            if (!downloadRequired && !string.IsNullOrWhiteSpace(info.Url)) videoUrl = info.Url;
+                            // Clean() drops generic titles like "view" often returned by iwara's media server
+                            title = TitleSanitizer.Clean(info.Title, host);
                         }
                     }
                     catch (Exception ex)
                     {
-                        Logger.Warning($"[VideoUrlExtractor] yt-dlp extraction/download failed for {host}: {ex.Message}");
+                        Logger.Warning($"[VideoUrlExtractor] yt-dlp metadata extraction failed for {host}: {ex.Message}");
                     }
                 }
 
                 // If yt-dlp failed or was skipped, try getting the URL normally
-                if (string.IsNullOrEmpty(videoUrl))
+                if (string.IsNullOrEmpty(videoUrl) && !downloadRequired)
                 {
                     if (!string.IsNullOrEmpty(cachedUrl))
                     {
                         videoUrl = cachedUrl;
                     }
-                    else if (useYtDlpFirst)
+                    else if (SiteRules.Is(host, Site.Rule34Video))
                     {
-                        // We already tried ExtractVideoInfoAsync and it failed, but let's strictly fallback
-                        if (SiteRules.Is(host, Site.Rule34Video))
-                        {
-                            videoUrl = await ExtractRule34VideoUrlAsync(normalizedUrl, cancellationToken);
-                        }
-                        else
-                        {
-                            if (hasHtml) videoUrl = await ExtractGenericVideoUrlAsync(normalizedUrl, cancellationToken);
-                        }
+                        videoUrl = await ExtractRule34VideoUrlAsync(normalizedUrl, cancellationToken);
                     }
                     else if (SiteRules.Is(host, Site.PmvHaven))
                     {
@@ -154,9 +130,9 @@ namespace EdgeLoop.Classes
                     {
                         videoUrl = await ExtractHypnotubeUrlAsync(normalizedUrl, cancellationToken);
                     }
-                    else
+                    else if (hasHtml)
                     {
-                        if (hasHtml) videoUrl = await ExtractGenericVideoUrlAsync(normalizedUrl, cancellationToken);
+                        videoUrl = await ExtractGenericVideoUrlAsync(normalizedUrl, cancellationToken);
                     }
                 }
 
@@ -165,8 +141,8 @@ namespace EdgeLoop.Classes
                     // Fallback 1: Extract from URL slug (No network request)
                     title = ExtractTitleFromUrlSlug(normalizedUrl);
 
-                    // Fallback 2: Fetch HTML (Only if not a protected site that blocks HttpClient)
-                    bool canScrape = !SiteRules.Is(host, Site.Iwara) && !SiteRules.Is(host, Site.Rule34Video);
+                    // Fallback 2: Fetch HTML (Iwara's pages are an app shell with no title in them)
+                    bool canScrape = !SiteRules.Is(host, Site.Iwara);
 
                     if (string.IsNullOrEmpty(title) && canScrape)
                     {
@@ -250,11 +226,13 @@ namespace EdgeLoop.Classes
 
             try
             {
-                var normalizedUrl = FileValidator.NormalizeUrl(pageUrl);
+                // Without the site's playlist/tracking parameters (items saved before they were stripped at import)
+                var normalizedUrl = FileValidator.NormalizeUrl(SiteRules.NormalizePageUrl(pageUrl));
                 var uri = new Uri(normalizedUrl);
                 var host = uri.Host.ToLowerInvariant();
 
-                if (Constants.VideoExtensions.Any(ext => uri.AbsolutePath.EndsWith(ext, StringComparison.OrdinalIgnoreCase)))
+                // Already a video file (e.g. an Iwara file link saved by an earlier session): nothing to extract
+                if (FileValidator.IsDirectMediaUrl(normalizedUrl))
                 {
                     return normalizedUrl;
                 }
@@ -271,6 +249,7 @@ namespace EdgeLoop.Classes
 
                         if (!string.IsNullOrEmpty(videoUrl))
                         {
+                            SiteRestrictions.Record(normalizedUrl, SiteRestriction.None);
                             PersistentUrlCache.Instance.Set(pageUrl, videoUrl);
                             return videoUrl;  // Returns local file path
                         }
@@ -279,11 +258,21 @@ namespace EdgeLoop.Classes
                     {
                         Logger.Warning($"[VideoUrlExtractor] Download+mux failed for {host}: {ex.Message}");
                     }
+
+                    // yt-dlp named a reason streaming won't get past (e.g. no JavaScript runtime for YouTube)
+                    if (SiteRestrictions.For(normalizedUrl) is var blocked && blocked != SiteRestriction.None)
+                    {
+                        Logger.Warning($"[VideoUrlExtractor] Not streaming {host} either: {blocked}");
+                        return null;
+                    }
                     // Fall through to streaming path as fallback
                 }
 
+                // Sites the app's own scrapers handle; yt-dlp is only their fallback
+                // (it can't do PMVHaven or Hypnotube, and its Rule34Video support is broken as of 2026.10.26)
                 var hasSpecializedScraper = SiteRules.Is(host, Site.PmvHaven) ||
-                                           SiteRules.Is(host, Site.Hypnotube);
+                                           SiteRules.Is(host, Site.Hypnotube) ||
+                                           SiteRules.Is(host, Site.Rule34Video);
 
                 // Explicitly block RedGifs support as requested
                 if (host.Contains("redgifs.com"))
@@ -339,6 +328,11 @@ namespace EdgeLoop.Classes
                 {
                     PersistentUrlCache.Instance.Set(pageUrl, videoUrl);
                 }
+                else if (SiteRestrictions.For(normalizedUrl) is var restriction && restriction != SiteRestriction.None)
+                {
+                    // The page said why there's no video (VIP-only, location-blocked, ...); yt-dlp won't do better
+                    Logger.Debug($"[VideoUrlExtractor] Not trying yt-dlp for {host}: {restriction}");
+                }
                 else if (_ytDlpService != null && _ytDlpService.IsAvailable)
                 {
                     // FALLBACK: If specialized scrapers failed, try yt-dlp as a last resort
@@ -370,16 +364,26 @@ namespace EdgeLoop.Classes
         {
             try
             {
+                // Signed-in accounts get 720p; signs in (again) with the account in Settings when needed
+                await _signIn.EnsureSignedInAsync(Site.Hypnotube, cancellationToken);
                 var html = await FetchHtmlAsync(url, cancellationToken);
                 if (string.IsNullOrWhiteSpace(html)) return null;
 
                 Logger.Debug($"ExtractHypnotubeUrlAsync: Processing HTML from {url}");
 
-                // Check for "friends only" restriction
-                if (html.Contains("You must be friends with") && html.Contains("to watch this video"))
+                // VIP-only, friends-only and location-blocked pages say so; there's no video to find
+                var restriction = SiteRestrictions.Detect(Site.Hypnotube, html);
+                SiteRestrictions.Record(url, restriction);
+                if (restriction != SiteRestriction.None)
                 {
-                    Logger.Warning($"[Hypnotube] Video is restricted to friends only: {url}");
+                    Logger.Warning($"[Hypnotube] {restriction}: {url}");
                     return null;
+                }
+
+                // Signed out although the account's session should be signed in: it ran out, so check it next time
+                if (_signIn.HasAccount(Site.Hypnotube) && !SiteSignIn.ShowsSignedIn(html))
+                {
+                    _signIn.NoteSignedOutPage(Site.Hypnotube);
                 }
 
                 // 1. Try multi-source extraction (Higher Priority)
@@ -437,6 +441,7 @@ namespace EdgeLoop.Classes
         {
             try
             {
+                await _signIn.EnsureSignedInAsync(Site.Rule34Video, cancellationToken);
                 var html = await FetchHtmlAsync(url, cancellationToken);
                 if (string.IsNullOrWhiteSpace(html))
                 {
@@ -560,60 +565,26 @@ namespace EdgeLoop.Classes
                 var html = await FetchHtmlAsync(url, cancellationToken);
                 if (string.IsNullOrWhiteSpace(html)) return null;
 
-                // 1. Try JSON-LD contentUrl (Highest Priority for PMVHaven)
-                // Look for "contentUrl":"...m3u8"
-                var jsonLdPattern = @"""contentUrl""\s*:\s*[""']([^""']+\.m3u8(?:[^""']*)?)[""']";
-                var jsonLdMatch = Regex.Match(html, jsonLdPattern, RegexOptions.IgnoreCase);
-                if (jsonLdMatch.Success && jsonLdMatch.Groups.Count > 1)
+                // 1. The video's own HLS stream, from the page's data script
+                var stream = FindPmvHavenStream(html);
+                if (stream != null)
                 {
-                    var hlsUrl = CleanExtractedUrl(jsonLdMatch.Groups[1].Value);
-                    Logger.Debug($"PMVHaven: Found HLS URL in JSON-LD: {hlsUrl}");
-
-                    if (!hlsUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase) && !hlsUrl.StartsWith("//", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var absolute = "https://video.pmvhaven.com/" + hlsUrl.TrimStart('/');
-                        Logger.Debug($"PMVHaven: Resolved relative JSON-LD URL to CDN: {absolute}");
-                        return absolute;
-                    }
-
-                    return ResolveUrl(hlsUrl, url);
+                    Logger.Debug($"PMVHaven: Found HLS stream: {stream}");
+                    return stream;
                 }
 
-                // 2. Try generic HLS (.m3u8) patterns
-                var hlsPattern = @"[""']([^""']+\.m3u8(?:[^""']*)?)[""']";
-                var hlsMatches = Regex.Matches(html, hlsPattern, RegexOptions.IgnoreCase);
-                foreach (Match match in hlsMatches)
-                {
-                    if (match.Success && match.Groups.Count > 1)
-                    {
-                        var hlsUrl = CleanExtractedUrl(match.Groups[1].Value);
-                        // Filter out common false positives if necessary, but m3u8 is usually good
-                        if (!hlsUrl.Contains("preview", StringComparison.OrdinalIgnoreCase))
-                        {
-                            Logger.Debug($"PMVHaven: Found HLS URL in HTML: {hlsUrl}");
-
-                            if (!hlsUrl.StartsWith("http", StringComparison.OrdinalIgnoreCase) && !hlsUrl.StartsWith("//", StringComparison.OrdinalIgnoreCase))
-                            {
-                                var absolute = "https://video.pmvhaven.com/" + hlsUrl.TrimStart('/');
-                                Logger.Debug($"PMVHaven: Resolved relative HLS URL to CDN: {absolute}");
-                                return absolute;
-                            }
-
-                            return ResolveUrl(hlsUrl, url);
-                        }
-                    }
-                }
-
-                // 3. Try og:video (often highest quality direct file if not HLS)
+                // 2. og:video
                 var ogVideo = StashPatternExtractor.ExtractOgVideo(html);
-                if (!string.IsNullOrEmpty(ogVideo))
+                if (!string.IsNullOrEmpty(ogVideo) && !IsPreviewClip(ogVideo))
                 {
-                    Logger.Debug("PMVHaven: Found og:video URL (likely highest quality)");
-                    return ResolveUrl(ogVideo, url);
+                    Logger.Debug("PMVHaven: Found og:video URL");
+                    return ResolveUrl(CleanExtractedUrl(ogVideo), url);
                 }
 
-                // 4. Try multi-source extraction with quality selection
-                var sources = StashPatternExtractor.ExtractAllVideoSources(html, url);
+                // 3. Multi-source extraction with quality selection
+                var sources = StashPatternExtractor.ExtractAllVideoSources(html, url)
+                    .Where(s => !IsPreviewClip(s.Url))
+                    .ToList();
                 if (sources.Any())
                 {
                     var best = QualitySelector.SelectBest(sources);
@@ -624,9 +595,13 @@ namespace EdgeLoop.Classes
                     }
                 }
 
-                // 5. Fallback to generic extraction
-                // Explicitly warn or filter if we think generic might pick a preview
+                // 4. Generic extraction, but never a few-second preview clip from the related-videos list
                 var videoUrl = ExtractVideoFromHtml(html, url);
+                if (IsPreviewClip(videoUrl))
+                {
+                    Logger.Warning($"PMVHaven: Only preview clips found on {url}");
+                    return null;
+                }
                 return videoUrl;
             }
             catch (Exception ex)
@@ -636,6 +611,77 @@ namespace EdgeLoop.Classes
             }
         }
 
+
+        private static readonly Regex HlsLinkPattern = new Regex(@"[""']([^""'\s<>]+\.m3u8(?:\?[^""'\s<>]*)?)[""']", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        // "…/1080p.m3u8" (current uploads) or "…/<id>_720p.m3u8" (older ones)
+        private static readonly Regex HlsVariantHeight = new Regex(@"[/_-](\d{3,4})p\.m3u8(?:\?|$)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex PmvHavenCdnBase = new Regex(@"https?://[^/""'\s]*pmvhavencloud[^/""'\s]*/", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+        /// <summary>
+        /// Finds a PMVHaven video's own stream in its page. The page data escapes slashes
+        /// (https://...) and lists the stream as absolute and relative links, next to
+        /// preview clips of related videos. Returns the highest "{N}p.m3u8" variant of the
+        /// first stream folder on the page, else that folder's master.m3u8, or null.
+        /// </summary>
+        internal static string FindPmvHavenStream(string html)
+        {
+            if (string.IsNullOrWhiteSpace(html)) return null;
+            var decoded = DecodeScriptEscapes(html);
+
+            var links = HlsLinkPattern.Matches(decoded)
+                .Select(m => m.Groups[1].Value)
+                .Where(link => !IsPreviewClip(link))
+                .ToList();
+            if (links.Count == 0) return null;
+
+            // Relative links ("videos/x.mp4/master.m3u8") belong to the CDN the page's other files come from
+            var cdnBase = links.Select(l => Uri.TryCreate(l, UriKind.Absolute, out var u) ? $"{u.Scheme}://{u.Host}/" : null)
+                              .FirstOrDefault(b => b != null);
+            if (cdnBase == null)
+            {
+                var cdn = PmvHavenCdnBase.Match(decoded);
+                if (cdn.Success) cdnBase = cdn.Value;
+            }
+
+            var absolute = links
+                .Select(link => Uri.TryCreate(link, UriKind.Absolute, out var u) ? u
+                    : cdnBase != null && Uri.TryCreate(new Uri(cdnBase), link.TrimStart('/'), out var r) ? r
+                    : null)
+                .Where(u => u != null && (u.Scheme == Uri.UriSchemeHttps || u.Scheme == Uri.UriSchemeHttp))
+                .Select(u => u.ToString())
+                .ToList();
+            if (absolute.Count == 0) return null;
+
+            // The page's own video comes first; related videos only carry preview clips
+            string Folder(string link) => link.Substring(0, link.LastIndexOf('/') + 1);
+            var folder = Folder(absolute[0]);
+            var streams = absolute.Where(l => Folder(l).Equals(folder, StringComparison.OrdinalIgnoreCase)).Distinct().ToList();
+
+            var best = streams
+                .Select(l => (Link: l, Match: HlsVariantHeight.Match(l)))
+                .Where(x => x.Match.Success)
+                .OrderByDescending(x => int.Parse(x.Match.Groups[1].Value))
+                .Select(x => x.Link)
+                .FirstOrDefault();
+
+            return best
+                ?? streams.FirstOrDefault(l => l.Contains("/master.m3u8", StringComparison.OrdinalIgnoreCase))
+                ?? streams[0];
+        }
+
+        /// <summary>Short hover previews ("..._preview.mp4", ".../videoPreview/...") rather than the video itself.</summary>
+        private static bool IsPreviewClip(string url) =>
+            !string.IsNullOrEmpty(url) && url.Contains("preview", StringComparison.OrdinalIgnoreCase);
+
+        private static readonly Regex UnicodeEscape = new Regex(@"\\u([0-9a-fA-F]{4})", RegexOptions.Compiled);
+
+        /// <summary>Turns script string escapes ("/", "\/") back into the characters they stand for.</summary>
+        internal static string DecodeScriptEscapes(string text)
+        {
+            if (string.IsNullOrEmpty(text) || text.IndexOf('\\') < 0) return text;
+            text = UnicodeEscape.Replace(text, m => ((char)Convert.ToInt32(m.Groups[1].Value, 16)).ToString());
+            return text.Replace("\\/", "/");
+        }
 
         private async Task<string> ExtractGenericVideoUrlAsync(string url, CancellationToken cancellationToken)
         {
@@ -920,8 +966,8 @@ namespace EdgeLoop.Classes
             // Remove whitespace
             url = url.Trim();
 
-            // Handle escaped slashes
-            url = url.Replace("\\/", "/");
+            // Handle escaped characters from scripts ("\/", "/")
+            url = DecodeScriptEscapes(url);
 
             // Some sites (like Rule34Video) prefix URLs with metadata like 'function/0/'
             // If the URL contains 'http' but not at the start, try to isolate the actual URL
@@ -995,8 +1041,8 @@ namespace EdgeLoop.Classes
                 var uri = new Uri(normalizedUrl);
                 var host = uri.Host.ToLowerInvariant();
 
-                // Fast path for sites that require CF bypass / yt-dlp to get title
-                if (SiteRules.Is(host, Site.Rule34Video) || SiteRules.Is(host, Site.Iwara))
+                // Iwara's pages are an app shell with no title in them; yt-dlp reads its API
+                if (SiteRules.Is(host, Site.Iwara))
                 {
                     if (_ytDlpService != null && _ytDlpService.IsAvailable)
                     {
@@ -1054,6 +1100,9 @@ namespace EdgeLoop.Classes
                 var uri = new Uri(url);
                 var host = uri.Host.ToLowerInvariant();
                 var path = uri.AbsolutePath;
+
+                // YouTube links have no slug ("/watch?v=…"): leave the title to the page or yt-dlp
+                if (SiteRules.Is(host, Site.YouTube)) return null;
 
                 // Handle specific sites
                 if (SiteRules.Is(host, Site.Iwara))

@@ -44,11 +44,23 @@ namespace EdgeLoop.Classes
         /// <summary>Strip the query string from page URLs before extraction (playlist/tracking params break it).</summary>
         public bool StripQueryFromPageUrl { get; init; }
 
+        /// <summary>
+        /// Whether the player keeps HTTP connections open between media requests (FFmpeg's
+        /// http_persistent). On by default; off for sites whose streams stall when it's on.
+        /// </summary>
+        public bool PersistentMediaConnections { get; init; } = true;
+
         /// <summary>Headers passed to yt-dlp with --add-header ("Name: value").</summary>
         public IReadOnlyList<string> YtDlpHeaders { get; init; } = Array.Empty<string>();
 
         /// <summary>When no cookies are configured, let yt-dlp read them from the user's browser.</summary>
         public bool UseBrowserCookiesFallback { get; init; }
+
+        /// <summary>
+        /// Longest a resolved media link from this site is kept in the URL cache, for sites whose
+        /// links stop working sooner than they say (or don't say). Null means no site limit.
+        /// </summary>
+        public TimeSpan? ResolvedUrlLifetime { get; init; }
 
         /// <summary>Reads this site's session cookies from settings (null if the site has none).</summary>
         public Func<UserSettings, string> CookieSetting { get; init; }
@@ -92,8 +104,7 @@ namespace EdgeLoop.Classes
                 StripQueryFromPageUrl = true,
                 // Iwara sits behind Cloudflare and checks these on API calls
                 YtDlpHeaders = new[] { $"User-Agent: {Constants.BrowserUserAgent}", "X-Site: www.iwara.tv" },
-                UseBrowserCookiesFallback = true,
-                CookieSetting = s => s.IwaraCookies,
+                // No cookies: Iwara signs in with an account (email and password) and a token, see IwaraApi
             },
             new SiteProfile
             {
@@ -103,7 +114,8 @@ namespace EdgeLoop.Classes
                 StripQueryFromPageUrl = true,
                 SendCookiesWithMedia = true,
                 UseBrowserCookiesFallback = true,
-                CookieSetting = s => s.HypnotubeCookies,
+                // The session from EdgeLoop's own sign-in (Settings account) first, else pasted cookies
+                CookieSetting = s => s.HypnotubeSession ?? s.HypnotubeCookies,
             },
             new SiteProfile
             {
@@ -112,13 +124,19 @@ namespace EdgeLoop.Classes
                 // Rule34Video only redirects to the media file when a Referer is present
                 PageReferer = "https://rule34video.com/",
                 MediaReferer = "https://rule34video.com/",
-                CookieSetting = s => s.Rule34VideoCookies,
+                // Its signed get_file links stop working within the hour
+                ResolvedUrlLifetime = TimeSpan.FromMinutes(20),
+                CookieSetting = s => s.Rule34VideoSession ?? s.Rule34VideoCookies,
             },
             new SiteProfile
             {
                 Site = Site.PmvHaven,
                 Domains = new[] { "pmvhaven.com" },
                 MediaReferer = "https://pmvhaven.com/",
+                // Links on the site carry tracking such as "?from=home"
+                StripQueryFromPageUrl = true,
+                // Its HLS streams were unstable over kept-open connections (April 2026)
+                PersistentMediaConnections = false,
             },
             new SiteProfile
             {
@@ -156,12 +174,15 @@ namespace EdgeLoop.Classes
 
         public static SiteProfile Get(string urlOrHost) => Get(Identify(urlOrHost));
 
-        /// <summary>Removes query strings that break extraction on sites that need it.</summary>
+        /// <summary>
+        /// Removes query strings that break extraction on sites that need it. Media files keep
+        /// theirs: on these sites the query is the link's signature ("?token=...&amp;expires=...").
+        /// </summary>
         public static string NormalizePageUrl(string url)
         {
             if (string.IsNullOrEmpty(url)) return url;
             var profile = Get(url);
-            if (profile.StripQueryFromPageUrl)
+            if (profile.StripQueryFromPageUrl && !FileValidator.IsDirectMediaUrl(url))
             {
                 var queryStart = url.IndexOf('?');
                 if (queryStart >= 0) return url.Substring(0, queryStart);

@@ -30,7 +30,7 @@ namespace EdgeLoop.Tests.Stability
             MockExtractor.Setup(x => x.ExtractVideoUrlAsync(pageUrl, It.IsAny<CancellationToken>(), It.IsAny<IProgress<string>>()))
                 .ReturnsAsync(directUrl);
 
-            _mockDownloadService.Setup(d => d.DownloadVideoAsync(It.IsAny<string>(), It.IsAny<Dictionary<string, string>>(), It.IsAny<CancellationToken>()))
+            _mockDownloadService.Setup(d => d.DownloadVideoAsync(It.IsAny<string>(), It.IsAny<Dictionary<string, string>>(), It.IsAny<CancellationToken>(), It.IsAny<string>()))
                 .ReturnsAsync("cached_path.mp4");
 
             var vm = new HypnoViewModel(MockExtractor.Object, _mockDownloadService.Object);
@@ -61,8 +61,49 @@ namespace EdgeLoop.Tests.Stability
             _mockDownloadService.Verify(d => d.DownloadVideoAsync(
                 directUrl,
                 It.Is<Dictionary<string, string>>(h => h != null && h.ContainsKey("Referer") && h["Referer"] == pageUrl),
-                It.IsAny<CancellationToken>()
+                It.IsAny<CancellationToken>(),
+                pageUrl // Stored under the page: the signed link changes on every lookup
             ), Times.Once);
+        }
+
+        [Fact]
+        public async Task Iwara_NextVideosFileLink_PlaysWithoutBeingResolvedAgain()
+        {
+            // Pre-buffering swaps the next video's page for its file link, which on Iwara names the file in
+            // the query (/view?…&filename=…_Source.mp4). Taking that link for a page sent it back through
+            // extraction, which Iwara refuses, so playback never moved on to the next video.
+            const string pageUrl = "https://www.iwara.tv/video/FXNY1VuxsOLw4B/vam-sphmackg4-mightty-pmvhmv";
+            const string fileUrl = "https://hime.iwara.tv/view?hash=ff374fa5e41e&filename=91d19d93-2a9f_Source.mp4&path=2025%2F05%2F08&expires=1795355309";
+            MockExtractor.Setup(x => x.ExtractVideoUrlAsync(pageUrl, It.IsAny<CancellationToken>(), It.IsAny<IProgress<string>>()))
+                .ReturnsAsync(fileUrl);
+
+            var vm = new HypnoViewModel(MockExtractor.Object, _mockDownloadService.Object);
+            var item1 = new VideoItem("https://example.com/item1.mp4");
+            var item2 = new VideoItem(pageUrl) { OriginalPageUrl = pageUrl };
+            vm.SetQueue(new[] { item1, item2 });
+            // The player ignores "media opened" until the load has handed it a source, so wait for that first
+            (await WaitUntil(() => vm.CurrentItem == item1 && vm.CurrentSource != null)).Should().BeTrue("the first video reaches the player");
+
+            vm.OnMediaOpened(this, new FlyleafLib.MediaPlayer.OpenCompletedArgs()); // pre-buffers item2
+            (await WaitUntil(() => item2.FilePath == fileUrl)).Should().BeTrue("pre-buffering swaps in the file link");
+
+            vm.PlayNext(force: true);
+            (await WaitUntil(() => vm.CurrentItem == item2)).Should().BeTrue("playback moves on to the next video");
+            await Task.Delay(200); // let the load run far enough to have asked for a lookup, if it were going to
+
+            MockExtractor.Verify(x => x.ExtractVideoUrlAsync(fileUrl, It.IsAny<CancellationToken>(), It.IsAny<IProgress<string>>()), Times.Never);
+        }
+
+        /// <summary>Polls a condition, so a busy test run doesn't fail on a fixed wait that was too short.</summary>
+        private static async Task<bool> WaitUntil(Func<bool> condition, int timeoutMs = 5000)
+        {
+            var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+            while (DateTime.UtcNow < deadline)
+            {
+                if (condition()) return true;
+                await Task.Delay(25);
+            }
+            return condition();
         }
 
         [Fact]

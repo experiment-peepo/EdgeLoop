@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -64,9 +65,15 @@ namespace EdgeLoop.Classes
         /// <summary>
         /// Detects quality/resolution from URL patterns or other strings
         /// </summary>
+        /// <summary>
+        /// The quality a link's path names ("…_720p.mp4"), or 0. Only the path: the query is usually a
+        /// random signature (Hypnotube's "?token=…") whose letters read as "hd", "sd" or "4k" by chance.
+        /// </summary>
         public static int DetectQualityFromUrl(string url)
         {
-            return DetectQualityFromString(url);
+            if (string.IsNullOrEmpty(url)) return 0;
+            var path = Uri.TryCreate(url, UriKind.Absolute, out var uri) ? uri.AbsolutePath : url.Split('?', '#')[0];
+            return DetectQualityFromString(path);
         }
 
         /// <summary>

@@ -51,7 +51,7 @@ namespace EdgeLoop.Classes
                 {
                     _data.LastUpdated = DateTime.Now;
                     string json = JsonSerializer.Serialize(_data, new JsonSerializerOptions { WriteIndented = true });
-                    File.WriteAllText(_telemetryPath, json);
+                    AtomicFile.WriteAllText(_telemetryPath, json);
                 }
                 catch (Exception ex)
                 {

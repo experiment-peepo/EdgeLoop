@@ -36,6 +36,26 @@ namespace EdgeLoop.Classes
         }
 
         /// <summary>
+        /// Encrypts a password. Unlike <see cref="Protect"/> it never falls back to plain text: a
+        /// password is often reused elsewhere, so when Windows can't encrypt it, it isn't kept (null).
+        /// </summary>
+        public static string ProtectSecret(string plaintext)
+        {
+            if (string.IsNullOrEmpty(plaintext)) return null;
+
+            try
+            {
+                var encrypted = ProtectedData.Protect(Encoding.UTF8.GetBytes(plaintext), null, DataProtectionScope.CurrentUser);
+                return EncryptedPrefix + Convert.ToBase64String(encrypted);
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[CookieProtector] Couldn't encrypt a password, so it isn't saved: {ex.Message}");
+                return null;
+            }
+        }
+
+        /// <summary>
         /// Decrypts a cookie string. Handles both encrypted (DPAPI-prefixed) and
         /// legacy plaintext cookies for backward compatibility.
         /// </summary>

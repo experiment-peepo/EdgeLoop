@@ -67,6 +67,56 @@ namespace EdgeLoop.Tests
             MockSettings.Object.HypnotubeCookies.Should().Be("PHPSESSID=abc; theme=dark");
         }
 
+        [Theory]
+        [InlineData("theme=dark; age_verified=1", true)]                     // copied with document.cookie: no session
+        [InlineData("Cookie: theme=dark; PHPSESSID=abc123", false)]          // copied from the Network tab
+        [InlineData("PHPSESSID=abc123", false)]
+        [InlineData("theme=dark; NOTPHPSESSID=x", true)]
+        [InlineData("   ", false)]                                           // nothing pasted: nothing to warn about
+        public void PastedCookies_WithoutTheSignInCookie_GetAWarning(string cookies, bool warns)
+        {
+            var settings = CreateSettings();
+
+            settings.HypnotubeCookies = cookies;
+
+            (settings.HypnotubeCookiesNote != null).Should().Be(warns);
+            SettingsViewModel.SignInCookieNote(cookies).Should().Be(settings.HypnotubeCookiesNote);
+        }
+
+        [Fact]
+        public void CookieWarning_IsNotASetting()
+        {
+            var settings = CreateSettings();
+
+            settings.Rule34VideoCookies = "theme=dark";
+            settings.Rule34VideoCookiesNote.Should().NotBeNull();
+            settings.Rule34VideoCookies = null;
+
+            settings.HasChanges.Should().BeFalse("the warning follows the cookies; it isn't saved itself");
+        }
+
+        [Fact]
+        public void CookieBackup_StartsClosed_AndTogglingItIsNotAChange()
+        {
+            var settings = CreateSettings();
+            settings.ShowCookieFallback.Should().BeFalse("accounts are the way to sign in; cookies are only a backup");
+
+            settings.ToggleCookieFallbackCommand.Execute(null);
+            settings.ShowCookieFallback.Should().BeTrue();
+            settings.HasChanges.Should().BeFalse("opening a section isn't a setting");
+
+            settings.ToggleCookieFallbackCommand.Execute(null);
+            settings.ShowCookieFallback.Should().BeFalse();
+        }
+
+        [Fact]
+        public void CookieBackup_StartsOpen_WhenCookiesAreAlreadySet()
+        {
+            MockSettings.Setup(s => s.Rule34VideoCookiesEncrypted).Returns("PHPSESSID=abc");
+
+            CreateSettings().ShowCookieFallback.Should().BeTrue("they're in use, so they shouldn't be hidden");
+        }
+
         [Fact]
         public void BlankCookies_AreSavedAsNone()
         {

@@ -27,13 +27,23 @@ namespace EdgeLoop.Classes
         private readonly IVideoUrlExtractor _urlExtractor;
         private readonly IHtmlFetcher _htmlFetcher;
         private readonly YtDlpService _ytDlpService;
+        private readonly IwaraApi _iwaraApi;
+        private readonly SiteSignIn _signIn;
 
-        public PlaylistImporter(IVideoUrlExtractor urlExtractor, IHtmlFetcher htmlFetcher = null, YtDlpService ytDlpService = null)
+        public PlaylistImporter(IVideoUrlExtractor urlExtractor, IHtmlFetcher htmlFetcher = null, YtDlpService ytDlpService = null, IwaraApi iwaraApi = null, SiteSignIn signIn = null)
         {
             _urlExtractor = urlExtractor ?? throw new ArgumentNullException(nameof(urlExtractor));
             _htmlFetcher = htmlFetcher ?? new StandardHtmlFetcher();
             _ytDlpService = ytDlpService ?? (ServiceContainer.TryGet<YtDlpService>(out var service) ? service : null);
+            _iwaraApi = iwaraApi ?? IwaraApi.Shared;
+            _signIn = signIn ?? SiteSignIn.Shared;
         }
+
+        /// <summary>
+        /// Something the user should know about the last import, such as videos a site hid because
+        /// they aren't signed in; null if nothing.
+        /// </summary>
+        public string ImportNotice { get; private set; }
 
         /// <summary>
         /// Imports a playlist from a supported site
@@ -61,6 +71,7 @@ namespace EdgeLoop.Classes
             }
 
             cancellationToken.ThrowIfCancellationRequested();
+            ImportNotice = null;
 
             var videoItems = new List<VideoItem>();
             var videoLinkInfos = new List<VideoLinkInfo>();
@@ -82,6 +93,8 @@ namespace EdgeLoop.Classes
                 }
                 else if (SiteRules.Is(host, Site.Hypnotube))
                 {
+                    // Signed in (with the account in Settings) private and VIP playlists show their videos too
+                    await _signIn.EnsureSignedInAsync(Site.Hypnotube, cancellationToken);
                     var links = await ExtractHypnotubePlaylistAsync(playlistUrl, cancellationToken);
                     foreach (var kvp in links)
                     {
@@ -90,7 +103,8 @@ namespace EdgeLoop.Classes
                 }
                 else if (SiteRules.Is(host, Site.Rule34Video))
                 {
-                    var links = await ExtractGenericPlaylistWithTitlesAsync(playlistUrl, cancellationToken);
+                    await _signIn.EnsureSignedInAsync(Site.Rule34Video, cancellationToken);
+                    var links = await ExtractRule34VideoPlaylistAsync(playlistUrl, cancellationToken);
                     foreach (var kvp in links)
                     {
                         videoLinkInfos.Add(new VideoLinkInfo { Url = kvp.Key, Title = kvp.Value });
@@ -113,20 +127,18 @@ namespace EdgeLoop.Classes
                     }
                     else
                     {
-                        Logger.Debug($"[PlaylistImporter] Trying native API for iwara.tv playlist: {playlistUrl}");
-                        var links = await ExtractIwaraPlaylistAsync(playlistUrl, cancellationToken);
-                        if (links.Count > 0)
+                        Logger.Debug($"[PlaylistImporter] Reading Iwara playlist through its API: {playlistUrl}");
+                        var (links, answered) = await ExtractIwaraPlaylistAsync(playlistUrl, cancellationToken);
+                        foreach (var kvp in links)
                         {
-                            foreach (var kvp in links)
-                            {
-                                videoLinkInfos.Add(new VideoLinkInfo { Url = kvp.Key, Title = kvp.Value });
-                            }
+                            videoLinkInfos.Add(new VideoLinkInfo { Url = kvp.Key, Title = kvp.Value });
                         }
 
-                        // If native fails (e.g. 403 Forbidden), try yt-dlp which is much more resilient
-                        if (videoLinkInfos.Count == 0 && _ytDlpService != null)
+                        // Only when the API couldn't be read at all (or it's a user page, not a playlist):
+                        // yt-dlp's Iwara playlists give no titles, and past page 1 it reads Iwara's general video feed
+                        if (!answered && videoLinkInfos.Count == 0 && _ytDlpService != null)
                         {
-                            Logger.Debug($"[PlaylistImporter] Native Iwara extraction failed (likely 403), falling back to yt-dlp: {playlistUrl}");
+                            Logger.Debug($"[PlaylistImporter] Iwara API unavailable, falling back to yt-dlp: {playlistUrl}");
                             var info = await _ytDlpService.ExtractPlaylistInfoAsync(playlistUrl, cancellationToken);
                             foreach (var kvp in info)
                             {
@@ -179,7 +191,9 @@ namespace EdgeLoop.Classes
                 // Extract direct video URLs and titles for each page URL
                 foreach (var info in videoLinkInfos)
                 {
-                    var pageUrl = info.Url;
+                    // Without the site's playlist and tracking parameters (Hypnotube's "?p=", PMVHaven's
+                    // "?from="), so the same video imported twice is recognised as a duplicate
+                    var pageUrl = SiteRules.NormalizePageUrl(info.Url);
                     cancellationToken.ThrowIfCancellationRequested();
 
                     current++;
@@ -194,77 +208,20 @@ namespace EdgeLoop.Classes
                             continue;
                         }
 
-                        // Extract Metadata (Integrated URL and Title in one pass)
-                        var metadata = await _urlExtractor.ExtractVideoMetadataAsync(pageUrl, cancellationToken);
-                        Logger.Debug($"[PlaylistImporter] Metadata for {pageUrl}: Title='{metadata.Title}', UrlSuccess={!string.IsNullOrEmpty(metadata.Url)}");
-                        var videoUrl = metadata.Url;
-                        var title = metadata.Title;
-
-                        // PREFERENCE: Use the title from the gallery/API if available.
-                        if (!string.IsNullOrWhiteSpace(info.Title))
+                        // Playlist pages usually name their videos, and then nothing needs fetching now.
+                        // Otherwise one lookup gets the title. Either way the item keeps its page URL and the
+                        // video's own link is found when it plays (and cached in the background), so importing
+                        // never downloads and never stores a link that expires.
+                        var title = UsableTitle(info.Title);
+                        if (title == null)
                         {
-                            // If the extracted title is generic (ID-like or empty), or if we are on a known site with good gallery titles
-                            bool isGeneric = string.IsNullOrWhiteSpace(title) ||
-                                           TitleSanitizer.IsIdLike(title) ||
-                                           title.ToLowerInvariant() == "view" ||
-                                           title.ToLowerInvariant() == "unknown";
-
-                            if (isGeneric || SiteRules.Is(pageUrl, Site.Iwara) || SiteRules.Is(pageUrl, Site.Hypnotube) || SiteRules.Is(pageUrl, Site.Rule34Video))
-                            {
-                                if (!string.IsNullOrWhiteSpace(info.Title) && !TitleSanitizer.IsIdLike(info.Title))
-                                {
-                                    title = info.Title;
-                                }
-                            }
+                            var metadata = await _urlExtractor.ExtractVideoMetadataAsync(pageUrl, cancellationToken);
+                            Logger.Debug($"[PlaylistImporter] Metadata for {pageUrl}: Title='{metadata.Title}', UrlSuccess={!string.IsNullOrEmpty(metadata.Url)}");
+                            title = UsableTitle(metadata.Title);
                         }
+                        title ??= UsableTitle(TitleSanitizer.FromUrlSlug(pageUrl)) ?? FallbackTitle(pageUrl);
 
-                        // Final fallback: If still ID-like, try to de-slugify the URL
-                        if (TitleSanitizer.IsIdLike(title))
-                        {
-                            var deSlugified = TitleSanitizer.FromUrlSlug(pageUrl);
-                            if (!string.IsNullOrWhiteSpace(deSlugified) && !TitleSanitizer.IsIdLike(deSlugified))
-                            {
-                                title = deSlugified;
-                            }
-                        }
-
-                        // If extraction failed, don't skip the video entirely.
-                        // Instead, add it using the page URL as the FilePath, which will trigger JIT extraction during playback.
-                        if (string.IsNullOrEmpty(videoUrl))
-                        {
-                            string reason = "likely restricted or removed";
-                            if (SiteRules.Is(pageUrl, Site.Hypnotube)) reason = "restricted, friends-only, or removed";
-                            else if (SiteRules.Is(pageUrl, Site.Iwara)) reason = "requires cookies or age-verification";
-
-                            Logger.Warning($"Extraction failed for {pageUrl} ({reason}). Adding as page URL for JIT resolution.");
-                            videoUrl = pageUrl;
-                        }
-
-                        if (string.IsNullOrWhiteSpace(title) || TitleSanitizer.IsIdLike(title))
-                        {
-                            // Extract title from URL slug as a high-quality fallback
-                            try
-                            {
-                                var slug = pageUrl.Split('?').First().TrimEnd('/').Split('/').Last();
-                                // Remove .html, .htm, etc.
-                                if (slug.Contains(".")) slug = slug.Substring(0, slug.LastIndexOf('.'));
-
-                                // Remove numeric IDs at the end (e.g. -7132)
-                                slug = Regex.Replace(slug, @"-\d+$", "");
-
-                                // Replace dashes/underscores with spaces and capitalize
-                                title = System.Globalization.CultureInfo.CurrentCulture.TextInfo.ToTitleCase(
-                                    slug.Replace("-", " ").Replace("_", " ")
-                                );
-                            }
-                            catch
-                            {
-                                title = pageUrl.Split('/').Last();
-                            }
-                        }
-
-                        // Create video item
-                        var videoItem = new VideoItem(videoUrl)
+                        var videoItem = new VideoItem(pageUrl)
                         {
                             Title = title,
                             OriginalPageUrl = pageUrl  // Store for re-extraction when URLs expire
@@ -279,7 +236,7 @@ namespace EdgeLoop.Classes
                         }
                         else
                         {
-                            Logger.Warning($"Skipped invalid video URL: {videoUrl} - {videoItem.ValidationError}");
+                            Logger.Warning($"Skipped invalid video URL: {pageUrl} - {videoItem.ValidationError}");
                         }
                     }
                     catch (Exception ex)
@@ -301,6 +258,27 @@ namespace EdgeLoop.Classes
                 Logger.Error($"Error importing playlist from {playlistUrl}", ex);
                 throw;
             }
+        }
+
+        /// <summary>
+        /// A last-resort title from the link when nothing better is known: "YouTube video jNQXAC9IVRw"
+        /// for YouTube (whose links have no slug, only "watch?v="), else the link's last path part.
+        /// </summary>
+        internal static string FallbackTitle(string pageUrl)
+        {
+            if (SiteRules.Is(pageUrl, Site.YouTube) && Uri.TryCreate(pageUrl, UriKind.Absolute, out var uri))
+            {
+                var id = GetQueryParam(uri, "v") ?? uri.AbsolutePath.TrimEnd('/').Split('/').Last();
+                if (!string.IsNullOrWhiteSpace(id) && id != "watch") return $"YouTube video {id}";
+            }
+            return pageUrl.Split('?')[0].TrimEnd('/').Split('/').Last();
+        }
+
+        /// <summary>The title, trimmed and decoded, or null if it's empty, a placeholder or an ID.</summary>
+        private static string UsableTitle(string title)
+        {
+            var clean = TitleSanitizer.Clean(title);
+            return clean == null || TitleSanitizer.IsIdLike(clean) ? null : clean;
         }
 
         private async Task<Dictionary<string, string>> ExtractHypnotubePlaylistAsync(string url, CancellationToken cancellationToken)
@@ -344,6 +322,18 @@ namespace EdgeLoop.Classes
 
                     Logger.Debug($"[Hypnotube] Received HTML ({html.Length} chars)");
 
+                    // Hypnotube blocks playlist and channel pages in some locations, saying so on the page
+                    var restriction = SiteRestrictions.Detect(Site.Hypnotube, html);
+                    if (pagesFetched == 1 || restriction != SiteRestriction.None)
+                    {
+                        SiteRestrictions.Record(url, restriction);
+                    }
+                    if (restriction != SiteRestriction.None)
+                    {
+                        Logger.Warning($"[Hypnotube] {restriction}: {currentUrl}");
+                        break;
+                    }
+
                     // Extract video URLs from current page
                     var pageVideoUrls = ExtractHypnotubeLinksWithTitles(html, currentUrl);
                     foreach (var kvp in pageVideoUrls)
@@ -382,221 +372,196 @@ namespace EdgeLoop.Classes
 
 
 
-        private async Task<Dictionary<string, string>> ExtractIwaraPlaylistAsync(string url, CancellationToken cancellationToken)
+        /// <summary>
+        /// An Iwara playlist through Iwara's API, page by page, signed in when Settings has an account
+        /// (signed out, Iwara leaves explicit videos out). Answered is false when the API couldn't be
+        /// read at all, so the caller can try yt-dlp instead.
+        /// </summary>
+        private async Task<(Dictionary<string, string> Videos, bool Answered)> ExtractIwaraPlaylistAsync(string url, CancellationToken cancellationToken)
         {
-            var videoUrls = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var videos = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            // https://www.iwara.tv/playlist/{uuid}[/slug] or https://api.iwara.tv/playlist/{uuid}
+            var match = Regex.Match(url, @"/playlist/([a-f0-9-]+)", RegexOptions.IgnoreCase);
+            if (!match.Success) return (videos, false);
+            var playlistId = match.Groups[1].Value;
+
+            const int pageSize = 50;
+            var maxPages = App.Settings?.MaxPlaylistPages ?? 100;
+            bool answered = false;
+            int? visible = null, declared = null;
+
             try
             {
-                // URL can be https://www.iwara.tv/playlist/[uuid] or https://api.iwara.tv/playlist/[uuid]
-                var match = Regex.Match(url, @"/playlist/([a-f0-9-]+)", RegexOptions.IgnoreCase);
-                if (!match.Success) return videoUrls;
-
-                var playlistId = match.Groups[1].Value;
-                int page = 0;
-                int maxPages = App.Settings?.MaxPlaylistPages ?? 100;
-
-                Logger.Debug($"[Iwara] Starting API extraction for playlist {playlistId}");
-
-                while (page < maxPages)
+                var authorization = await _iwaraApi.GetAuthorizationAsync(cancellationToken);
+                for (int page = 0; page < maxPages; page++)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var apiUrl = $"https://api.iwara.tv/playlist/{playlistId}?page={page}";
+                    using var doc = await _iwaraApi.GetJsonAsync($"playlist/{playlistId}?page={page}&limit={pageSize}", authorization, cancellationToken);
+                    var root = doc.RootElement;
+                    if (!root.TryGetProperty("results", out var results) || results.ValueKind != JsonValueKind.Array) break;
+                    answered = true;
 
-                    string json = null;
-                    try
+                    if (page == 0)
                     {
-                        json = await FetchHtmlAsync(apiUrl, cancellationToken);
-                    }
-                    catch (Exception ex) when (ex.Message.Contains("403"))
-                    {
-                        Logger.Warning($"[Iwara] API returned 403. Retrying without cookies...");
-                        // StandardHtmlFetcher handles the "without cookies" logic if we bypass it here
-                        // but actually we need to tell it to skip cookies.
-                        // For now, let's just log it. The next fetch attempt will be via yt-dlp anyway.
+                        // "count" is what this account may see; the playlist's "numVideos" is everything in it
+                        visible = root.TryGetProperty("count", out var count) && count.TryGetInt32(out var c) ? c : null;
+                        declared = root.TryGetProperty("playlist", out var playlist) && playlist.ValueKind == JsonValueKind.Object &&
+                                   playlist.TryGetProperty("numVideos", out var numVideos) && numVideos.TryGetInt32(out var n) ? n : null;
                     }
 
-                    if (string.IsNullOrWhiteSpace(json)) break;
-
-                    using var doc = JsonDocument.Parse(json);
-                    if (!doc.RootElement.TryGetProperty("results", out var results) || results.ValueKind != JsonValueKind.Array)
-                    {
-                        break;
-                    }
-
-                    int count = 0;
+                    int added = 0;
                     foreach (var item in results.EnumerateArray())
                     {
-                        JsonElement videoElement = item;
-                        // Some API versions wrap the video in a 'video' property
-                        if (item.TryGetProperty("video", out var v)) videoElement = v;
+                        var video = item.TryGetProperty("video", out var wrapped) && wrapped.ValueKind == JsonValueKind.Object ? wrapped : item;
+                        var id = Text(video, "id");
+                        if (string.IsNullOrEmpty(id)) continue;
 
-                        if (videoElement.TryGetProperty("id", out var idProp))
-                        {
-                            var id = idProp.GetString();
+                        var slug = Text(video, "slug");
+                        var pageUrl = string.IsNullOrEmpty(slug) ? $"https://www.iwara.tv/video/{id}" : $"https://www.iwara.tv/video/{id}/{slug}";
+                        var title = Text(video, "title");
+                        if (string.IsNullOrWhiteSpace(title) && !string.IsNullOrEmpty(slug)) title = TitleSanitizer.DeSlugify(slug);
 
-                            // Try multiple fields for slug
-                            string slug = string.Empty;
-                            if (videoElement.TryGetProperty("slug", out var s)) slug = s.GetString();
-
-                            // Try multiple fields for title
-                            string title = string.Empty;
-                            if (videoElement.TryGetProperty("title", out var t)) title = t.GetString();
-                            else if (videoElement.TryGetProperty("name", out var n)) title = n.GetString();
-
-                            // If title is missing or generic, use slug
-                            if (string.IsNullOrWhiteSpace(title) || title == id || TitleSanitizer.IsIdLike(title))
-                            {
-                                if (!string.IsNullOrWhiteSpace(slug) && !TitleSanitizer.IsIdLike(slug))
-                                {
-                                    title = TitleSanitizer.DeSlugify(slug);
-                                }
-                                else if (string.IsNullOrWhiteSpace(title) || TitleSanitizer.IsIdLike(title))
-                                {
-                                    title = id;
-                                }
-                            }
-
-                            // Final sanitization: If still ID-like or placeholder, try Search API fallback
-                            if (TitleSanitizer.IsIdLike(title))
-                            {
-                                var searchTitle = await FetchIwaraTitleFromSearchApiAsync(id, cancellationToken);
-                                if (!string.IsNullOrWhiteSpace(searchTitle) && !TitleSanitizer.IsIdLike(searchTitle))
-                                {
-                                    title = searchTitle;
-                                }
-                                else
-                                {
-                                    title = string.Empty; // Clear so fallback can try de-slugifying URL
-                                }
-                            }
-
-                            var videoUrl = $"https://www.iwara.tv/video/{id}/{slug}";
-                            if (!videoUrls.ContainsKey(videoUrl))
-                            {
-                                videoUrls[videoUrl] = title;
-                                count++;
-                            }
-                        }
-                        else
-                        {
-                            Logger.Debug($"[Iwara] Skipping item without ID: {item.ToString().Substring(0, Math.Min(50, item.ToString().Length))}...");
-                        }
+                        if (videos.TryAdd(pageUrl, title)) added++;
                     }
 
-                    Logger.Debug($"[Iwara] Page {page}: Extracted {count} videos");
-                    if (count == 0) break;
-
-                    page++;
+                    Logger.Debug($"[Iwara] Playlist page {page}: {added} videos ({videos.Count} of {visible?.ToString() ?? "?"})");
+                    if (added == 0 || results.GetArrayLength() < pageSize || (visible is int all && videos.Count >= all)) break;
                 }
             }
-            catch (Exception ex)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
-                Logger.Warning($"Error extracting Iwara playlist: {ex.Message}");
+                throw;
             }
-            return videoUrls;
+            catch (Exception ex) when (ex is HttpRequestException or System.IO.IOException or JsonException or TaskCanceledException)
+            {
+                Logger.Warning($"[Iwara] Playlist API failed for {playlistId}: {ex.Message}");
+            }
+
+            if (answered) ImportNotice = IwaraHiddenVideosNotice(videos.Count, declared);
+            return (videos, answered);
         }
 
-        private async Task<string> FetchIwaraTitleFromSearchApiAsync(string id, CancellationToken cancellationToken)
+        /// <summary>Says when Iwara left videos out because Settings has no Iwara account, or it couldn't sign in.</summary>
+        private string IwaraHiddenVideosNotice(int found, int? declared)
         {
+            if (declared is not int all || found >= all) return null;
+
+            var shown = $"Iwara showed {found} of this playlist's {all} videos.";
+            if (!_iwaraApi.HasAccount)
+                return $"{shown} The others may need a signed-in account: add yours in Settings › Privacy & Cookies.";
+            if (_iwaraApi.LastSignInError is string error)
+                return $"{shown} Signing in to Iwara failed: {error}";
+            return null; // Signed in: the rest are private or deleted
+        }
+
+        /// <summary>
+        /// Rule34Video lists (playlists, member uploads) show 60 videos a page. Follows the list's
+        /// own "next" link (?from=2, ?from=3, ...) until a page adds nothing new or the page limit.
+        /// </summary>
+        private async Task<Dictionary<string, string>> ExtractRule34VideoPlaylistAsync(string url, CancellationToken cancellationToken)
+        {
+            var videos = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var maxPages = App.Settings?.MaxPlaylistPages ?? 100;
+
             try
             {
-                // Search API often bypasses the 403 blocks seen on individual playlist/video APIs
-                var apiUrl = $"https://api.iwara.tv/videos?query={id}";
-                var json = await FetchHtmlAsync(apiUrl, cancellationToken);
-                if (string.IsNullOrWhiteSpace(json)) return null;
-
-                using var doc = JsonDocument.Parse(json);
-                if (doc.RootElement.TryGetProperty("results", out var results) && results.ValueKind == JsonValueKind.Array)
+                var pageUrl = url;
+                for (int page = 1; page <= maxPages && pageUrl != null; page++)
                 {
-                    foreach (var item in results.EnumerateArray())
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var html = await FetchHtmlAsync(pageUrl, cancellationToken);
+                    if (string.IsNullOrWhiteSpace(html)) break;
+
+                    int before = videos.Count;
+                    foreach (var kvp in ExtractRule34VideoLinksWithTitles(html, pageUrl))
                     {
-                        if (item.TryGetProperty("id", out var idProp) && idProp.GetString() == id)
-                        {
-                            if (item.TryGetProperty("title", out var titleProp))
-                            {
-                                return titleProp.GetString();
-                            }
-                        }
+                        videos.TryAdd(kvp.Key, kvp.Value);
+                    }
+                    Logger.Debug($"[Rule34Video] Page {page}: {videos.Count - before} new videos ({videos.Count} in all)");
+
+                    // Nothing new: the last page, or the site ignored the page number
+                    if (videos.Count == before) break;
+
+                    pageUrl = NextRule34VideoPage(html, url);
+                    if (page == maxPages && pageUrl != null)
+                    {
+                        Logger.Warning($"[Rule34Video] Stopped after {maxPages} pages (the page limit in Settings)");
                     }
                 }
             }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
-                Logger.Debug($"[Iwara] Search API fallback failed for {id}: {ex.Message}");
+                Logger.Warning($"Error extracting Rule34Video playlist: {ex.Message}");
+            }
+            return videos;
+        }
+
+        /// <summary>
+        /// The next page of a Rule34Video list, from its "next" pager link
+        /// (data-parameters="sort_by:...;from:2"), or null on the last page. Member pages page
+        /// their uploads with "from_videos"; other lists with "from".
+        /// </summary>
+        internal static string NextRule34VideoPage(string html, string listUrl)
+        {
+            if (string.IsNullOrEmpty(html) || string.IsNullOrEmpty(listUrl)) return null;
+
+            var key = listUrl.Contains("/members/", StringComparison.OrdinalIgnoreCase) ? "from_videos" : "from";
+            var pagers = Regex.Matches(html, @"pager\s+next[^>]*>\s*<a[^>]*data-parameters=""([^""]*)""", RegexOptions.IgnoreCase);
+            foreach (Match pager in pagers)
+            {
+                var offset = Regex.Match(pager.Groups[1].Value, $@"(?:^|;){key}:(\d+)");
+                if (offset.Success)
+                {
+                    return SetQueryParam(listUrl, key, offset.Groups[1].Value);
+                }
             }
             return null;
         }
 
-        private async Task<List<string>> ExtractRule34VideoPlaylistAsync(string url, CancellationToken cancellationToken)
+        /// <summary>The URL with one query parameter set, keeping the others.</summary>
+        private static string SetQueryParam(string url, string name, string value)
         {
-            var allVideoUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var builder = new UriBuilder(url);
+            var query = System.Web.HttpUtility.ParseQueryString(builder.Query);
+            query[name] = value;
+            builder.Query = query.ToString();
+            return builder.Uri.ToString();
+        }
 
-            try
+        /// <summary>
+        /// Video links and titles on a Rule34Video list page. Playlists mark each entry
+        /// (data-playlist-item, data-rd-plp-title); other lists fall back to the thumbnail grid.
+        /// </summary>
+        private Dictionary<string, string> ExtractRule34VideoLinksWithTitles(string html, string baseUrl)
+        {
+            var videos = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+            var doc = new HtmlDocument();
+            doc.LoadHtml(html);
+            var items = doc.DocumentNode.SelectNodes("//a[@data-playlist-item]");
+            if (items != null)
             {
-                // Start with first page
-                var currentUrl = url;
-                var visitedPages = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                var pageUrlsToFetch = new Queue<string>();
-                pageUrlsToFetch.Enqueue(currentUrl);
-
-                // Use configurable max pages from user settings
-                var maxPages = App.Settings?.MaxPlaylistPages ?? 100;
-                int pagesFetched = 0;
-
-                // If this is a single video page, don't treat it as a playlist
-                if (IsRule34VideoPageUrl(url))
+                foreach (var item in items)
                 {
-                    Logger.Debug($"[Rule34Video] Recognized input as single video page, skipping playlist extraction: {url}");
-                    return new List<string> { url };
+                    var link = ResolveUrl(item.GetAttributeValue("data-playlist-item", null) ?? item.GetAttributeValue("href", null), baseUrl);
+                    if (link == null || !IsRule34VideoPageUrl(link)) continue;
+                    var title = WebUtility.HtmlDecode(item.GetAttributeValue("data-rd-plp-title", "")).Trim();
+                    videos.TryAdd(link, title);
                 }
-
-                while (pageUrlsToFetch.Count > 0 && pagesFetched < maxPages)
-                {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    currentUrl = pageUrlsToFetch.Dequeue();
-                    if (visitedPages.Contains(currentUrl)) continue;
-                    visitedPages.Add(currentUrl);
-                    pagesFetched++;
-
-                    var html = await FetchHtmlAsync(currentUrl, cancellationToken);
-                    if (string.IsNullOrWhiteSpace(html)) continue;
-
-                    // Extract video URLs from current page
-                    var pageVideoUrls = ExtractRule34VideoLinksFromHtml(html, currentUrl);
-                    foreach (var videoUrl in pageVideoUrls)
-                    {
-                        allVideoUrls.Add(videoUrl);
-                    }
-
-                    // Extract pagination links
-                    try
-                    {
-                        var nextPageUrl = ExtractNextPageUrl(html, currentUrl, "rule34video.com");
-                        if (!string.IsNullOrWhiteSpace(nextPageUrl) && !visitedPages.Contains(nextPageUrl))
-                        {
-                            pageUrlsToFetch.Enqueue(nextPageUrl);
-                        }
-                    }
-                    catch (Exception pagEx)
-                    {
-                        Logger.Warning($"Error extracting next page URL: {pagEx.Message}. Stopping pagination.");
-                        break; // Stop pagination if there's an error
-                    }
-                }
-
-                if (pagesFetched >= maxPages)
-                {
-                    Logger.Warning($"RULE34Video playlist extraction stopped after {maxPages} pages (safety limit)");
-                }
-
-                return allVideoUrls.ToList();
+                if (videos.Count > 0) return videos;
             }
-            catch (Exception ex)
+
+            foreach (var link in ExtractRule34VideoLinksFromHtml(html, baseUrl))
             {
-                Logger.Warning($"Error extracting RULE34Video playlist: {ex.Message}");
-                return allVideoUrls.ToList();
+                videos.TryAdd(link, null);
             }
+            return videos;
         }
 
         private async Task<Dictionary<string, string>> ExtractPmvHavenPlaylistAsync(string url, CancellationToken cancellationToken)
@@ -913,77 +878,37 @@ namespace EdgeLoop.Classes
 
                         try
                         {
-                            // Check if this is an ItemList (playlist)
-                            if (jsonContent.Contains("\"@type\"") && jsonContent.Contains("\"ItemList\""))
+                            // A playlist is an ItemList whose entries each hold one video's page link and name
+                            using var doc = JsonDocument.Parse(jsonContent);
+                            var root = doc.RootElement;
+                            if (root.ValueKind != JsonValueKind.Object || Text(root, "@type") != "ItemList" ||
+                                !root.TryGetProperty("itemListElement", out var entries) || entries.ValueKind != JsonValueKind.Array)
                             {
-                                Logger.Debug("[PMVHaven] Found LD+JSON ItemList");
+                                continue;
+                            }
 
-                                // Try multiple URL patterns that PMVHaven might use
-                                var urlPatterns = new[] {
-                                    @"""embedUrl""\s*:\s*""([^""]+)""",      // embedUrl field
-                                    @"""url""\s*:\s*""([^""]+/video[^""]+)""", // url field containing /video
-                                    @"""contentUrl""\s*:\s*""([^""]+)""",   // contentUrl field
-                                    @"""@id""\s*:\s*""([^""]+/video[^""]+)""" // @id field containing /video
-                                };
+                            Logger.Debug("[PMVHaven] Found LD+JSON ItemList");
+                            foreach (var entry in entries.EnumerateArray())
+                            {
+                                var video = entry.TryGetProperty("item", out var item) && item.ValueKind == JsonValueKind.Object ? item : entry;
+                                var link = new[] { Text(video, "url"), Text(video, "contentUrl"), Text(video, "embedUrl"), Text(video, "@id"), Text(entry, "url") }
+                                    .FirstOrDefault(IsPmvHavenVideoPage);
+                                if (link == null) continue;
 
-                                foreach (var pattern in urlPatterns)
+                                var title = WebUtility.HtmlDecode(Text(video, "name") ?? Text(entry, "name") ?? string.Empty).Trim();
+                                if (videoUrls.TryAdd(link, title))
                                 {
-                                    var urlMatches = Regex.Matches(jsonContent, pattern, RegexOptions.IgnoreCase);
-
-                                    foreach (Match urlMatch in urlMatches)
-                                    {
-                                        if (urlMatch.Success && urlMatch.Groups.Count > 1)
-                                        {
-                                            var extractedUrl = urlMatch.Groups[1].Value;
-
-                                            // Clean up escaped URLs
-                                            extractedUrl = extractedUrl.Replace("\\/", "/");
-
-                                            // Filter: Only accept pmvhaven.com VIDEO PAGE URLs, not CDN/direct video URLs
-                                            // Skip: video.pmvhaven.com (CDN), .mp4, .m3u8, .webm files
-                                            if (!string.IsNullOrEmpty(extractedUrl) &&
-                                                (extractedUrl.Contains("pmvhaven.com/videos/") || extractedUrl.Contains("pmvhaven.com/video/")) &&
-                                                !extractedUrl.Contains("video.pmvhaven.com") &&
-                                                !extractedUrl.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) &&
-                                                !extractedUrl.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase) &&
-                                                !extractedUrl.EndsWith(".webm", StringComparison.OrdinalIgnoreCase) &&
-                                                !extractedUrl.Contains("/master.m3u8"))
-                                            {
-
-                                                // Try to find a title near this URL in the JSON
-                                                string title = string.Empty;
-                                                var urlEscaped = Regex.Escape(urlMatch.Value);
-                                                var namePattern = $@"""name""\s*:\s*""([^""]+)""[^}}]*?{urlEscaped}";
-                                                var nameMatch = Regex.Match(jsonContent, namePattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-                                                if (!nameMatch.Success)
-                                                {
-                                                    namePattern = $@"{urlEscaped}[^}}]*?""name""\s*:\s*""([^""]+)""";
-                                                    nameMatch = Regex.Match(jsonContent, namePattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
-                                                }
-
-                                                if (nameMatch.Success)
-                                                {
-                                                    title = WebUtility.HtmlDecode(nameMatch.Groups[1].Value);
-                                                }
-
-                                                if (!videoUrls.ContainsKey(extractedUrl))
-                                                {
-                                                    videoUrls[extractedUrl] = title;
-                                                    Logger.Debug($"[PMVHaven] Extracted page URL: {extractedUrl} (Title: {title})");
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                if (videoUrls.Count > 0)
-                                {
-                                    Logger.Debug($"[PMVHaven] Successfully extracted {videoUrls.Count} videos from LD+JSON");
-                                    return videoUrls;
+                                    Logger.Debug($"[PMVHaven] Extracted page URL: {link} (Title: {title})");
                                 }
                             }
+
+                            if (videoUrls.Count > 0)
+                            {
+                                Logger.Debug($"[PMVHaven] Successfully extracted {videoUrls.Count} videos from LD+JSON");
+                                return videoUrls;
+                            }
                         }
-                        catch (Exception jsonEx)
+                        catch (JsonException jsonEx)
                         {
                             Logger.Warning($"[PMVHaven] Error parsing LD+JSON: {jsonEx.Message}");
                         }
@@ -1047,6 +972,24 @@ namespace EdgeLoop.Classes
                 Logger.Warning($"Error extracting PMVHaven links from HTML: {ex.Message}");
                 return new Dictionary<string, string>();
             }
+        }
+
+        /// <summary>A string property of a JSON object, or null.</summary>
+        private static string Text(JsonElement element, string name) =>
+            element.ValueKind == JsonValueKind.Object && element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String
+                ? value.GetString()
+                : null;
+
+        /// <summary>A PMVHaven video page (/video/slug_id or /videos/id), not a stream or file on its CDN.</summary>
+        private static bool IsPmvHavenVideoPage(string link)
+        {
+            if (!Uri.TryCreate(link, UriKind.Absolute, out var uri) || !SiteRules.Is(uri.Host, Site.PmvHaven)) return false;
+            if (!uri.Host.Equals("pmvhaven.com", StringComparison.OrdinalIgnoreCase) &&
+                !uri.Host.Equals("www.pmvhaven.com", StringComparison.OrdinalIgnoreCase)) return false;
+
+            var path = uri.AbsolutePath.ToLowerInvariant();
+            return (path.StartsWith("/video/") || path.StartsWith("/videos/"))
+                && !path.EndsWith(".mp4") && !path.EndsWith(".m3u8") && !path.EndsWith(".webm");
         }
 
         private List<string> ExtractVideoLinksFromHtml(string html, string baseUrl, string domainFilter)

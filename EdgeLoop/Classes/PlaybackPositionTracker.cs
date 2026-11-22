@@ -395,11 +395,7 @@ namespace EdgeLoop.Classes
                     Directory.CreateDirectory(directory);
                 }
 
-                // Atomic write: write to temp file then move to final path
-                string tempFile = _settingsPath + ".tmp";
-                File.WriteAllText(tempFile, json);
-                if (File.Exists(_settingsPath)) File.Delete(_settingsPath);
-                File.Move(tempFile, _settingsPath);
+                AtomicFile.WriteAllText(_settingsPath, json);
 
                 Logger.Debug($"[PositionTracker] Successfully saved {count} positions to data directory");
             }

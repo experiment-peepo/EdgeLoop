@@ -6,11 +6,17 @@ namespace EdgeLoop.Classes
 {
     public interface IVideoDownloadService
     {
-        string GetCachePath(string url);
-        bool IsCached(string url);
-        string GetCachedFilePath(string url);
-        Task<string> DownloadVideoAsync(string url, Dictionary<string, string> headers = null, CancellationToken cancellationToken = default);
-        Task<string> DownloadPartialAsync(string url, long maxBytes = 150 * 1024 * 1024, Dictionary<string, string> headers = null, CancellationToken cancellationToken = default);
+        /// <summary>
+        /// Where the cached copy for <paramref name="cacheKey"/> lives. The key is the video's page URL
+        /// when it has one: signed media links change every time they're looked up, so naming the copy
+        /// after them would download the same video again each time.
+        /// </summary>
+        string GetCachePath(string cacheKey);
+        bool IsCached(string cacheKey);
+        string GetCachedFilePath(string cacheKey);
+        /// <summary>Downloads <paramref name="url"/> to the cache, under <paramref name="cacheKey"/> (default: the URL itself).</summary>
+        Task<string> DownloadVideoAsync(string url, Dictionary<string, string> headers = null, CancellationToken cancellationToken = default, string cacheKey = null);
+        Task<string> DownloadPartialAsync(string url, long maxBytes = 150 * 1024 * 1024, Dictionary<string, string> headers = null, CancellationToken cancellationToken = default, string cacheKey = null);
         void CleanupOldFiles(int daysOld = 10);
         long GetCacheSize();
     }

@@ -1,0 +1,29 @@
+<!-- Trimmed from https://rule34video.com/login/, saved 2026-11-22: the login form only. -->
+<html><body>
+		<a href="/signup/">Sign up</a>
+	</nav>
+				<form class="rda-form" action="/login/" data-form="ajax" method="post" novalidate>
+		<input type="hidden" name="remember_me_csrf_token" value="85d6b8b969c818b69853714dab4fb065ee75a843df5a179a50fa2968f4cae42b"/>
+		<div class="generic-error hidden"></div>
+		<div class="rda-field">
+			<label for="login_username">E-mail or username</label>
+			<div class="rda-in">
+				<input type="text" name="username" id="login_username" class="fs-field" autocomplete="username" autocapitalize="none" spellcheck="false" placeholder="you@example.com" value=""/>
+				<div class="field-error down"></div>
+			</div>
+		</div>
+		<div class="rda-field">
+			<label for="login_pass">Password</label>
+			<div class="rda-in rda-in--eye">
+				<input type="password" name="pass" id="login_pass" class="fs-field" autocomplete="current-password"/>
+				<button type="button" class="rda-eye" data-rda-eye aria-label="Show password" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5C6.5 5 2.7 9.1 1.5 12c1.2 2.9 5 7 10.5 7s9.3-4.1 10.5-7C21.3 9.1 17.5 5 12 5zm0 11.5a4.5 4.5 0 110-9 4.5 4.5 0 010 9zm0-2.5a2 2 0 100-4 2 2 0 000 4z"/></svg></button>
+				<div class="field-error down"></div>
+			</div>
+		</div>
+				<label class="rda-check" for="login_remember_me"><input type="checkbox" name="remember_me" id="login_remember_me" value="1" checked/><span class="rda-box" aria-hidden="true"></span><span>Keep me logged in</span></label>
+						<input type="hidden" name="action" value="login"/>
+		<input type="hidden" name="email_link" value="https://rule34video.com/email/"/>
+		<input type="hidden" name="redirect_to" value="/"/>		<button type="submit" class="fs-button fs-button--primary rda-submit">Log in</button>
+		<div class="rda-alt">
+			<a class="rda-link" href="/reset-password/">Forgot password?</a>
+</body></html>

@@ -12,6 +12,7 @@ namespace EdgeLoop.Classes
             if (string.IsNullOrWhiteSpace(error)) return null;
             bool Has(string text) => error.Contains(text, StringComparison.OrdinalIgnoreCase);
 
+            if (SiteRestrictions.FindIn(error) is string restriction) return restriction;
             if (Has("404")) return "It isn't online anymore (404).";
             if (Has("403")) return "The site refused access (403).";
             if (Has("timeout") || Has("timed out")) return "It took too long to load.";

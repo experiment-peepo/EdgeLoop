@@ -27,6 +27,14 @@ namespace EdgeLoop.Windows
             };
             DataContext = _viewModel;
 
+            // A password box can't be bound: fill it once, then pass every change to the view model
+            IwaraPasswordBox.Password = _viewModel.IwaraPassword ?? string.Empty;
+            IwaraPasswordBox.PasswordChanged += (s, e) => _viewModel.IwaraPassword = IwaraPasswordBox.Password;
+            HypnotubePasswordBox.Password = _viewModel.HypnotubeAccount.Password ?? string.Empty;
+            HypnotubePasswordBox.PasswordChanged += (s, e) => _viewModel.HypnotubeAccount.Password = HypnotubePasswordBox.Password;
+            Rule34VideoPasswordBox.Password = _viewModel.Rule34VideoAccount.Password ?? string.Empty;
+            Rule34VideoPasswordBox.PasswordChanged += (s, e) => _viewModel.Rule34VideoAccount.Password = Rule34VideoPasswordBox.Password;
+
             SourceInitialized += (s, e) => FitToScreen();
             SizeChanged += (s, e) => FitToScreen();
         }

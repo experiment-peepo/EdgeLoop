@@ -103,12 +103,7 @@ namespace EdgeLoop.Classes
                     json = JsonSerializer.Serialize(_records, new JsonSerializerOptions { WriteIndented = true });
                 }
 
-                // Atomic write using temp file
-                string tempPath = _historyFilePath + ".tmp";
-                await File.WriteAllTextAsync(tempPath, json);
-
-                if (File.Exists(_historyFilePath)) File.Delete(_historyFilePath);
-                File.Move(tempPath, _historyFilePath);
+                await AtomicFile.WriteAllTextAsync(_historyFilePath, json);
 
                 _lastSaveTime = DateTime.Now;
             }
@@ -128,12 +123,7 @@ namespace EdgeLoop.Classes
                     json = JsonSerializer.Serialize(_records, new JsonSerializerOptions { WriteIndented = true });
                 }
 
-                // Atomic write using temp file
-                string tempPath = _historyFilePath + ".tmp";
-                File.WriteAllText(tempPath, json);
-
-                if (File.Exists(_historyFilePath)) File.Delete(_historyFilePath);
-                File.Move(tempPath, _historyFilePath);
+                AtomicFile.WriteAllText(_historyFilePath, json);
 
                 _lastSaveTime = DateTime.Now;
             }

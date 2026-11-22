@@ -135,6 +135,8 @@ namespace EdgeLoop.ViewModels
         private CancellationTokenSource _cancellationTokenSource;
         private CancellationTokenSource _importCts;
         private readonly SemaphoreSlim _saveSemaphore = new SemaphoreSlim(1, 1);
+        private readonly object _pendingSessionLock = new object();
+        private List<PlaylistItem> _pendingSession; // Latest playlist snapshot not yet written, or null
         private bool _isHypnotizing = false;
         private readonly IVideoUrlExtractor _urlExtractor;
         private readonly PlaylistImporter _playlistImporter;
@@ -725,14 +727,17 @@ namespace EdgeLoop.ViewModels
                 }
                 // Check if it's a page URL that needs extraction
                 string finalUrl = inputUrl;
-                if (FileValidator.IsPageUrl(inputUrl))
+                // Sites that need a download (YouTube, Vimeo, ...) are downloaded when the video plays, not while adding it
+                if (FileValidator.IsPageUrl(inputUrl) && !YtDlpService.IsDownloadRequiredSite(new Uri(inputUrl).Host))
                 {
                     ShowImportProgress("Extracting video URL from page...");
                     finalUrl = await _urlExtractor.ExtractVideoUrlAsync(inputUrl, cancellationToken);
 
                     if (string.IsNullOrWhiteSpace(finalUrl))
                     {
-                        SetStatusMessage("Couldn't find a video on that page. It may not have one, or the site may have changed.", StatusMessageType.Error);
+                        SetStatusMessage(SiteRestrictions.Describe(inputUrl) is string blocked
+                            ? $"Couldn't add that video. {blocked}"
+                            : "Couldn't find a video on that page. It may not have one, or the site may have changed.", StatusMessageType.Error);
                         return;
                     }
                 }
@@ -955,6 +960,8 @@ namespace EdgeLoop.ViewModels
 
                             if (item.AssignedScreen == null) item.AssignedScreen = GetDefaultScreen();
 
+                            // A web video saved while it played from a cached copy that has since been cleaned up
+                            HypnoViewModel.RevertDeletedCacheFile(item);
                             item.Validate();
                             itemsToLoad.Add(item);
                         }
@@ -1088,17 +1095,26 @@ namespace EdgeLoop.ViewModels
                         addedCount++;
                     }
 
-                    if (skippedCount > 0)
-                    {
-                        SetStatusMessage($"Added {Videos(addedCount)} from the playlist ({skippedCount} already in it)", StatusMessageType.Success);
-                    }
+                    var added = skippedCount > 0
+                        ? $"Added {Videos(addedCount)} from the playlist ({skippedCount} already in it)"
+                        : $"Added {Videos(addedCount)} from the playlist";
+                    // e.g. Iwara leaving videos out for a signed-out account
+                    if (_playlistImporter.ImportNotice is string notice)
+                        SetStatusMessage($"{added}. {notice}", StatusMessageType.Warning);
                     else
-                    {
-                        SetStatusMessage($"Added {Videos(addedCount)} from the playlist", StatusMessageType.Success);
-                    }
+                        SetStatusMessage(added, StatusMessageType.Success);
 
                     UpdateButtons();
                     SaveSession();
+                    IsLoading = false;
+                    return;
+                }
+
+                // The site said why it showed nothing (e.g. Hypnotube blocks playlists in some locations,
+                // Iwara hides explicit videos from signed-out accounts)
+                if ((SiteRestrictions.Describe(trimmedUrl) ?? _playlistImporter.ImportNotice) is string blocked)
+                {
+                    SetStatusMessage($"Couldn't import that page. {blocked}", StatusMessageType.Error);
                     IsLoading = false;
                     return;
                 }
@@ -1453,38 +1469,18 @@ namespace EdgeLoop.ViewModels
                     DurationSeconds = item.Duration?.TotalSeconds
                 }).ToList();
 
-                Action saveAction = () =>
+                lock (_pendingSessionLock)
                 {
-                    if (!_saveSemaphore.Wait(0))
-                    {
-                        Logger.Debug("SaveSession: Another save in progress, skipping");
-                        return;
-                    }
-
-                    try
-                    {
-                        var playlist = new Playlist { Items = playlistItems };
-                        var json = System.Text.Json.JsonSerializer.Serialize(playlist);
-                        var path = AppPaths.SessionFile;
-                        System.IO.File.WriteAllText(path, json);
-                    }
-                    catch (Exception ex)
-                    {
-                        Logger.Error("Failed to save session", ex);
-                    }
-                    finally
-                    {
-                        _saveSemaphore.Release();
-                    }
-                };
+                    _pendingSession = playlistItems;
+                }
 
                 if (runInBackground)
                 {
-                    System.Threading.Tasks.Task.Run(saveAction);
+                    System.Threading.Tasks.Task.Run(() => WritePendingSession(waitForOtherSave: false));
                 }
                 else
                 {
-                    saveAction();
+                    WritePendingSession(waitForOtherSave: true);
                 }
             }
             catch (Exception ex)
@@ -1493,9 +1489,65 @@ namespace EdgeLoop.ViewModels
             }
         }
 
+        /// <summary>
+        /// Writes the latest playlist snapshot. When another save is running, a background save
+        /// leaves the snapshot for it: that save writes whatever is newest before it finishes, so
+        /// no change is lost. On exit (<paramref name="waitForOtherSave"/>), waits for it instead.
+        /// </summary>
+        private void WritePendingSession(bool waitForOtherSave)
+        {
+            while (true)
+            {
+                bool acquired = waitForOtherSave ? _saveSemaphore.Wait(TimeSpan.FromSeconds(10)) : _saveSemaphore.Wait(0);
+                if (!acquired)
+                {
+                    if (waitForOtherSave) Logger.Warning("SaveSession: Another save didn't finish in time; the playlist may not include the last change");
+                    return;
+                }
+
+                try
+                {
+                    while (true)
+                    {
+                        List<PlaylistItem> items;
+                        lock (_pendingSessionLock)
+                        {
+                            items = _pendingSession;
+                            _pendingSession = null;
+                        }
+                        if (items == null) break;
+
+                        try
+                        {
+                            var json = System.Text.Json.JsonSerializer.Serialize(new Playlist { Items = items });
+                            AtomicFile.WriteAllText(AppPaths.SessionFile, json);
+                        }
+                        catch (Exception ex)
+                        {
+                            Logger.Error("Failed to save session", ex);
+                        }
+                    }
+                }
+                finally
+                {
+                    _saveSemaphore.Release();
+                }
+
+                // A snapshot that arrived after the last write, while its own save couldn't get in
+                lock (_pendingSessionLock)
+                {
+                    if (_pendingSession == null) return;
+                }
+            }
+        }
+
         private async Task InitializeAsync(CancellationToken ct)
         {
-            // 1. Run update check for yt-dlp
+            // 1. Load the session first: the daily yt-dlp update below downloads a new copy of
+            // yt-dlp, and the saved playlist shouldn't wait for that
+            await LoadSessionAsync(ct);
+
+            // 2. Run update check for yt-dlp
             try
             {
                 if (ServiceContainer.TryGet<YtDlpService>(out var ytDlp))
@@ -1514,9 +1566,6 @@ namespace EdgeLoop.ViewModels
             {
                 Logger.Warning("yt-dlp update check failed", ex);
             }
-
-            // 2. Load session
-            await LoadSessionAsync(ct);
         }
 
         private async Task InitializeAsyncWithoutSession(CancellationToken ct)
@@ -1610,6 +1659,13 @@ namespace EdgeLoop.ViewModels
                             videoItem.Opacity = item.Opacity;
                             videoItem.Volume = item.Volume;
                             videoItem.OriginalPageUrl = item.OriginalPageUrl; // Restore for re-extraction
+
+                            // A web video saved while it played from a cached copy that has since been
+                            // cleaned up: use its page again instead of showing it as missing
+                            if (HypnoViewModel.RevertDeletedCacheFile(videoItem))
+                            {
+                                Logger.Debug($"LoadSession: Cached copy of '{videoItem.FileName}' is gone, using its page again");
+                            }
 
                             // Set title if available (backward compatible - Title may be null for old sessions)
                             if (!string.IsNullOrWhiteSpace(item.Title))

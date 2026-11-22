@@ -54,13 +54,19 @@ EdgeLoop features a robust background pre-buffering system designed to eliminate
 3.  **Run**: Extract and launch `EdgeLoop.exe`.
 
 ### Site Authentication
-For sites that require you to be signed in:
-1.  In EdgeLoop, open **Settings → Privacy & Cookies** and click **Copy cookie helper**.
-2.  In your browser, open the site while signed in, press `F12` and choose the **Console** tab.
-3.  Paste the helper there and press Enter.
-4.  Back in EdgeLoop, click **Paste** next to the site, then **Save**.
+**Iwara** shows explicit videos only to signed-in accounts. Enter your Iwara email and password in **Settings → Privacy & Cookies** and click **Check sign-in**.
 
-Cookies are stored encrypted for your Windows account and shown hidden unless you tick **Show**.
+**Hypnotube** (720p for signed-in accounts) and **Rule34Video**: enter your account in **Settings → Privacy & Cookies** (Hypnotube wants your username, not your email) and click **Check sign-in**. EdgeLoop signs in by itself, keeps the session, and signs in again when it runs out.
+
+If a site starts asking for a captcha, EdgeLoop can't answer it and says so. Paste the site's cookies instead:
+1.  In your browser, open the site while signed in, press `F12` and choose the **Network** tab.
+2.  Reload the page (`F5`), then right-click the first request in the list (the page itself).
+3.  Choose **Copy Value → Copy as cURL** (Firefox) or **Copy → Copy as cURL** (Chrome, Edge).
+4.  In EdgeLoop, open **Settings → Privacy & Cookies**, click **Paste** next to the site, then **Save**.
+
+**Paste** also accepts a `cookies.txt` file, an extension's JSON export, Chrome's "Copy as PowerShell", the `Cookie` header on its own, or just the `PHPSESSID` value. It keeps only that site's cookies and says what it found. Copy from the Network tab, not the Console: the cookie that signs you in (`PHPSESSID`) is hidden from page scripts, so `document.cookie` leaves it out. EdgeLoop warns you if the pasted cookies don't include it.
+
+Cookies and the Iwara password are stored encrypted for your Windows account. Cookies are shown hidden unless you tick **Show**.
 
 ## 🤝 Contributing
 *   See [CONTRIBUTING.md](.github/CONTRIBUTING.md) for guidelines.
