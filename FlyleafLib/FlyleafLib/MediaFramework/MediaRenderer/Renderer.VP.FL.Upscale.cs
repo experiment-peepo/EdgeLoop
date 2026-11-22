@@ -1,5 +1,7 @@
 using FlyleafLib.MediaFramework.MediaFrame;
+using FlyleafLib.MediaFramework.MediaRenderer.Effects;
 using Vortice.Direct3D11;
+using Vortice.DXGI;
 using Vortice.Mathematics;
 
 using FeatureLevel = Vortice.Direct3D.FeatureLevel;
@@ -7,8 +9,8 @@ using FeatureLevel = Vortice.Direct3D.FeatureLevel;
 namespace FlyleafLib.MediaFramework.MediaRenderer;
 
 /// <summary>
-/// Fork: shader upscaling on the Flyleaf processor. The frame is drawn at its own size, doubled by FSRCNNX
-/// (<see cref="FsrcnnxUpscaler"/>), then drawn scaled into the viewport. It only runs when the video is
+/// Fork: shader upscaling on the Flyleaf processor. The frame is drawn at its own size, doubled by Magpie's
+/// FSRCNNX effect (<see cref="MagpieEffectRunner"/>), then drawn scaled into the viewport. It only runs when the video is
 /// enlarged, in SDR and unrotated; anything else draws the usual way.
 /// </summary>
 public partial class Renderer
@@ -19,8 +21,9 @@ public partial class Renderer
     /// <summary>Fork: why shader upscaling isn't running although it's switched on, e.g. "the video isn't enlarged". Null otherwise.</summary>
     public string ShaderUpscalingIdleReason { get; private set; }
 
-    FsrcnnxUpscaler upscaler;
-    bool            upFailed;
+    GpuTexture          upInput;    // The frame at its own size
+    MagpieEffectRunner  upscaler;
+    bool                upFailed;
 
     /// <summary>Why this frame can't be upscaled by the shader (it's switched on), or null when it can.</summary>
     string FLUpscaleIdleReason()
@@ -68,20 +71,20 @@ public partial class Renderer
         try
         {
             // 1. The frame at its own size, with all of the pixel shader's colour work
-            context.OMSetRenderTargets(upscaler.InputRTV);
-            context.RSSetViewport(new Viewport(0, 0, upscaler.Width, upscaler.Height));
+            context.OMSetRenderTargets(upInput.RTV);
+            context.RSSetViewport(new Viewport(0, 0, upInput.Width, upInput.Height));
             context.Draw(6, 0);
             context.OMSetRenderTargets((ID3D11RenderTargetView)null); // so the passes can read it
 
             // 2. Doubled
-            upscaler.Run(context, samplerPoint, samplerLinear);
+            upscaler.Run(context, upInput.SRV);
 
             // 3. Scaled into the viewport
             context.OMSetRenderTargets(target);
             context.RSSetViewport(Viewport);
             context.VSSetShader(vsSimple);
             context.PSSetShader(psShader["rgba"]);
-            context.PSSetShaderResource(0, upscaler.OutputSRV);
+            context.PSSetShaderResource(0, upscaler.Output.SRV);
             context.Draw(6, 0);
         }
         finally
@@ -96,7 +99,7 @@ public partial class Renderer
 
         SetShaderUpscaling(true);
         SetShaderUpscalingIdle(null);
-        SetUpscaledSize($"{upscaler.Width * 2}x{upscaler.Height * 2}");
+        SetUpscaledSize($"{upscaler.OutputWidth}x{upscaler.OutputHeight}");
         return true;
     }
 
@@ -106,24 +109,27 @@ public partial class Renderer
         {
             if (upscaler == null)
             {
-                var blobs = ShaderCompiler.FSRCNNXBlobs();
-                if (!blobs.IsCompleted)
+                var compiled = MagpieEffects.Compile(MagpieEffects.FSRCNNX);
+                if (!compiled.IsCompleted)
                     return false; // Still compiling: draw the usual way meanwhile
 
-                if (!blobs.IsCompletedSuccessfully)
+                if (!compiled.IsCompletedSuccessfully)
                 {
                     upFailed = true;
-                    Log.Error($"[Upscale] FSRCNNX unavailable ({blobs.Exception?.GetBaseException().Message})");
+                    Log.Error($"[Upscale] FSRCNNX unavailable ({compiled.Exception?.GetBaseException().Message})");
                     return false;
                 }
 
-                upscaler = new(device, blobs.Result);
+                upscaler = new(device, compiled.Result);
             }
 
-            if (upscaler.Width != width || upscaler.Height != height)
+            if (upInput == null || upInput.Width != width || upInput.Height != height)
             {
-                upscaler.Resize(context, width, height);
-                Log.Info($"[Upscale] FSRCNNX {width}x{height} -> {width * 2}x{height * 2}");
+                upInput?.Dispose();
+                upInput = null;
+                upInput = new GpuTexture(device, width, height, Format.R16G16B16A16_Float, BindFlags.ShaderResource | BindFlags.RenderTarget);
+                upscaler.Resize(width, height, width * 2, height * 2);
+                Log.Info($"[Upscale] FSRCNNX {width}x{height} -> {upscaler.OutputWidth}x{upscaler.OutputHeight}");
             }
             return true;
         }
@@ -169,6 +175,8 @@ public partial class Renderer
     {   // With the device (FLDispose), or after an error
         upscaler?.Dispose();
         upscaler = null;
+        upInput?.Dispose();
+        upInput = null;
         UpscaleDispose();
         FLUpscaleStopped();
     }

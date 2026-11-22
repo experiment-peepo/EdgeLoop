@@ -9,12 +9,13 @@
 
 ## 🎯 Summary of Custom Features
 
-This fork adds two major capabilities not present in upstream Flyleaf:
+This fork adds three major capabilities not present in upstream Flyleaf:
 
 | Feature | Purpose | Complexity |
 |---------|---------|------------|
 | **External Clock Synchronization** | Multi-monitor frame-exact sync | High |
 | **D3DImage Transparency Support** | WPF overlay windows without airspace issues | High |
+| **Shader Upscaling (Magpie effects)** | FSRCNNX upscaling on every screen and any GPU | High |
 
 ---
 
@@ -232,6 +233,22 @@ Upstream v3.12 renamed `Config.Player` to `Config.Playback`, moved decoder and s
 - **Dropped**: the fork's `ChildRenderer` fixes (upstream removed `ChildRenderer`) and its `LibraryImport` conversions in `NativeMethods` (upstream's file was taken as is).
 
 `FFmpegPlaybackTests` in EdgeLoop.Tests starts the engine, checks that the bundled FFmpeg loads and plays a small H.264/AAC clip end to end.
+
+### 7. Shader Upscaling (November 2026)
+
+EdgeLoop upscales video with Magpie's shader effects instead of the graphics drivers' upscalers (NVIDIA RTX Video Super Resolution only upscales one video at a time system-wide and can't be timed). Upstream's `SuperResolution` code is untouched; EdgeLoop never turns it on.
+
+- **`Engine/Config.cs`**: `Video.ShaderUpscaling` (switches the processor, see below) and `Video.ShaderUpscalingMaxHeight` (only video up to that height).
+- **`Renderer.VP.cs`**: `VPSelection` picks the Flyleaf processor whenever shader upscaling is on, like 360° mode does, even if D3D11 is preferred. `VPConfigHelper` calls `UpscaleProcessorChanged` when the processor changes.
+- **`Renderer.VP.FL.cs`**: `FLRender` calls `FLUpscaleDraw` instead of the plain draw; `FLDispose` disposes the upscaling resources.
+- **`Renderer.VP.FL.Upscale.cs`** (NEW FILE): draws the frame at its own size (with all of the pixel shader's colour work), runs the effect, then draws the result scaled into the viewport and restores the state the frame's drawing expects. Only for enlarged, SDR, unrotated, non-360°, non-alpha video. Reports `ShaderUpscaling` and `ShaderUpscalingIdleReason`.
+- **`Renderer.Upscale.cs`** (NEW FILE) and **`GpuTimer.cs`** (NEW FILE): `UpscalingMs` (GPU timestamp queries, read without stalling, averaged over 60 frames) and `UpscaledSize`.
+- **`Effects/MagpieEffect.cs`** and **`Effects/MagpieEffectRunner.cs`** (NEW FILES): a C# port of Magpie's effect compiler and drawer (GPL-3.0). It reads MagpieFX version 4 files, generates one compute shader per pass (PS-style passes too, as Magpie does), sizes the textures from their expressions and dispatches the passes. Not supported: `//!SOURCE` textures; FP16 (always float). INPUT and OUTPUT are R16G16B16A16_FLOAT.
+- **`Effects/Magpie/*.hlsl`**: unchanged Magpie effect files, embedded as `MagpieEffects/<name>.hlsl` (see `FlyleafLib.csproj` and the folder's README for sources and licences).
+- **`ShaderCompiler.cs`**: `CompileCS` compiles cs_5_0 shaders and returns the compiler's messages.
+- **`FlyleafLib.Controls.WPF/FlyleafD3DImage.cs`**: sizes the shared texture in physical pixels (`VisualTreeHelper.GetDpi`), so video on a scaled screen is drawn at the screen's resolution instead of being stretched by WPF.
+
+`MagpieEffectTests` in EdgeLoop.Tests reads and compiles every bundled effect and runs each on the GPU (or WARP), checking the pictures they produce.
 
 ### 5. Test Files
 

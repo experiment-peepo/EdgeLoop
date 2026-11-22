@@ -67,5 +67,7 @@ Cookies are stored encrypted for your Windows account and shown hidden unless yo
 ## 📜 License
 Distributed under the **GPL-3.0 License**. See `LICENSE` for more information.
 
+Upscaling uses shader effects from [Magpie](https://github.com/Blinue/Magpie) (GPL-3.0): FSRCNNX by igv (GPL-3.0), AMD FidelityFX FSR 1 (MIT) and igv's SSimDownscaler (LGPL-3.0). See `FlyleafLib/FlyleafLib/MediaFramework/MediaRenderer/Effects/Magpie/README.md`.
+
 ---
 *Support the development on [Patreon](https://www.patreon.com/cw/vexfromdestiny) or [Ko-fi](https://ko-fi.com/vexfromdestiny)*

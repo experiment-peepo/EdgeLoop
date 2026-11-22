@@ -53,6 +53,11 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Fork: Magpie shader effects, read at run time by MagpieEffects (see Effects/Magpie/README.md) -->
+    <EmbeddedResource Include="MediaFramework\MediaRenderer\Effects\Magpie\*.hlsl" LogicalName="MagpieEffects/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="..\Images\Flyleaf.png">
       <Pack>True</Pack>
       <PackagePath></PackagePath>
