@@ -169,10 +169,17 @@ internal static partial class ShaderCompiler
     /// Fork: compiles a compute shader (cs_5_0, Direct3D 11.0 hardware). Null if it doesn't compile, with the
     /// compiler's messages in <paramref name="errors"/>.
     /// </summary>
-    internal static unsafe Blob CompileCS(ReadOnlySpan<byte> hlsl, string name, string entryPoint, out string errors)
+    internal static Blob CompileCS(ReadOnlySpan<byte> hlsl, string name, string entryPoint, out string errors) =>
+        CompileShader(hlsl, name, entryPoint, "cs_5_0", out errors);
+
+    /// <summary>
+    /// Fork: compiles one entry point of a complete shader source for <paramref name="profile"/> (e.g. ps_5_0). Null if
+    /// it doesn't compile, with the compiler's messages in <paramref name="errors"/>.
+    /// </summary>
+    internal static unsafe Blob CompileShader(ReadOnlySpan<byte> hlsl, string name, string entryPoint, string profile, out string errors)
     {
         errors = null;
-        Compiler.Compile(hlsl, null, null, entryPoint, name, "cs_5_0", ShaderFlags.OptimizationLevel3, out var shaderBlob, out var error);
+        Compiler.Compile(hlsl, null, null, entryPoint, name, profile, ShaderFlags.OptimizationLevel3, out var shaderBlob, out var error);
 
         if (error != null)
         {

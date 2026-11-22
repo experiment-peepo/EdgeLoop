@@ -21,6 +21,8 @@
 ### 🔲 Transparent Graphics Pipeline
 *   **DirectX 11 Rendering**: Custom pipeline that allows video windows to be truly transparent.
 *   **Windowless Feel**: Run content as if it's part of your wallpaper.
+*   **Upscaling**: Videos smaller than the screen are enlarged with shaders (AMD FSR 1 or FSRCNNX), on every screen at once and on any graphics card.
+*   **HDR**: Turn on **Settings → Playback → HDR on HDR monitors** and HDR videos play in true HDR on monitors that support it. EdgeLoop switches Windows HDR on for those monitors while it plays there and back off afterwards.
 
 ### 🌐 Deep Web Integration
 *   **Powered by yt-dlp**: Stream from 1000+ sites.

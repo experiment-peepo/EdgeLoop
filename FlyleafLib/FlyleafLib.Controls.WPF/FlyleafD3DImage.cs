@@ -20,6 +20,7 @@ public class FlyleafD3DImage : Image, IDisposable
     private D3DImage d3dImage;
     private bool disposed;
     private long lastFrameCount = -1;
+    private int errorCount;
 
     public FlyleafD3DImage()
     {
@@ -27,16 +28,60 @@ public class FlyleafD3DImage : Image, IDisposable
         this.Source = d3dImage;
         this.Stretch = Stretch.Uniform;
 
-        this.Loaded += (s, e) => { FlyleafLib.Logger.Log("[V] Control Loaded", LogLevel.Debug); StartRendering(); d3dImage.IsFrontBufferAvailableChanged += OnIsFrontBufferAvailableChanged; };
-        this.Unloaded += (s, e) => { FlyleafLib.Logger.Log("[V] Control Unloaded", LogLevel.Debug); StopRendering(); d3dImage.IsFrontBufferAvailableChanged -= OnIsFrontBufferAvailableChanged; };
+        this.Loaded += (s, e) =>
+        {
+            FlyleafLib.Logger.Log("[V] Control Loaded", LogLevel.Debug);
+            StartRendering();
+            d3dImage.IsFrontBufferAvailableChanged += OnIsFrontBufferAvailableChanged;
+            Microsoft.Win32.SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+        };
+        this.Unloaded += (s, e) =>
+        {
+            FlyleafLib.Logger.Log("[V] Control Unloaded", LogLevel.Debug);
+            StopRendering();
+            d3dImage.IsFrontBufferAvailableChanged -= OnIsFrontBufferAvailableChanged;
+            Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+        };
     }
 
     private void OnIsFrontBufferAvailableChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
+        FlyleafLib.Logger.Log($"[V] Front buffer {(d3dImage.IsFrontBufferAvailable ? "available" : "lost")}", LogLevel.Info);
         if (d3dImage.IsFrontBufferAvailable)
-            StartRendering();
+            Rebuild(); // Fork: WPF rebuilt its device, so ours may be stale too
         else
             StopRendering();
+    }
+
+    /// <summary>Fork: a display changed (resolution, a monitor switching HDR): the shared surface may no longer show.</summary>
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e) =>
+        Dispatcher.BeginInvoke(Rebuild, System.Windows.Threading.DispatcherPriority.Render);
+
+    /// <summary>Fork: a new shared surface and D3D9 device, then rendering again from the next frame.</summary>
+    private void Rebuild()
+    {
+        if (disposed || Player?.Renderer?.D3DImage is not { IsEnabled: true, Disposed: false } manager)
+            return;
+
+        var (width, height) = PixelSize();
+        manager.Recreate(width, height);
+        lastFrameCount = -1;
+        StartRendering();
+    }
+
+    /// <summary>The control's size in the screen's real pixels, not WPF's scaled units.</summary>
+    private (int Width, int Height) PixelSize()
+    {
+        var dpi = VisualTreeHelper.GetDpi(this);
+        int width = (int)Math.Round(ActualWidth * dpi.DpiScaleX);
+        int height = (int)Math.Round(ActualHeight * dpi.DpiScaleY);
+        if (width > 0 && height > 0)
+            return (width, height);
+
+        var window = Window.GetWindow(this);
+        if (window != null && window.ActualWidth > 0 && window.ActualHeight > 0)
+            return ((int)Math.Round(window.ActualWidth * dpi.DpiScaleX), (int)Math.Round(window.ActualHeight * dpi.DpiScaleY));
+        return (1920, 1080);
     }
 
     private static void OnPlayerChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
@@ -98,26 +143,7 @@ public class FlyleafD3DImage : Image, IDisposable
 
             // Fork: in the screen's real pixels, not WPF's scaled units, so video on a 150% 4K screen is
             // drawn at 3840x2160 rather than drawn at 2560x1440 and stretched by WPF
-            var control = this;
-            var dpi = VisualTreeHelper.GetDpi(control);
-            int width  = (int)Math.Round(control.ActualWidth * dpi.DpiScaleX);
-            int height = (int)Math.Round(control.ActualHeight * dpi.DpiScaleY);
-
-            if (width <= 0 || height <= 0)
-            {
-                var window = Window.GetWindow(control);
-                if (window != null && window.ActualWidth > 0 && window.ActualHeight > 0)
-                {
-                    width = (int)Math.Round(window.ActualWidth * dpi.DpiScaleX);
-                    height = (int)Math.Round(window.ActualHeight * dpi.DpiScaleY);
-                }
-                else
-                {
-                    width = 1920;
-                    height = 1080;
-                }
-            }
-
+            var (width, height) = PixelSize();
             manager.EnsureSize(width, height);
 
             var surface = manager.SharedSurface9;
@@ -149,8 +175,9 @@ public class FlyleafD3DImage : Image, IDisposable
         catch (ObjectDisposedException) { StopRendering(); }
         catch (Exception ex)
         {
-            if (renderCount % 60 == 0)
-                FlyleafLib.Logger.Log($"[V] Error in OnRendering: {ex.Message}", LogLevel.Error);
+            // Fork: the first error and every 60th after it (renderCount doesn't move while every frame fails)
+            if (errorCount++ % 60 == 0)
+                FlyleafLib.Logger.Log($"[V] Error in OnRendering ({errorCount}): {ex.Message}", LogLevel.Error);
         }
     }
 
@@ -159,6 +186,7 @@ public class FlyleafD3DImage : Image, IDisposable
         if (disposed)
             return;
         StopRendering();
+        Microsoft.Win32.SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         if (Player != null)
             Player.Renderer.D3DImage.IsEnabled = false;
         disposed = true;

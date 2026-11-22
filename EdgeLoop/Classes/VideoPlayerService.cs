@@ -318,6 +318,29 @@ namespace EdgeLoop.Classes
         }
 
         /// <summary>
+        /// Whether this playback's screens draw video in windows of their own, for HDR (see
+        /// <see cref="HdrSwitcher.UsesOwnVideoWindows"/>). False if Windows can't say which monitors support HDR.
+        /// </summary>
+        private static bool UsesOwnVideoWindows(IEnumerable<string> screenDevices)
+        {
+            if (App.Settings?.UseHdr != true || screenDevices == null)
+                return false;
+
+            try
+            {
+                bool own = HdrSwitcher.Shared.UsesOwnVideoWindows(true, screenDevices);
+                Logger.Info(own ? "[HDR] Playing with HDR: each screen draws its video in its own window"
+                                : "[HDR] HDR is on in Settings, but none of these screens' monitors support it");
+                return own;
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[HDR] Couldn't tell which monitors support HDR: {ex.Message}");
+                return false;
+            }
+        }
+
+        /// <summary>
         /// Plays videos on the specified screens
         /// </summary>
         /// <param name="files">Video files to play</param>
@@ -327,6 +350,7 @@ namespace EdgeLoop.Classes
             StopAll();
             var queue = await NormalizeItemsAsync(files, CancellationToken.None);
             var allScreens = Screen.AllScreens;
+            bool ownVideoWindows = UsesOwnVideoWindows(screens?.Select(s => s?.Screen?.DeviceName));
 
             foreach (var sv in (screens ?? Enumerable.Empty<ScreenViewer>()).OrderBy(s => s.ScreenIndex))
             {
@@ -340,7 +364,7 @@ namespace EdgeLoop.Classes
                     continue;
                 }
 
-                var w = new HypnoWindow(sv.Screen);
+                var w = new HypnoWindow(sv.Screen, ownVideoWindows);
                 w.Show();
 
                 w.ViewModel.SetQueue(queue);
@@ -618,6 +642,7 @@ namespace EdgeLoop.Classes
 
                 if (assignments == null) return;
                 var allScreens = Screen.AllScreens;
+                bool ownVideoWindows = UsesOwnVideoWindows(assignments.Keys.Select(s => s?.Screen?.DeviceName));
 
                 int sharedCoordinatedIndex = -1;
 
@@ -644,7 +669,7 @@ namespace EdgeLoop.Classes
                     if (!queue.Any()) continue;
 
                     // 0. Screen and Visibility
-                    var w = new HypnoWindow(sv.Screen);
+                    var w = new HypnoWindow(sv.Screen, ownVideoWindows);
                     w.Show();
 
                     // 1. Group Identity Phase (BEFORE SetQueue)

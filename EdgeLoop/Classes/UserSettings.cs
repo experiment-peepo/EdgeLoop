@@ -112,6 +112,12 @@ namespace EdgeLoop.Classes
         /// <summary>How upscaling enlarges video: "Fast" (FSR 1), "Sharp" (FSRCNNX) or "LineArt" (FSRCNNX for line art).</summary>
         public virtual string UpscalingQuality { get; set; } = "Sharp";
 
+        /// <summary>
+        /// HDR videos play in HDR on monitors that support it: Windows HDR is switched on for them while EdgeLoop plays
+        /// there, and back off afterwards (see <see cref="HdrSwitcher"/>).
+        /// </summary>
+        public virtual bool UseHdr { get; set; } = false;
+
         // Local Censor Settings
         //
         // Screen-capture censoring tools detect on the composited desktop, which

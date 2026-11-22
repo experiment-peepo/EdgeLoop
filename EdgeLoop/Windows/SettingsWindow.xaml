@@ -127,6 +127,10 @@
                                   ToolTip="Only videos smaller than the screen are upscaled"/>
                     </controls:SettingRow>
 
+                    <controls:SettingRow Header="HDR on HDR monitors" Description="HDR videos play in true HDR. EdgeLoop turns Windows HDR on for those monitors while it plays there, and back off afterwards. Applies the next time videos start.">
+                        <CheckBox IsChecked="{Binding UseHdr}"/>
+                    </controls:SettingRow>
+
                     <controls:SettingRow Header="Notices when a video can't play" Description="A short message in the corner of that screen, which fades after a few seconds">
                         <CheckBox IsChecked="{Binding ShowPlaybackNotices}"/>
                     </controls:SettingRow>

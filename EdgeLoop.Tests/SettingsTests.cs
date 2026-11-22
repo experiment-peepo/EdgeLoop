@@ -195,6 +195,20 @@ namespace EdgeLoop.Tests
             settings.SkipForwardHotkey.Combo.ToString().Should().Be("Right arrow");
             settings.ScreenSkipSettings[1].UseOwnKeys.Should().BeFalse();
         }
+
+        [Fact]
+        public void HdrSetting_IsOffByDefault_AndIsSaved()
+        {
+            new UserSettings().UseHdr.Should().BeFalse("it switches Windows' own HDR setting");
+
+            MockSettings.SetupProperty(s => s.UseHdr, false);
+            var settings = CreateSettings();
+            settings.UseHdr = true;
+            settings.HasChanges.Should().BeTrue();
+
+            settings.Save();
+            MockSettings.Object.UseHdr.Should().BeTrue();
+        }
     }
 
     public class HotkeyComboTests

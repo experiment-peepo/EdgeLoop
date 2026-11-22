@@ -101,6 +101,26 @@ namespace EdgeLoop.Tests
         }
 
         [Fact]
+        public void TheWpfVideoSurface_IsRebuiltFresh_AfterADisplayChange()
+        {
+            EnsureEngineStarted();
+            using var player = new Player(new Config());
+            var manager = player.Renderer.D3DImage;
+            manager.IsEnabled = true;
+
+            manager.EnsureSize(64, 48);
+            var before = manager.SharedTexture11;
+            if (before == null)
+                return; // No Direct3D 9 on this machine (some build servers): nothing to rebuild
+
+            manager.Recreate(64, 48); // What a display change (another monitor switching HDR) triggers
+
+            manager.SharedTexture11.Should().NotBeNull().And.NotBeSameAs(before, "a new surface replaces the stale one");
+            manager.SharedSurface9.Should().NotBeNull("WPF gets a surface to show again");
+            manager.SharedTexture11.Description.Width.Should().Be(64u);
+        }
+
+        [Fact]
         public void DurationProbe_ReadsTheClipsLength()
         {
             EnsureEngineStarted();

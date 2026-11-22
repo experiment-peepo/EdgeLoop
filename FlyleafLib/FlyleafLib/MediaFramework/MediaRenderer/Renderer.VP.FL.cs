@@ -553,6 +553,7 @@ color.rgb += (noise - 0.5) / 255.0;");
         FLUpscaleDispose();
         upFailed = false;
         upChromaFailed = false;
+        upHdrFailed = false;
 
         if (snapshot != null)
         {

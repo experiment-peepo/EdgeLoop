@@ -43,7 +43,7 @@ namespace EdgeLoop.Tests
             var ssim = MagpieEffects.Load(MagpieEffects.SSimDownscaler);
 
             ssim.Passes.Select(p => p.PsStyle).Should().Equal(true, true, true, false, false);
-            ssim.Textures.Should().Contain(t => t.Format.Name == "R8G8B8A8_UNORM");
+            ssim.Textures.Should().Contain(t => t.Name == "POSTKERNEL" && t.Format.Dxgi != MagpieFormat.Default.Dxgi, "its own format, not the default");
             MagpieEffects.Load(MagpieEffects.Easu).Textures[1].WidthExpression.Should().BeNull("EASU draws at whatever size it's given");
         }
 
@@ -198,6 +198,16 @@ namespace EdgeLoop.Tests
         }
 
         [Fact]
+        public void EightBitTextures_AreSixteenBit_SoHdrPicturesDontBand()
+        {
+            var effect = MagpieEffects.Load(MagpieEffects.SSimDownscaler);
+
+            effect.Textures.Should().Contain(t => t.Name == "POSTKERNEL" && t.Format.Name == "R16G16B16A16_UNORM",
+                "the file asks for R8G8B8A8_UNORM; 16-bit keeps its 0 to 1 range");
+            effect.Textures.Should().NotContain(t => t.Format.Dxgi == Format.R8G8B8A8_UNorm);
+        }
+
+        [Fact]
         public async Task Deband_KeepsRealEdges()
         {
             static float[] Edge(float x, float y) => x < 32 ? [0.2f, 0.2f, 0.2f] : [0.8f, 0.8f, 0.8f];
@@ -243,7 +253,7 @@ namespace EdgeLoop.Tests
             }
         }
 
-        private static float[,][] ReadBack(ID3D11Device device, ID3D11DeviceContext context, ID3D11Texture2D texture, uint width, uint height)
+        internal static float[,][] ReadBack(ID3D11Device device, ID3D11DeviceContext context, ID3D11Texture2D texture, uint width, uint height)
         {
             var description = texture.Description;
             description.Usage = ResourceUsage.Staging;

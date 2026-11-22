@@ -1,5 +1,8 @@
 ## [Unreleased]
 
+### Added
+- **HDR**: With "HDR on HDR monitors" (Settings → Playback, off by default), HDR videos play in true HDR on monitors that support it, upscaled like any other video. EdgeLoop switches Windows HDR on for those monitors while it plays there and back off when playback stops or EdgeLoop closes, or at the next start if it crashed; HDR you turned on yourself is left alone. SDR videos on those monitors keep Windows' SDR brightness.
+
 ### Changed
 - **Playback engine**: Updated the bundled FlyleafLib to v3.12 with FFmpeg 9.
 - **Upscaling**: Videos smaller than the screen are upscaled by shaders, on every screen at once and on any graphics card: Fast (AMD FSR 1), Sharp (FSRCNNX) or Line art (FSRCNNX trained on anime and drawings). FSRCNNX doubles the picture, then FSR 1 enlarges the rest or a high-quality shrink fits it to the screen. Each mode includes sharper colour (rebuilt from the full-resolution brightness, instead of blended up from half resolution), sharpening (FSR 1's) and smooths banding in gradients, and the picture is dithered so gradients don't band on 8-bit screens. A screen whose graphics card can't keep up steps down to Fast, then off, and says so. Diagnostic mode shows what each screen runs and its cost per frame. The NVIDIA and Intel driver upscalers are no longer used: they upscale only one video at a time and need the driver's own setting.

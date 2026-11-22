@@ -477,6 +477,7 @@ public unsafe partial class Renderer
         if (hdrSwapchain != enabled)
         {
             hdrSwapchain = enabled;
+            Log.Info($"HDR output {(enabled ? "on (FP16 scRGB)" : "off")}"); // Fork: so a test can tell
             FLUpdateTargetNits();
 
             if (VideoProcessor == VideoProcessors.D3D11)

@@ -13,7 +13,8 @@ namespace FlyleafLib.MediaFramework.MediaRenderer.Effects;
 /// </summary>
 /// <remarks>
 /// Not supported: textures loaded from image files (<c>//!SOURCE</c>). FP16 is never used: <c>MF</c> is float.
-/// INPUT and OUTPUT are 16-bit float textures here (Magpie: 8-bit), matching the renderer's.
+/// INPUT and OUTPUT are 16-bit float textures here (Magpie: 8-bit), matching the renderer's, and an effect's own
+/// 8-bit RGBA textures are 16-bit (still 0 to 1), so an HDR picture, which is PQ here, doesn't band.
 /// </remarks>
 internal sealed partial class MagpieEffect
 {
@@ -207,6 +208,8 @@ internal sealed partial class MagpieEffect
                     break;
                 case "FORMAT":
                     format = MagpieFormat.Get(value) ?? throw Error($"texture {name} has an unknown format {value}");
+                    if (format.Dxgi == Format.R8G8B8A8_UNorm)
+                        format = MagpieFormat.Get("R16G16B16A16_UNORM"); // More steps, the same range
                     break;
                 case "SOURCE":
                     throw new NotSupportedException($"Effect {Name}: texture {name} is loaded from a file, which isn't supported");

@@ -205,6 +205,35 @@ public class D3DImageManager : IDisposable
         }
     }
 
+    /// <summary>
+    /// Fork: builds a new shared surface and D3D9 device. A display change (another monitor switching HDR, a
+    /// resolution change, the lock screen) can leave the old ones unusable for WPF: its video stays blank while
+    /// the rest of the window draws. Between frames, so the renderer never draws into a half-built surface.
+    /// </summary>
+    public void Recreate(int width, int height)
+    {
+        if (width <= 0 || height <= 0)
+            return;
+
+        lock (renderer.lockRenderLoops)
+        {
+            lock (lockD3D)
+            {
+                if (Disposed)
+                    return;
+
+                DisposeTextures();
+                device9?.Dispose();
+                device9 = null;
+                d3d9?.Dispose();
+                d3d9 = null;
+            }
+
+            EnsureSize(width, height);
+        }
+        renderer.Log.Info($"D3DImage rebuilt after a display change: {width}x{height}");
+    }
+
     /// <summary>Creates the shared texture's video processor output view if the D3D11 VP became available after the texture.</summary>
     internal void EnsureVpov()
     {

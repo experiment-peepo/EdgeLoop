@@ -60,6 +60,7 @@ namespace EdgeLoop.ViewModels
             _upscalingMode = !settings.EnableSuperResolution ? UpscalingSupport.Off
                 : UpscalingSupport.IsMode(settings.UpscalingQuality) && settings.UpscalingQuality != UpscalingSupport.Off ? settings.UpscalingQuality : "Sharp";
             _showPlaybackNotices = settings.ShowPlaybackNotices;
+            _useHdr = settings.UseHdr;
 
             // --- Library ---
             _rememberLastPlaylist = settings.RememberLastPlaylist;
@@ -214,7 +215,7 @@ namespace EdgeLoop.ViewModels
         {
             var values = new List<object>
             {
-                SelectedDefaultMonitor?.DeviceName, DefaultOpacity, DefaultVolume, AlwaysOpaque, UpscalingMode, ShowPlaybackNotices,
+                SelectedDefaultMonitor?.DeviceName, DefaultOpacity, DefaultVolume, AlwaysOpaque, UpscalingMode, ShowPlaybackNotices, UseHdr,
                 RememberLastPlaylist, RememberFilePosition, EnableLocalCaching, LocalCacheDirectory,
                 BrowserForCookies, CleanCookieString(HypnotubeCookies), CleanCookieString(IwaraCookies), CleanCookieString(Rule34VideoCookies),
                 StartWithWindows, EnableDiagnosticMode,
@@ -279,6 +280,14 @@ namespace EdgeLoop.ViewModels
         {
             get => _showPlaybackNotices;
             set => SetProperty(ref _showPlaybackNotices, value);
+        }
+
+        private bool _useHdr;
+        /// <summary>HDR videos play in HDR on HDR monitors, with Windows HDR switched on for them while playing.</summary>
+        public bool UseHdr
+        {
+            get => _useHdr;
+            set => SetProperty(ref _useHdr, value);
         }
 
         // ===== Library & Cache =====
@@ -655,6 +664,7 @@ namespace EdgeLoop.ViewModels
                     AlwaysOpaque = defaults.AlwaysOpaque;
                     UpscalingMode = defaults.EnableSuperResolution ? defaults.UpscalingQuality : UpscalingSupport.Off;
                     ShowPlaybackNotices = defaults.ShowPlaybackNotices;
+                    UseHdr = defaults.UseHdr;
                     break;
                 case SettingsSection.Library:
                     RememberLastPlaylist = defaults.RememberLastPlaylist;
@@ -771,6 +781,7 @@ namespace EdgeLoop.ViewModels
             if (IsUpscalingOn)
                 settings.UpscalingQuality = UpscalingMode;
             settings.ShowPlaybackNotices = ShowPlaybackNotices;
+            settings.UseHdr = UseHdr;
 
             settings.RememberLastPlaylist = RememberLastPlaylist;
             settings.RememberFilePosition = RememberFilePosition;

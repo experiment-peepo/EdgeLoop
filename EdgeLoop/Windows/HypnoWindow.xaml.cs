@@ -28,10 +28,19 @@ namespace EdgeLoop.Windows
         public HypnoViewModel ViewModel => _viewModel;
         public string ScreenDeviceName => _targetScreen?.DeviceName ?? "Unknown";
 
-        public HypnoWindow(System.Windows.Forms.Screen screen = null)
+        // With HDR on (see HdrSwitcher.UsesOwnVideoWindows): this screen's video goes to a DirectComposition window
+        // under this one, in HDR where the monitor can
+        private readonly bool _ownVideoWindow;
+        private HdrVideoSurface _videoSurface;
+        private string _hdrScreen;
+
+        /// <param name="screen">The screen it plays on.</param>
+        /// <param name="ownVideoWindow">Draw the video in a window of its own, for HDR, instead of through WPF.</param>
+        public HypnoWindow(System.Windows.Forms.Screen screen = null, bool ownVideoWindow = false)
         {
             InitializeComponent();
             _targetScreen = screen;
+            _ownVideoWindow = ownVideoWindow;
             _viewModel = new HypnoViewModel(App.UrlExtractor);
             _viewModel.MonitorName = screen?.DeviceName ?? "Default";
             this.DataContext = _viewModel;
@@ -70,6 +79,80 @@ namespace EdgeLoop.Windows
         private void ViewModel_PropertyChanged(object sender, System.ComponentModel.PropertyChangedEventArgs e)
         {
             // SpeedRatio and Volume are now handled directly by the ViewModel's Player instance
+
+            // The video window's video is see-through on its own; this window's opacity only reaches the labels
+            if (_videoSurface != null && e.PropertyName == nameof(HypnoViewModel.EffectiveOpacity))
+                _viewModel.Player?.Renderer?.SwapChain.SetOpacity((float)_viewModel.EffectiveOpacity);
+        }
+
+        /// <summary>
+        /// With HDR on: shows this screen's video in its own window through FlyleafLib's swap chain instead of through
+        /// WPF, and on a monitor that supports HDR switches Windows HDR on for it. Every screen of the playback does
+        /// this, HDR or not: once one monitor is in HDR, WPF stops showing its video on the others (the frames are
+        /// drawn, but never appear). Anything that fails leaves the usual WPF video in place.
+        /// </summary>
+        [SupportedOSPlatform("windows")]
+        private void StartOwnVideoWindow(IntPtr overlay, System.Drawing.Rectangle bounds)
+        {
+            var player = _viewModel.Player;
+            if (_targetScreen == null || player?.Renderer == null)
+                return;
+
+            try
+            {
+                bool hdr = HdrSwitcher.Shared.SwitchOn(_targetScreen.DeviceName);
+                if (hdr)
+                {
+                    _hdrScreen = _targetScreen.DeviceName;
+                    player.Renderer.PreferredVideoProcessor = FlyleafLib.VideoProcessors.Flyleaf; // HDR output needs it
+                }
+
+                // Off with WPF's video: the swap chain draws it instead
+                FirstVideo.Player = null;
+                FirstVideo.Visibility = Visibility.Collapsed;
+                Background = System.Windows.Media.Brushes.Transparent;
+
+                _videoSurface = new HdrVideoSurface(bounds, overlay);
+                player.Renderer.SwapChain.SetOpacity((float)_viewModel.EffectiveOpacity);
+                player.Renderer.SwapChain.Setup(_videoSurface.Handle);
+                Logger.Info(hdr
+                    ? $"[HDR] {_targetScreen.DeviceName}: video in its own window, in HDR"
+                    : $"[HDR] {_targetScreen.DeviceName} can't show HDR: video in its own window, in SDR");
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($"[HDR] Couldn't give {_targetScreen.DeviceName} its own video window: the usual video", ex);
+                StopOwnVideoWindow();
+                if (TryFindResource("VideoBackdropBrush") is System.Windows.Media.Brush backdrop)
+                    Background = backdrop;
+                FirstVideo.Visibility = Visibility.Visible;
+                FirstVideo.Player = player;
+            }
+        }
+
+        /// <summary>Takes the video off its own window and puts the monitor's HDR back as it was.</summary>
+        [SupportedOSPlatform("windows")]
+        private void StopOwnVideoWindow()
+        {
+            try
+            {
+                if (_videoSurface != null)
+                {
+                    _viewModel?.Player?.Renderer?.SwapChain.Setup(0);
+                    _videoSurface.Dispose();
+                    _videoSurface = null;
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning($"[HDR] Closing the video window: {ex.Message}");
+            }
+
+            if (_hdrScreen != null)
+            {
+                HdrSwitcher.Shared.Restore(_hdrScreen);
+                _hdrScreen = null;
+            }
         }
 
         private void SyncTimer_Tick(object sender, EventArgs e)
@@ -86,6 +169,8 @@ namespace EdgeLoop.Windows
             {
                 if (disposing)
                 {
+                    StopOwnVideoWindow(); // Before the player goes
+
                     // Unsubscribe from events
                     if (_viewModel != null)
                     {
@@ -277,6 +362,9 @@ namespace EdgeLoop.Windows
                 Logger.Debug($"[HypnoWindow] Positioning: {b.Left},{b.Top} {b.Width}x{b.Height}");
                 SetWindowPos(hwnd, new IntPtr(-1), b.Left, b.Top, b.Width, b.Height,
                     SWP_FRAMECHANGED | SWP_SHOWWINDOW | SWP_NOACTIVATE);
+
+                if (_ownVideoWindow)
+                    StartOwnVideoWindow(hwnd, b);
 
                 // 3. WPF Metadata
                 this.WindowStartupLocation = WindowStartupLocation.Manual;

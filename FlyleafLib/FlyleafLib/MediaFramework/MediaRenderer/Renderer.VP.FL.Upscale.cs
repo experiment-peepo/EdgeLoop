@@ -12,7 +12,8 @@ namespace FlyleafLib.MediaFramework.MediaRenderer;
 /// Fork: shader upscaling and debanding on the Flyleaf processor. The frame is drawn at its own size (with sharper
 /// colour from <see cref="ChromaFromLuma"/> for 4:2:0 hardware frames), run through the chain
 /// <see cref="UpscalePlanner"/> picks (deband, FSRCNNX, FSR 1, SSimDownscaler, sharpening), then drawn into the
-/// viewport with dithering. Only for SDR, unrotated video; anything else draws the usual way. When the
+/// viewport with dithering. With HDR output the chain works on a PQ copy of the picture (<see cref="HdrPicture"/>),
+/// turned back into scRGB as it's drawn. Only for unrotated video; anything else draws the usual way. When the
 /// chain takes more than half of each frame's time, it steps down: to FSR 1, then to no upscaling.
 /// </summary>
 public partial class Renderer
@@ -39,13 +40,15 @@ public partial class Renderer
     int             upSlowStrikes;
     ChromaFromLuma  upChroma;
     bool            upChromaFailed;
+    HdrPicture      upHdr;      // With HDR output: the PQ picture the effects work on
+    bool            upHdrFailed;
 
     /// <summary>Why no effect can run on this frame (upscaling or deband), or null.</summary>
     string FLEffectsBlockedReason()
     {
         if (upFailed)
             return "it failed to start";
-        if (hdrSwapchain)
+        if (hdrSwapchain && upHdrFailed)
             return "HDR output";
         if (rotation != 0)
             return "rotated video";
@@ -106,7 +109,8 @@ public partial class Renderer
 
         var steps = UpscalePlanner.Plan(VisibleWidth, VisibleHeight, targetWidth, targetHeight,
             upscale, upscaler, debandOn && blocked == null, upscale && ucfg._ShaderSharpening > 0);
-        if (steps.Count == 0 || !FLUpscaleEnsure(steps))
+        bool hdr = hdrSwapchain;
+        if (steps.Count == 0 || !FLUpscaleEnsure(steps) || (hdr && !FLHdrPictureEnsure()))
         {
             SetShaderUpscaling(false, null);
             SetShaderUpscalingIdle(upscaleOn ? skip ?? (upFailed ? "it failed to start" : "starting") : null);
@@ -131,8 +135,15 @@ public partial class Renderer
             context.Draw(6, 0);
             context.OMSetRenderTargets((ID3D11RenderTargetView)null); // so the effects can read it
 
-            // 2. Each effect on the last one's picture
+            // 1b. With HDR output, a PQ copy for the effects (theirs is a 0 to 1 picture, not scRGB's nits)
             var picture = upInput.SRV;
+            if (hdr)
+            {
+                upHdr.ToPQ(context, picture, upInput.Width, upInput.Height);
+                picture = upHdr.Output.SRV;
+            }
+
+            // 2. Each effect on the last one's picture
             foreach (var (step, runner) in upChain)
             {
                 if (step.Effect == MagpieEffects.Rcas)
@@ -141,13 +152,18 @@ public partial class Renderer
                 picture = runner.Output.SRV;
             }
 
-            // 3. Into the viewport (one to one when upscaled), dithered for the 8-bit screen
+            // 3. Into the viewport (one to one when upscaled): dithered for the 8-bit screen, or back into scRGB for HDR
             context.OMSetRenderTargets(target);
             context.RSSetViewport(Viewport);
-            context.VSSetShader(vsSimple);
-            context.PSSetShader(psShader["rgbaDither"]);
-            context.PSSetShaderResource(0, picture);
-            context.Draw(6, 0);
+            if (hdr)
+                upHdr.FromPQ(context, picture);
+            else
+            {
+                context.VSSetShader(vsSimple);
+                context.PSSetShader(psShader["rgbaDither"]);
+                context.PSSetShaderResource(0, picture);
+                context.Draw(6, 0);
+            }
         }
         finally
         {
@@ -159,7 +175,7 @@ public partial class Renderer
             context.PSSetShaderResources(0, frame.SRV);
         }
 
-        SetShaderUpscaling(true, (sharperColour ? "sharper colour → " : "") + UpscalePlanner.Describe(steps));
+        SetShaderUpscaling(true, (sharperColour ? "sharper colour → " : "") + UpscalePlanner.Describe(steps) + (hdr ? " (HDR)" : ""));
         SetShaderUpscalingIdle(null);
         return true;
     }
@@ -187,6 +203,31 @@ public partial class Renderer
         {
             upChromaFailed = true;
             Log.Error($"[Upscale] Sharper colour unavailable ({e.GetBaseException().Message})");
+            return false;
+        }
+    }
+
+    /// <summary>With HDR output: whether the PQ conversion is ready. False while it's still compiling, or if it failed.</summary>
+    bool FLHdrPictureEnsure()
+    {
+        if (upHdr != null)
+            return true;
+        if (upHdrFailed)
+            return false;
+
+        var task = HdrPicture.Compile();
+        if (!task.IsCompleted)
+            return false; // Still compiling: the usual drawing meanwhile
+
+        try
+        {
+            upHdr = new HdrPicture(device, task.Result);
+            return true;
+        }
+        catch (Exception e)
+        {
+            upHdrFailed = true;
+            Log.Error($"[Upscale] Unavailable with HDR output ({e.GetBaseException().Message})");
             return false;
         }
     }
@@ -316,6 +357,8 @@ public partial class Renderer
     {   // With the device (FLDispose), or after an error
         upChroma?.Dispose();
         upChroma = null;
+        upHdr?.Dispose();
+        upHdr = null;
         FLUpscaleDisposeChain();
         upInput?.Dispose();
         upInput = null;

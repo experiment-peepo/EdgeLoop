@@ -44,6 +44,8 @@ public class SwapChain
     IDCompositionVisual         dcVisual;
     IDCompositionTarget         dcTarget;
     IDCompositionRectangleClip  dcClip;
+    IDCompositionEffectGroup    dcEffect;           // Fork: see-through opacity
+    float                       opacity = 1;
 
     ID2D1DeviceContext          context2d; // ref only
     ID2D1Bitmap1                bitmap2d;
@@ -87,6 +89,41 @@ public class SwapChain
         SampleDescription = new SampleDescription(1, 0),
         Flags = SwapChainFlags.None
     };
+
+    /// <summary>
+    /// Fork: how see-through the video is on the desktop, 0 to 1, for a swap chain in a window (DirectComposition).
+    /// Kept for the next window the swap chain is set up in.
+    /// </summary>
+    public void SetOpacity(float value)
+    {
+        lock (Renderer.lockDevice)
+        {
+            opacity = Math.Clamp(value, 0, 1);
+            if (!Disposed)
+                ApplyOpacity();
+        }
+    }
+
+    void ApplyOpacity()
+    {
+        if (dcDevice == null || dcVisual == null)
+            return;
+
+        try
+        {
+            if (dcEffect == null)
+            {
+                dcDevice.CreateEffectGroup(out dcEffect).CheckError();
+                dcVisual.SetEffect(dcEffect).CheckError();
+            }
+            dcEffect.SetOpacity(opacity).CheckError();
+            dcDevice.Commit().CheckError();
+        }
+        catch (Exception e)
+        {
+            Log.Warn($"SC Opacity failed ({e.Message})");
+        }
+    }
 
     public void Setup(nint hwnd)
     {
@@ -144,6 +181,9 @@ public class SwapChain
                 SetClipHelper();
                 dcVisual.SetClip(dcClip).CheckError();
             }
+
+            if (opacity < 1)
+                ApplyOpacity(); // Fork: commits
 
             dcDevice.Commit().CheckError();
 
@@ -261,6 +301,13 @@ public class SwapChain
                 Log.Debug($"SC Disposing [Hwnd: {ControlHwnd}]");
 
             RemoveSubClass();
+
+            if (dcEffect != null)
+            {
+                dcVisual?.SetEffect(null);
+                dcEffect.Dispose();
+                dcEffect = null;
+            }
 
             if (dcClip != null)
             {

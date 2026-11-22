@@ -74,6 +74,8 @@ namespace EdgeLoop
 
             AppDomain.CurrentDomain.UnhandledException += (s, args) =>
             {
+                try { Classes.HdrSwitcher.Shared.RestoreAll(); } catch { } // Never leave a monitor in HDR it wasn't in
+
                 try
                 {
                     var ex = args.ExceptionObject as Exception;
@@ -86,6 +88,10 @@ namespace EdgeLoop
             // 1.5. Rotate logs if too large (20MB main, 10MB diagnostics)
             Classes.Logger.CheckAndRotateLogFile(20 * 1024 * 1024);
             Classes.Logger.CheckAndRotateDiagnosticsLogFile(10 * 1024 * 1024);
+
+            // 1.6. A previous run that crashed may have left a monitor in HDR: put it back
+            try { Classes.HdrSwitcher.Shared.RecoverFromRecord(); }
+            catch (Exception ex) { Classes.Logger.Warning($"[HDR] Recovery failed: {ex.Message}"); }
 
             // 2. Resolve Log Level (Command Line > Env Var > Settings)
             var resolvedLogLevel = ResolveLogLevel(e.Args);
@@ -249,6 +255,9 @@ namespace EdgeLoop
         protected override void OnExit(ExitEventArgs e)
         {
             Logger.Debug("Application exiting - starting shutdown sequence...");
+
+            try { Classes.HdrSwitcher.Shared.RestoreAll(); }
+            catch (Exception ex) { Logger.Warning($"[HDR] Restoring on exit failed: {ex.Message}"); }
 
             try
             {
