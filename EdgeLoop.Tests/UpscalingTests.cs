@@ -52,12 +52,14 @@ namespace EdgeLoop.Tests
             video.ShaderUpscaler.Should().Be(upscaler);
             video.ShaderSharpening.Should().Be(sharpening);
             video.ShaderDeband.Should().BeTrue();
+            video.ShaderChromaFromLuma.Should().BeTrue("every mode gets sharper colour");
 
             MockSettings.Object.EnableSuperResolution = false;
             player.RefreshSuperResolution();
             video.ShaderUpscaling.Should().BeFalse();
             video.ShaderSharpening.Should().Be(0);
             video.ShaderDeband.Should().BeFalse("off is off");
+            video.ShaderChromaFromLuma.Should().BeFalse();
         }
 
         [Fact]

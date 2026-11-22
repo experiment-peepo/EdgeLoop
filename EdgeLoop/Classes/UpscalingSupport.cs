@@ -14,7 +14,7 @@ namespace EdgeLoop.Classes
     public static class UpscalingSupport
     {
         /// <summary>The Settings description of upscaling.</summary>
-        public const string Description = "Sharper video when it's smaller than the screen, on every screen at once, with light sharpening and smoother gradients. Fast suits slower graphics cards; Line art suits anime and drawings.";
+        public const string Description = "Sharper video when it's smaller than the screen, on every screen at once, with sharper colour, light sharpening and smoother gradients. Fast suits slower graphics cards; Line art suits anime and drawings.";
 
         /// <summary>Upscaling in Settings: off, or how (stored in <see cref="UserSettings.UpscalingQuality"/>).</summary>
         public static readonly IReadOnlyList<(string Label, string Mode)> Modes = new[]
@@ -52,6 +52,7 @@ namespace EdgeLoop.Classes
             video.ShaderUpscaler = upscaler;
             video.ShaderSharpening = on ? sharpening : 0;
             video.ShaderDeband = on && deband;
+            video.ShaderChromaFromLuma = on; // Every mode: it costs well under 0.1 ms a frame at 1080p
         }
 
         /// <summary>The saved quality as an upscaler; anything unknown is Sharp.</summary>

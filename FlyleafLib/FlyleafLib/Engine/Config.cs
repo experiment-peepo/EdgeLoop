@@ -588,6 +588,10 @@ public class Config : NotifyPropertyChanged
         public bool ShaderDeband { get => _ShaderDeband; set { if (Set(ref _ShaderDeband, value)) player?.Renderer?.VPSwitchCheck(); } }
         internal bool _ShaderDeband;
 
+        /// <summary>Fork: rebuilds full-resolution colour for 4:2:0 hardware-decoded video from its brightness (EdgeLoop's chroma-from-luma shader), while the upscaling or deband shaders run.</summary>
+        public bool ShaderChromaFromLuma { get => _ShaderChromaFromLuma; set => Set(ref _ShaderChromaFromLuma, value); }
+        internal bool _ShaderChromaFromLuma;
+
         /// <summary>Requests hardware video decoding on decoder setup. <see cref="MediaPlayer.Video.HWAcceleration"/> reports the effective result.</summary>
         public bool HWAcceleration { get; set; } = true;
         /// <summary>Toggles the saved hardware decoding preference for the next decoder setup.</summary>

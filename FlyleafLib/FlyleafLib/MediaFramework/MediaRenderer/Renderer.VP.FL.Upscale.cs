@@ -9,9 +9,10 @@ using FeatureLevel = Vortice.Direct3D.FeatureLevel;
 namespace FlyleafLib.MediaFramework.MediaRenderer;
 
 /// <summary>
-/// Fork: shader upscaling and debanding on the Flyleaf processor. The frame is drawn at its own size, run through
-/// the chain <see cref="UpscalePlanner"/> picks (deband, FSRCNNX, FSR 1, SSimDownscaler, sharpening), then drawn
-/// into the viewport with dithering. Only for SDR, unrotated video; anything else draws the usual way. When the
+/// Fork: shader upscaling and debanding on the Flyleaf processor. The frame is drawn at its own size (with sharper
+/// colour from <see cref="ChromaFromLuma"/> for 4:2:0 hardware frames), run through the chain
+/// <see cref="UpscalePlanner"/> picks (deband, FSRCNNX, FSR 1, SSimDownscaler, sharpening), then drawn into the
+/// viewport with dithering. Only for SDR, unrotated video; anything else draws the usual way. When the
 /// chain takes more than half of each frame's time, it steps down: to FSR 1, then to no upscaling.
 /// </summary>
 public partial class Renderer
@@ -36,6 +37,8 @@ public partial class Renderer
     int             upLevel;    // 0 as configured, 1 stepped down to FSR 1, 2 stepped down to no upscaling
     (bool On, ShaderUpscaler Upscaler) upLevelFor;
     int             upSlowStrikes;
+    ChromaFromLuma  upChroma;
+    bool            upChromaFailed;
 
     /// <summary>Why no effect can run on this frame (upscaling or deband), or null.</summary>
     string FLEffectsBlockedReason()
@@ -110,10 +113,18 @@ public partial class Renderer
             return false;
         }
         upChainUpscales = upscale;
+        bool sharperColour = FLChromaEnsure(frame);
 
         int query = UpscaleTimingBegin();
         try
         {
+            // 0. Colour at brightness resolution, which the pixel shader then samples in place of the half-size plane
+            if (sharperColour)
+            {
+                upChroma.Run(context, frame.SRV[0], frame.SRV[1], ffTextureDesc.Width, ffTextureDesc.Height);
+                context.PSSetShaderResource(1, upChroma.Output.SRV);
+            }
+
             // 1. The frame at its own size, with all of the pixel shader's colour work
             context.OMSetRenderTargets(upInput.RTV);
             context.RSSetViewport(new Viewport(0, 0, upInput.Width, upInput.Height));
@@ -148,9 +159,36 @@ public partial class Renderer
             context.PSSetShaderResources(0, frame.SRV);
         }
 
-        SetShaderUpscaling(true, UpscalePlanner.Describe(steps));
+        SetShaderUpscaling(true, (sharperColour ? "sharper colour → " : "") + UpscalePlanner.Describe(steps));
         SetShaderUpscalingIdle(null);
         return true;
+    }
+
+    /// <summary>Whether this frame gets sharper colour: a 4:2:0 hardware frame (NV12, P010) with it switched on, once the shader is ready.</summary>
+    bool FLChromaEnsure(VideoFrame frame)
+    {
+        if (!ucfg._ShaderChromaFromLuma || upChromaFailed || psCase != PSCase.HW || isDovi || frame.SRV is not { Length: 2 } ||
+            ffTextureDesc.Format is not (Format.NV12 or Format.P010 or Format.P016))
+            return false;
+
+        if (upChroma != null)
+            return true;
+
+        var task = ChromaFromLuma.Compile();
+        if (!task.IsCompleted)
+            return false; // Still compiling: the usual colour meanwhile
+
+        try
+        {
+            upChroma = new ChromaFromLuma(device, task.Result);
+            return true;
+        }
+        catch (Exception e)
+        {
+            upChromaFailed = true;
+            Log.Error($"[Upscale] Sharper colour unavailable ({e.GetBaseException().Message})");
+            return false;
+        }
     }
 
     /// <summary>Builds the chain for these steps if it isn't already. False while an effect is still compiling, or if it failed.</summary>
@@ -276,6 +314,8 @@ public partial class Renderer
 
     void FLUpscaleDispose()
     {   // With the device (FLDispose), or after an error
+        upChroma?.Dispose();
+        upChroma = null;
         FLUpscaleDisposeChain();
         upInput?.Dispose();
         upInput = null;

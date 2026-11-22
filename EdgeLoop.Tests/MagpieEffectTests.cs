@@ -271,7 +271,8 @@ namespace EdgeLoop.Tests
             }
         }
 
-        private static (ID3D11Device, ID3D11DeviceContext) CreateDevice()
+        /// <summary>The real GPU, or Windows' software one (WARP) where there's none.</summary>
+        internal static (ID3D11Device, ID3D11DeviceContext) CreateDevice()
         {
             FeatureLevel[] levels = [FeatureLevel.Level_11_1, FeatureLevel.Level_11_0];
             if (D3D11.D3D11CreateDevice(null, DriverType.Hardware, DeviceCreationFlags.None, levels, out ID3D11Device? device, out ID3D11DeviceContext? context).Success)
