@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
 using Moq;
-using FluentAssertions;
+using AwesomeAssertions;
 using EdgeLoop.Classes;
 using EdgeLoop.ViewModels;
 

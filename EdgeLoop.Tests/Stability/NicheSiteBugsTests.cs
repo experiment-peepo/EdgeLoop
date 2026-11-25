@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Xunit;
 using Microsoft.Extensions.Time.Testing;
 using Moq;
-using FluentAssertions;
+using AwesomeAssertions;
 using EdgeLoop.Classes;
 using EdgeLoop.ViewModels;
 

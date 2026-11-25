@@ -7,7 +7,7 @@ using System.Windows.Media;
 using System.Windows.Threading;
 using EdgeLoop.Classes;
 using EdgeLoop.Windows;
-using FluentAssertions;
+using AwesomeAssertions;
 
 namespace EdgeLoop.Tests
 {
@@ -18,6 +18,17 @@ namespace EdgeLoop.Tests
     internal static class WpfApp
     {
         private static readonly Lazy<Dispatcher> _dispatcher = new(Start);
+        private static readonly List<DispatcherOperation> _queuedStartup = new();
+
+        /// <summary>What creating the App queued on the dispatcher: its startup, which the tests must never run.</summary>
+        internal static IReadOnlyList<DispatcherOperation> QueuedStartup
+        {
+            get
+            {
+                Run(() => { }); // Makes sure the app exists
+                return _queuedStartup;
+            }
+        }
 
         private static Dispatcher Start()
         {
@@ -29,7 +40,16 @@ namespace EdgeLoop.Tests
             {
                 try
                 {
+                    // Creating an App queues its startup on the dispatcher, to run as soon as Dispatcher.Run
+                    // below gets going. The real startup works on the user's own data (it cleans up the
+                    // download cache, for one) and opens the launcher, so take it off the queue.
+                    var hooks = Dispatcher.CurrentDispatcher.Hooks;
+                    DispatcherHookEventHandler onPosted = (_, e) => _queuedStartup.Add(e.Operation);
+                    hooks.OperationPosted += onPosted;
                     var app = new App();
+                    hooks.OperationPosted -= onPosted;
+                    foreach (var operation in _queuedStartup) operation.Abort();
+
                     app.InitializeComponent(); // loads App.xaml and the theme, without starting the app
                     // App.xaml says OnMainWindowClose; closing the first test window must not shut the dispatcher down
                     app.ShutdownMode = ShutdownMode.OnExplicitShutdown;
@@ -68,6 +88,13 @@ namespace EdgeLoop.Tests
 
     public class ThemeTests : TestBase
     {
+        [Fact]
+        public void TheAppsOwnStartup_NeverRunsInTests()
+        {
+            WpfApp.QueuedStartup.Should().NotBeEmpty("creating an App queues its startup");
+            WpfApp.QueuedStartup.Should().OnlyContain(o => o.Status == DispatcherOperationStatus.Aborted, "it works on the user's own data");
+        }
+
         private static void Layout(FrameworkElement element, double width = 600, double height = 400)
         {
             element.Measure(new Size(width, height));

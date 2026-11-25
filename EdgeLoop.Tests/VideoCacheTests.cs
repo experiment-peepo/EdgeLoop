@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EdgeLoop.Classes;
 using EdgeLoop.ViewModels;
-using FluentAssertions;
+using AwesomeAssertions;
 using Moq;
 
 namespace EdgeLoop.Tests
@@ -142,8 +142,17 @@ namespace EdgeLoop.Tests
 
             (await WaitUntil(() => vm.CurrentSource != null)).Should().BeTrue("the video reaches the player");
             vm.Config.Demuxer.FormatOpt["http_persistent"].Should().Be(expected);
+            vm.Config.Demuxer.FormatOpt["tls_verify"].Should().Be("1", "FFmpeg accepts any certificate unless told to check");
+            vm.Config.Demuxer.Cookies.Should().BeNull("no cookie goes to every host");
 
             vm.Dispose();
+        }
+
+        [Fact]
+        public void NoSite_SkipsTheCertificateCheck()
+        {
+            foreach (var site in Enum.GetValues<Site>())
+                SiteRules.Get(site).SkipCertificateCheck.Should().BeFalse($"{site}'s media servers have certificates Windows trusts");
         }
 
         [Fact]

@@ -4,7 +4,7 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using EdgeLoop.Classes.Censoring;
-using FluentAssertions;
+using AwesomeAssertions;
 
 namespace EdgeLoop.Tests.Stability
 {

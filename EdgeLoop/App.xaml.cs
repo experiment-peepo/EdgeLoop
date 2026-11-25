@@ -202,12 +202,16 @@ namespace EdgeLoop
             // Prune old history records in background
             System.Threading.Tasks.Task.Run(() => historyService.PruneOldRecords());
 
-            // Cleanup old cached videos (10+ days old) in background
+            var downloadService = new VideoDownloadService();
+            ServiceContainer.Register<IVideoDownloadService>(downloadService);
+
+            // In background: bring downloads over from the old folder, then clean up
+            // (videos unused for 10+ days, then down to the size limit)
             System.Threading.Tasks.Task.Run(() =>
             {
                 try
                 {
-                    var downloadService = new VideoDownloadService();
+                    downloadService.MoveOldDownloads();
                     downloadService.CleanupOldFiles(10);
                 }
                 catch (Exception ex)
@@ -240,11 +244,6 @@ namespace EdgeLoop
             {
                 Logger.Debug("Migrating plaintext cookies to encrypted storage...");
                 settings.HypnotubeCookies = settings.HypnotubeCookiesEncrypted; // Re-set triggers encryption
-                settings.Save();
-            }
-            if (settings.CookiesEncrypted != null && !CookieProtector.IsEncrypted(settings.CookiesEncrypted))
-            {
-                settings.Cookies = settings.CookiesEncrypted;
                 settings.Save();
             }
 

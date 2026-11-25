@@ -1,6 +1,6 @@
 using EdgeLoop.Classes;
 using EdgeLoop.ViewModels;
-using FluentAssertions;
+using AwesomeAssertions;
 
 namespace EdgeLoop.Tests
 {
@@ -258,6 +258,120 @@ namespace EdgeLoop.Tests
 
             settings.Save();
             MockSettings.Object.UseHdr.Should().BeTrue();
+        }
+
+        // --- Downloads ---
+
+        [Fact]
+        public void SizeLimit_ListsThePresets_AndAnyValueSavedByHand()
+        {
+            SettingsViewModel.BuildCacheSizeLimits(0).Select(l => l.Value).Should().Equal("5 GB", "10 GB", "20 GB", "50 GB", "100 GB", "No limit");
+            SettingsViewModel.BuildCacheSizeLimits(30).Select(l => l.Value).Should().Equal("5 GB", "10 GB", "20 GB", "30 GB", "50 GB", "100 GB", "No limit");
+            new UserSettings().MaxCacheSizeGb.Should().Be(20);
+        }
+
+        [Fact]
+        public void ALowerSizeLimit_IsSaved_AndAppliedRightAway()
+        {
+            MockSettings.SetupProperty(s => s.MaxCacheSizeGb, 50);
+            var downloads = new Moq.Mock<IVideoDownloadService>();
+            var trimmed = new System.Threading.ManualResetEventSlim();
+            downloads.Setup(d => d.TrimToLimit()).Callback(() => trimmed.Set()).Returns(0);
+            ServiceContainer.Register(downloads.Object);
+
+            var settings = CreateSettings();
+            settings.MaxCacheSizeGb = 10;
+            settings.HasChanges.Should().BeTrue();
+            settings.Save();
+
+            MockSettings.Object.MaxCacheSizeGb.Should().Be(10);
+            trimmed.Wait(TimeSpan.FromSeconds(5)).Should().BeTrue("a lower limit doesn't wait for the next download");
+        }
+
+        [Fact]
+        public void RaisingOrRemovingTheLimit_DeletesNothing()
+        {
+            MockSettings.SetupProperty(s => s.MaxCacheSizeGb, 10);
+            var downloads = new Moq.Mock<IVideoDownloadService>();
+            ServiceContainer.Register(downloads.Object);
+
+            foreach (var limit in new[] { 50, 0 })
+            {
+                var settings = CreateSettings();
+                settings.MaxCacheSizeGb = limit;
+                settings.Save();
+            }
+
+            System.Threading.Thread.Sleep(200);
+            downloads.Verify(d => d.TrimToLimit(), Moq.Times.Never);
+        }
+
+        [Fact]
+        public async Task SpaceUsed_IsShown()
+        {
+            var downloads = new Moq.Mock<IVideoDownloadService>();
+            downloads.Setup(d => d.GetCacheSize()).Returns((long)(3.4 * 1024 * 1024 * 1024));
+            ServiceContainer.Register(downloads.Object);
+
+            var settings = CreateSettings();
+            await settings.RefreshCacheSizeAsync();
+            settings.CacheSizeText.Should().Be($"{3.4.ToString("0.0", System.Globalization.CultureInfo.CurrentCulture)} GB used");
+            settings.HasChanges.Should().BeFalse("showing the size isn't a setting");
+
+            SettingsViewModel.FormatSize(0).Should().Be("0 MB");
+            SettingsViewModel.FormatSize(143L * 1024 * 1024).Should().Be("143 MB");
+        }
+
+        [Fact]
+        public void TheDownloadFolder_IsEdgeLoopsOwn_AndIsntSavedAsAPath()
+        {
+            new UserSettings().LocalCacheDirectory.Should().BeNull();
+            MockSettings.SetupProperty(s => s.LocalCacheDirectory, null!);
+
+            var settings = CreateSettings();
+            settings.LocalCacheDirectory.Should().Be(AppPaths.VideoCacheDirectory).And.StartWith(AppContext.BaseDirectory);
+            settings.Save();
+            MockSettings.Object.LocalCacheDirectory.Should().BeNull("a saved path would point at the old place once EdgeLoop's folder is moved");
+
+            settings.LocalCacheDirectory = @"E:\Videos";
+            settings.HasChanges.Should().BeTrue();
+            settings.Save();
+            MockSettings.Object.LocalCacheDirectory.Should().Be(@"E:\Videos");
+
+            settings.ResetSectionCommand.Execute("Library");
+            settings.LocalCacheDirectory.Should().Be(AppPaths.VideoCacheDirectory);
+            settings.Save();
+            MockSettings.Object.LocalCacheDirectory.Should().BeNull();
+        }
+
+        [Fact]
+        public void SettingsSavedBefore_MoveToEdgeLoopsFolder_UnlessAFolderWasPicked()
+        {
+            var old = new UserSettings { SettingsVersion = 1, LocalCacheDirectory = AppPaths.ProfileVideoCacheDirectory };
+            old.Migrate().Should().BeTrue();
+            old.LocalCacheDirectory.Should().BeNull("the old default was saved as a path, but nobody picked it");
+            old.Migrate().Should().BeFalse();
+
+            var picked = new UserSettings { SettingsVersion = 1, LocalCacheDirectory = @"E:\Videos" };
+            picked.Migrate().Should().BeTrue();
+            picked.LocalCacheDirectory.Should().Be(@"E:\Videos");
+
+            var pickedLater = new UserSettings { LocalCacheDirectory = AppPaths.ProfileVideoCacheDirectory };
+            pickedLater.Migrate().Should().BeFalse();
+            pickedLater.LocalCacheDirectory.Should().Be(AppPaths.ProfileVideoCacheDirectory, "picking that folder now is a choice");
+        }
+
+        // --- The old cookie setting ---
+
+        [Fact]
+        public void OldSettingsFiles_WithTheRemovedCookieSetting_StillLoad_AndSavingDropsIt()
+        {
+            var loaded = System.Text.Json.JsonSerializer.Deserialize<UserSettings>("{\"Cookies\":\"session=abc\",\"DefaultVolume\":0.25}")!;
+            loaded.DefaultVolume.Should().Be(0.25);
+
+            using var saved = System.Text.Json.JsonDocument.Parse(System.Text.Json.JsonSerializer.Serialize(loaded));
+            saved.RootElement.TryGetProperty("Cookies", out _).Should().BeFalse("one cookie for every site was sent to every host");
+            saved.RootElement.TryGetProperty("HypnotubeCookies", out _).Should().BeTrue("each site keeps its own cookies");
         }
     }
 

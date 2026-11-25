@@ -2,7 +2,7 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using EdgeLoop.Classes;
-using FluentAssertions;
+using AwesomeAssertions;
 
 namespace EdgeLoop.Tests
 {

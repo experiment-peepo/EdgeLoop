@@ -2,7 +2,7 @@ using System.Text.Json;
 using EdgeLoop.Classes;
 using EdgeLoop.ViewModels;
 using FlyleafLib.MediaFramework.MediaRenderer.Effects;
-using FluentAssertions;
+using AwesomeAssertions;
 using static EdgeLoop.Classes.UpscalingSupport;
 
 namespace EdgeLoop.Tests

@@ -1,7 +1,7 @@
 using System.IO;
 using FlyleafLib;
 using FlyleafLib.MediaPlayer;
-using FluentAssertions;
+using AwesomeAssertions;
 
 namespace EdgeLoop.Tests
 {

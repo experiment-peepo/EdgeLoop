@@ -951,16 +951,6 @@ namespace EdgeLoop.ViewModels
                         _currentPos = (_currentPos + 1) % _files.Length;
                     }
 
-                    // --- 1. MASTER BROADCAST ---
-                    // After master decides the next index, tell all followers
-                    if (!string.IsNullOrEmpty(SyncGroupId) && IsSyncMaster)
-                    {
-                        if (ServiceContainer.TryGet<VideoPlayerService>(out var vps))
-                        {
-                            vps.BroadcastIndexToGroup(SyncGroupId, _currentPos, force);
-                        }
-                    }
-
                     attempts++;
                     if (attempts > _files.Length)
                     {
@@ -976,6 +966,9 @@ namespace EdgeLoop.ViewModels
                 } while (_files[_currentPos] == null || (_fileFailureCounts.TryGetValue(_files[_currentPos].FilePath, out int fails) && fails >= 3));
 
                 Logger.Debug($"[PlayNext] {this.MonitorName} selected next video: #{_currentPos} - {_files[_currentPos].FileName}");
+
+                // After master decides the next index, tell all followers
+                BroadcastIndexToFollowers(force);
 
                 StartNewPlayRecord(_files[_currentPos].FilePath);
                 _ = LoadCurrentVideo();
@@ -1044,14 +1037,6 @@ namespace EdgeLoop.ViewModels
                     int previous = IsShuffle && _files.Length > 1 ? _shuffle.Back(_files.Length) : -1;
                     _currentPos = previous >= 0 ? previous : (_currentPos - 1 + _files.Length) % _files.Length;
 
-                    if (!string.IsNullOrEmpty(SyncGroupId) && IsSyncMaster)
-                    {
-                        if (ServiceContainer.TryGet<VideoPlayerService>(out var vps))
-                        {
-                            vps.BroadcastIndexToGroup(SyncGroupId, _currentPos, force);
-                        }
-                    }
-
                     attempts++;
                     if (attempts > _files.Length)
                     {
@@ -1067,6 +1052,8 @@ namespace EdgeLoop.ViewModels
                 } while (_files[_currentPos] == null || (_fileFailureCounts.TryGetValue(_files[_currentPos].FilePath, out int fails) && fails >= 3));
 
                 Logger.Debug($"[PlayPrevious] {this.MonitorName} selected previous video: #{_currentPos} - {_files[_currentPos].FileName}");
+
+                BroadcastIndexToFollowers(force);
 
                 lock (_loadLock)
                 {
@@ -1088,6 +1075,18 @@ namespace EdgeLoop.ViewModels
                 Logger.Error($"[PlayPrevious] Unhandled exception on {MonitorName}", ex);
                 IsLoadingStatus = false;
             }
+        }
+
+        /// <summary>
+        /// In group playback, the master tells the other screens which video it picked. Called once,
+        /// with the final pick: telling them every failed video skipped on the way made each of them
+        /// start loading it and cancel right away.
+        /// </summary>
+        private void BroadcastIndexToFollowers(bool force)
+        {
+            if (string.IsNullOrEmpty(SyncGroupId) || !IsSyncMaster) return;
+            if (ServiceContainer.TryGet<VideoPlayerService>(out var vps))
+                vps.BroadcastIndexToGroup(SyncGroupId, _currentPos, force);
         }
 
         private void RecordCurrentPlayEnd(bool wasSkipped = false)
@@ -1410,7 +1409,7 @@ namespace EdgeLoop.ViewModels
                         Logger.Warning($"File validation failed for '{_currentItem.FileName}': {validationError}. Skipping to next video.");
 
                         // Cleanup corrupted cache files immediately (e.g. HLS manifests saved as MP4)
-                        if (path.Contains("VideoCache") && File.Exists(path))
+                        if (VideoDownloadService.IsOwnCacheFile(path) && File.Exists(path))
                         {
                             try { File.Delete(path); Logger.Debug($"Deleted corrupted cache file: {path}"); } catch { }
                         }
@@ -1516,7 +1515,8 @@ namespace EdgeLoop.ViewModels
                 try
                 {
                     Config.Demuxer.UserAgent = App.Settings?.UserAgent;
-                    Config.Demuxer.Cookies = App.Settings?.Cookies;
+                    // No blanket Cookie header: a site's own cookies go only to its own hosts (BuildMediaHeaders below)
+                    Config.Demuxer.Cookies = null;
 
                     // Default network stability options
                     Config.Demuxer.FormatOpt["reconnect"] = "1";
@@ -1524,7 +1524,6 @@ namespace EdgeLoop.ViewModels
                     Config.Demuxer.FormatOpt["reconnect_delay_max"] = "5";
                     Config.Demuxer.FormatOpt["reconnect_on_network_error"] = "1";
                     Config.Demuxer.FormatOpt["reconnect_on_http_error"] = "1";
-                    Config.Demuxer.FormatOpt["tls_verify"] = "0"; // Helps with handshake failures on some CDNs
                     Config.Demuxer.FormatOpt["rw_timeout"] = "15000000"; // 15s socket timeout (in microseconds)
 
                     // --- SITE-SPECIFIC HEADER INJECTION ---
@@ -1539,6 +1538,8 @@ namespace EdgeLoop.ViewModels
                     var pageUrl = !string.IsNullOrEmpty(_currentItem.OriginalPageUrl) ? _currentItem.OriginalPageUrl : _currentItem.FilePath;
                     var connectionProfile = mediaSite != Site.Unknown ? SiteRules.Get(mediaSite) : SiteRules.Get(pageUrl);
                     Config.Demuxer.FormatOpt["http_persistent"] = connectionProfile.PersistentMediaConnections ? "1" : "0";
+                    // FFmpeg doesn't check certificates unless told to
+                    Config.Demuxer.FormatOpt["tls_verify"] = connectionProfile.SkipCertificateCheck ? "0" : "1";
 
                     string referer = siteProfile.MediaReferer ?? _currentItem.OriginalPageUrl;
 
@@ -2194,7 +2195,7 @@ namespace EdgeLoop.ViewModels
             Logger.Error(errorMessage, ex);
 
             // If the failure happened with a cached file, delete it so it can be re-downloaded or streamed next time
-            if (!string.IsNullOrEmpty(filePath) && filePath.Contains("VideoCache") && File.Exists(filePath))
+            if (!string.IsNullOrEmpty(filePath) && VideoDownloadService.IsOwnCacheFile(filePath) && File.Exists(filePath))
             {
                 Logger.Warning($"[HypnoViewModel] Deleting likely corrupted cache file: {filePath}");
                 try { File.Delete(filePath); } catch { }

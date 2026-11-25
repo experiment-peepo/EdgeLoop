@@ -6,7 +6,7 @@ using Xunit;
 using EdgeLoop.ViewModels;
 using EdgeLoop.Classes;
 using Moq;
-using FluentAssertions;
+using AwesomeAssertions;
 
 namespace EdgeLoop.Tests.Stability
 {

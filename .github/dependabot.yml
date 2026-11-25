@@ -17,7 +17,7 @@ updates:
           - "xunit*"
           - "Microsoft.NET.Test.Sdk"
           - "Moq"
-          - "FluentAssertions"
+          - "AwesomeAssertions"
           - "coverlet.*"
           - "Microsoft.Extensions.TimeProvider.Testing"
     ignore:

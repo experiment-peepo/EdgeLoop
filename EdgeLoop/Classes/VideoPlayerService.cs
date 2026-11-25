@@ -62,7 +62,7 @@ namespace EdgeLoop.Classes
             _masterSyncTimer.Tick += MasterSyncTimer_Tick;
         }
 
-        public void BroadcastIndexToGroup(string syncGroupId, int index, bool force = false)
+        public virtual void BroadcastIndexToGroup(string syncGroupId, int index, bool force = false)
         {
             lock (_playersLock)
             {

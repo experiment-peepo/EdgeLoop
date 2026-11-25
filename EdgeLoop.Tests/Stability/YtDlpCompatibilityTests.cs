@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using Xunit;
-using FluentAssertions;
+using AwesomeAssertions;
 using EdgeLoop.Classes;
 
 namespace EdgeLoop.Tests.Stability

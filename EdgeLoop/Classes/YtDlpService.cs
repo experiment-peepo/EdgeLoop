@@ -211,7 +211,6 @@ namespace EdgeLoop.Classes
 
                 // Global high-resolution enforcement
                 options.AddCustomOption<string>("--format-sort", "res,br,fps,quality");
-                options.AddCustomOption<string>("--no-check-certificates", null);
 
                 // YouTube EJS Challenge Solver (Requires Node.js installed on host)
                 options.AddCustomOption<string>("--js-runtimes", "node");
@@ -233,28 +232,12 @@ namespace EdgeLoop.Classes
                 }
                 else if (profile.UseBrowserCookiesFallback)
                 {
-                    // Use browser cookies for major sites that benefit from being logged in
-                    if (!string.IsNullOrEmpty(App.Settings?.Cookies) && (App.Settings.Cookies.Contains(host) || host.Split('.').Any(part => App.Settings.Cookies.Contains(part))))
-                    {
-                        Logger.Debug($"[yt-dlp] Using global cookies for {host}");
-                        cookieFile = CreateTempCookieFile(App.Settings.Cookies, host);
-                    }
-                    else
-                    {
-                        // Set through the option itself (not a raw custom option) so a locked-database
-                        // retry can clear it again
-                        var browser = SiteRules.CookieBrowser;
-                        options.CookiesFromBrowser = browser;
-                        Logger.Debug($"[yt-dlp] Using --cookies-from-browser {browser} for {host}");
-                    }
-                }
-                else if (!string.IsNullOrEmpty(App.Settings?.Cookies))
-                {
-                    if (App.Settings.Cookies.Contains(host) || host.Split('.').Any(part => App.Settings.Cookies.Contains(part)))
-                    {
-                        Logger.Debug($"[yt-dlp] Using global cookies for extraction on {host}");
-                        cookieFile = CreateTempCookieFile(App.Settings.Cookies, host);
-                    }
+                    // Use browser cookies for major sites that benefit from being logged in.
+                    // Set through the option itself (not a raw custom option) so a locked-database
+                    // retry can clear it again
+                    var browser = SiteRules.CookieBrowser;
+                    options.CookiesFromBrowser = browser;
+                    Logger.Debug($"[yt-dlp] Using --cookies-from-browser {browser} for {host}");
                 }
 
                 tempFiles.Add(cookieFile);
@@ -376,7 +359,6 @@ namespace EdgeLoop.Classes
                 var args = new List<string> {
                     "--flat-playlist",
                     "--print", "%(webpage_url)s|%(title)s",
-                    "--no-check-certificates",
                     "--impersonate", "chrome",
                     "--no-warnings",
                     "--js-runtimes", "node",
@@ -536,12 +518,11 @@ namespace EdgeLoop.Classes
             if (App.Settings?.EnableLocalCaching != true) return null;
 
             // Compute cache path using same hash as VideoDownloadService
-            var cacheDir = App.Settings?.LocalCacheDirectory ??
-                Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EdgeLoop", "VideoCache");
+            var cacheDir = AppPaths.ResolveVideoCacheDirectory(App.Settings?.LocalCacheDirectory);
             Directory.CreateDirectory(cacheDir);
 
             var hash = ComputeUrlHash(url);
-            var finalPath = Path.Combine(cacheDir, $"{hash}.mp4");
+            var finalPath = VideoDownloadService.CacheFilePath(cacheDir, hash);
 
             // Already cached?
             if (File.Exists(finalPath))
@@ -561,7 +542,6 @@ namespace EdgeLoop.Classes
                 "--no-playlist",
                 "--newline",
                 "--impersonate", "chrome",
-                "--no-check-certificates",
                 "--js-runtimes", "node",
                 "--remote-components", "ejs:github"
             };
@@ -687,17 +667,19 @@ namespace EdgeLoop.Classes
                 {
                     File.Move(tempPath, finalPath, overwrite: true);
                     Logger.Debug($"[yt-dlp] Downloaded and muxed: {Path.GetFileName(finalPath)}");
+                    new VideoDownloadService().TrimToLimit();
                     return finalPath;
                 }
 
                 // yt-dlp sometimes appends extension even with --output
-                var possibleFiles = Directory.GetFiles(cacheDir, $"{hash}.*")
+                var possibleFiles = Directory.GetFiles(cacheDir, Path.GetFileNameWithoutExtension(finalPath) + ".*")
                     .Where(f => !f.EndsWith(".ytdl_downloading"))
                     .FirstOrDefault();
                 if (possibleFiles != null)
                 {
                     File.Move(possibleFiles, finalPath, overwrite: true);
                     Logger.Debug($"[yt-dlp] Downloaded and muxed (resolved extension): {Path.GetFileName(finalPath)}");
+                    new VideoDownloadService().TrimToLimit();
                     return finalPath;
                 }
 

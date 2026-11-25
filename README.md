@@ -36,9 +36,9 @@
 
 ### 💾 Local Caching Architecture
 EdgeLoop features a robust background pre-buffering system designed to eliminate stuttering and provide instant seeking capabilities.
-*   **MP4/Static Video Sites** (e.g., Iwara, Rule34Video, Hypnotube): EdgeLoop automatically downloads these videos to the local cache (`%LOCALAPPDATA%\EdgeLoop\VideoCache` by default) in the background. When playback starts, it seamlessly switches to the local file for zero-stutter performance.
+*   **MP4/Static Video Sites** (e.g., Iwara, Rule34Video, Hypnotube): EdgeLoop automatically downloads these videos to the local cache (`Data\VideoCache` in EdgeLoop's own folder by default) in the background. When playback starts, it seamlessly switches to the local file for zero-stutter performance.
 *   **HLS Streaming Sites** (e.g., PMVHaven): These videos are delivered in live segments and cannot be easily cached as a single file. EdgeLoop streams these directly and bypasses the disk cache.
-*   **Auto-Cleanup**: Cached files are automatically cleaned up 10 days after their last access to prevent disk space exhaustion.
+*   **Auto-Cleanup**: Cached files are automatically cleaned up 10 days after their last use, and the cache stays under a size limit (20 GB by default; **Settings → Library & Cache → Size limit**), deleting the videos played longest ago first. EdgeLoop only ever deletes files it downloaded itself, so the download folder can hold your own videos too. **Clear downloads** empties it.
 *   **Toggle**: You can disable local caching in the Settings if you prefer to stream everything (Note: This may cause slower start times and stuttering when seeking for MP4 sites).
 
 ## 🛠️ Technical Stack

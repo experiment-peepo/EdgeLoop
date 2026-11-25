@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Globalization;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Runtime.Versioning;
 using System.Windows.Input;
 using EdgeLoop.Classes;
@@ -70,7 +71,9 @@ namespace EdgeLoop.ViewModels
             _rememberLastPlaylist = settings.RememberLastPlaylist;
             _rememberFilePosition = settings.RememberFilePosition;
             _enableLocalCaching = settings.EnableLocalCaching;
-            _localCacheDirectory = settings.LocalCacheDirectory;
+            _localCacheDirectory = AppPaths.ResolveVideoCacheDirectory(settings.LocalCacheDirectory);
+            _maxCacheSizeGb = settings.MaxCacheSizeGb;
+            CacheSizeLimits = BuildCacheSizeLimits(_maxCacheSizeGb);
 
             // --- Privacy ---
             _browserForCookies = settings.BrowserForCookies ?? defaults.BrowserForCookies;
@@ -149,11 +152,13 @@ namespace EdgeLoop.ViewModels
             CheckIwaraSignInCommand = new RelayCommand(async _ => await CheckIwaraSignInAsync(), _ => !IsCheckingIwaraSignIn);
             OpenDiagnosticsFolderCommand = new RelayCommand(OpenDiagnosticsFolder);
             BrowseCacheDirectoryCommand = new RelayCommand(BrowseCacheDirectory);
+            ClearDownloadsCommand = new RelayCommand(async _ => await ClearDownloadsAsync(), _ => !IsClearingDownloads);
             IdentifyScreensCommand = new RelayCommand(_ => ScreenIdentifier.Show());
 
             _loading = false;
             ValidateHotkeys();
             _savedState = Snapshot();
+            if (SelectedSection?.Section == SettingsSection.Library) _ = RefreshCacheSizeAsync();
         }
 
         private static IEnumerable<ScreenViewer> LoadScreens()
@@ -180,7 +185,10 @@ namespace EdgeLoop.ViewModels
             set
             {
                 if (value != null && SetProperty(ref _selectedSection, value))
+                {
                     _settings.LastExpandedSection = value.Section.ToString(); // Reopens here next time
+                    if (!_loading && value.Section == SettingsSection.Library) _ = RefreshCacheSizeAsync();
+                }
             }
         }
 
@@ -216,7 +224,8 @@ namespace EdgeLoop.ViewModels
         {
             nameof(HasChanges), nameof(SelectedSection), nameof(HasHotkeyConflicts), nameof(ShowCookies),
             nameof(ShowCookieFallback), nameof(HypnotubeCookiesNote), nameof(Rule34VideoCookiesNote), nameof(HypnotubePasteSummary), nameof(Rule34VideoPasteSummary), nameof(CensorModelStatus), nameof(DisconnectedScreensNote),
-            nameof(IwaraSignInStatus), nameof(IwaraSignInSucceeded), nameof(IsCheckingIwaraSignIn)
+            nameof(IwaraSignInStatus), nameof(IwaraSignInSucceeded), nameof(IsCheckingIwaraSignIn),
+            nameof(CacheSizeText), nameof(IsClearingDownloads)
         };
 
         protected override void OnPropertyChanged([System.Runtime.CompilerServices.CallerMemberName] string propertyName = null)
@@ -238,7 +247,7 @@ namespace EdgeLoop.ViewModels
             var values = new List<object>
             {
                 SelectedDefaultMonitor?.DeviceName, DefaultOpacity, DefaultVolume, AlwaysOpaque, UpscalingMode, ShowPlaybackNotices, UseHdr,
-                RememberLastPlaylist, RememberFilePosition, EnableLocalCaching, LocalCacheDirectory,
+                RememberLastPlaylist, RememberFilePosition, EnableLocalCaching, LocalCacheDirectory, MaxCacheSizeGb,
                 BrowserForCookies, CleanCookieString(HypnotubeCookies), CleanCookieString(Rule34VideoCookies),
                 CleanAccountText(IwaraEmail), IwaraPassword ?? string.Empty,
                 SiteAccountSetting.Clean(HypnotubeAccount.Username), HypnotubeAccount.Password ?? string.Empty,
@@ -339,10 +348,49 @@ namespace EdgeLoop.ViewModels
         }
 
         private string _localCacheDirectory;
+        /// <summary>The folder downloads really go to, also when none was picked.</summary>
         public string LocalCacheDirectory
         {
             get => _localCacheDirectory;
             set => SetProperty(ref _localCacheDirectory, value);
+        }
+
+        private int _maxCacheSizeGb;
+        /// <summary>Most the downloads may take up, in GB; 0 for no limit.</summary>
+        public int MaxCacheSizeGb
+        {
+            get => _maxCacheSizeGb;
+            set => SetProperty(ref _maxCacheSizeGb, value);
+        }
+
+        /// <summary>Size limits to pick from, plus the saved one when it isn't among them (edited by hand).</summary>
+        public IReadOnlyList<KeyValuePair<int, string>> CacheSizeLimits { get; private set; } = BuildCacheSizeLimits(0);
+
+        internal static IReadOnlyList<KeyValuePair<int, string>> BuildCacheSizeLimits(int saved)
+        {
+            var sizes = new SortedSet<int> { 5, 10, 20, 50, 100 };
+            if (saved > 0) sizes.Add(saved);
+            return sizes.Select(gb => new KeyValuePair<int, string>(gb, $"{gb} GB"))
+                .Append(new KeyValuePair<int, string>(0, "No limit"))
+                .ToList();
+        }
+
+        private string _cacheSizeText = "Checking…";
+        /// <summary>What the downloads take up now, or the result of clearing them.</summary>
+        public string CacheSizeText
+        {
+            get => _cacheSizeText;
+            private set => SetProperty(ref _cacheSizeText, value);
+        }
+
+        private bool _isClearingDownloads;
+        public bool IsClearingDownloads
+        {
+            get => _isClearingDownloads;
+            private set
+            {
+                if (SetProperty(ref _isClearingDownloads, value)) CommandManager.InvalidateRequerySuggested();
+            }
         }
 
         // ===== Privacy & Cookies =====
@@ -817,7 +865,8 @@ namespace EdgeLoop.ViewModels
                     RememberLastPlaylist = defaults.RememberLastPlaylist;
                     RememberFilePosition = defaults.RememberFilePosition;
                     EnableLocalCaching = defaults.EnableLocalCaching;
-                    LocalCacheDirectory = defaults.LocalCacheDirectory;
+                    LocalCacheDirectory = AppPaths.ResolveVideoCacheDirectory(defaults.LocalCacheDirectory);
+                    MaxCacheSizeGb = defaults.MaxCacheSizeGb;
                     break;
                 case SettingsSection.Privacy:
                     BrowserForCookies = defaults.BrowserForCookies; // Cookies stay: they're sign-ins, not preferences
@@ -860,6 +909,54 @@ namespace EdgeLoop.ViewModels
             }
         }
 
+        private static IVideoDownloadService Downloads =>
+            ServiceContainer.TryGet<IVideoDownloadService>(out var downloads) ? downloads : null;
+
+        /// <summary>Shows how much the downloads take up, read off the UI thread: a large folder takes a moment.</summary>
+        internal async Task RefreshCacheSizeAsync()
+        {
+            var downloads = Downloads;
+            if (downloads == null) return;
+            long bytes = await Task.Run(downloads.GetCacheSize);
+            CacheSizeText = $"{FormatSize(bytes)} used";
+        }
+
+        private async Task ClearDownloadsAsync()
+        {
+            var downloads = Downloads;
+            if (downloads == null) return;
+            if (!DialogService.Confirm("Clear downloads", "Delete every video EdgeLoop has downloaded? They're downloaded again the next time they play. This happens right away and can't be undone.",
+                    "Clear downloads", "Cancel", destructive: true))
+                return;
+
+            IsClearingDownloads = true;
+            try
+            {
+                var (freed, kept) = await Task.Run(downloads.ClearAll);
+                CacheSizeText = kept == 0
+                    ? $"Cleared {FormatSize(freed)}"
+                    : $"Cleared {FormatSize(freed)}; {kept} in use {(kept == 1 ? "was" : "were")} kept";
+            }
+            catch (Exception ex)
+            {
+                Logger.Warning("Clearing the downloads failed", ex);
+                CacheSizeText = "Couldn't clear the downloads";
+            }
+            finally
+            {
+                IsClearingDownloads = false;
+            }
+        }
+
+        /// <summary>"0 MB", "143 MB", "3.4 GB".</summary>
+        internal static string FormatSize(long bytes)
+        {
+            const double gb = 1024d * 1024 * 1024;
+            return bytes >= gb
+                ? (bytes / gb).ToString("0.0", CultureInfo.CurrentCulture) + " GB"
+                : $"{Math.Round(bytes / (1024d * 1024)):0} MB";
+        }
+
         private void OpenDiagnosticsFolder(object obj)
         {
             try
@@ -882,9 +979,7 @@ namespace EdgeLoop.ViewModels
             {
                 Description = "Select Local Cache Directory",
                 UseDescriptionForTitle = true,
-                SelectedPath = string.IsNullOrEmpty(LocalCacheDirectory) || !System.IO.Directory.Exists(LocalCacheDirectory)
-                    ? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
-                    : LocalCacheDirectory
+                SelectedPath = System.IO.Directory.Exists(LocalCacheDirectory) ? LocalCacheDirectory : AppPaths.DataDirectory
             };
 
             if (dialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
@@ -903,6 +998,7 @@ namespace EdgeLoop.ViewModels
         public ICommand ToggleCookieFallbackCommand { get; }
         public ICommand OpenDiagnosticsFolderCommand { get; }
         public ICommand BrowseCacheDirectoryCommand { get; }
+        public ICommand ClearDownloadsCommand { get; }
         public ICommand IdentifyScreensCommand { get; }
 
         public event EventHandler RequestClose;
@@ -934,7 +1030,10 @@ namespace EdgeLoop.ViewModels
             settings.RememberLastPlaylist = RememberLastPlaylist;
             settings.RememberFilePosition = RememberFilePosition;
             settings.EnableLocalCaching = EnableLocalCaching;
-            settings.LocalCacheDirectory = LocalCacheDirectory;
+            // EdgeLoop's own folder isn't saved as a path, so it's still right when EdgeLoop's folder is moved
+            settings.LocalCacheDirectory = AppPaths.IsSameDirectory(LocalCacheDirectory, AppPaths.VideoCacheDirectory) ? null : LocalCacheDirectory;
+            bool limitLowered = MaxCacheSizeGb > 0 && (settings.MaxCacheSizeGb <= 0 || MaxCacheSizeGb < settings.MaxCacheSizeGb);
+            settings.MaxCacheSizeGb = MaxCacheSizeGb;
 
             settings.BrowserForCookies = BrowserForCookies;
             settings.HypnotubeCookies = CookiesToSave(HypnotubeCookies, "Hypnotube");
@@ -993,6 +1092,10 @@ namespace EdgeLoop.ViewModels
 
             settings.LastExpandedSection = SelectedSection?.Section.ToString();
             settings.Save();
+
+            // A lower limit applies now, not at the next download
+            if (limitLowered && Downloads is { } downloads)
+                Task.Run(downloads.TrimToLimit);
 
             IsSaved = true;
             _savedState = Snapshot();

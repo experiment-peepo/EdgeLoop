@@ -1,5 +1,5 @@
 using EdgeLoop.Classes;
-using FluentAssertions;
+using AwesomeAssertions;
 
 namespace EdgeLoop.Tests
 {

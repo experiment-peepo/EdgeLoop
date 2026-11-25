@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EdgeLoop.Classes;
 using EdgeLoop.ViewModels;
-using FluentAssertions;
+using AwesomeAssertions;
 
 namespace EdgeLoop.Tests
 {

@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using EdgeLoop.Classes;
 using EdgeLoop.ViewModels;
-using FluentAssertions;
+using AwesomeAssertions;
 using Moq;
 
 namespace EdgeLoop.Tests
@@ -125,6 +125,32 @@ namespace EdgeLoop.Tests
             vm.PlayPrevious(force: true);
             vm.CurrentIndex.Should().Be(first, "Previous goes back to the video that played before, not its playlist neighbour");
 
+            vm.Dispose();
+        }
+
+        [Fact]
+        public async Task SkippingFailedVideos_TellsTheOtherScreensOnce()
+        {
+            var players = new Mock<VideoPlayerService>();
+            ServiceContainer.Register(players.Object);
+            var items = Enumerable.Range(0, 4).Select(i => new VideoItem($"https://stream.invalid/video{i}.mp4")).ToArray();
+            var vm = new HypnoViewModel(MockExtractor.Object, new Mock<IVideoDownloadService>().Object) { SyncGroupId = "group", IsSyncMaster = true };
+            vm.SetQueue(items);
+            (await WaitUntil(() => vm.CurrentSource != null)).Should().BeTrue();
+            players.Invocations.Clear();
+
+            // The next two have failed too often: they're skipped on the way to the fourth
+            var failures = (System.Collections.Concurrent.ConcurrentDictionary<string, int>)typeof(HypnoViewModel)
+                .GetField("_fileFailureCounts", System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance)!.GetValue(vm)!;
+            int start = vm.CurrentIndex;
+            failures[items[(start + 1) % 4].FilePath] = 3;
+            failures[items[(start + 2) % 4].FilePath] = 3;
+
+            vm.PlayNext(force: true);
+
+            vm.CurrentIndex.Should().Be((start + 3) % 4);
+            players.Verify(p => p.BroadcastIndexToGroup("group", (start + 3) % 4, true), Times.Once);
+            players.Verify(p => p.BroadcastIndexToGroup("group", It.IsAny<int>(), It.IsAny<bool>()), Times.Once, "the skipped ones aren't announced");
             vm.Dispose();
         }
 

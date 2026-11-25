@@ -18,7 +18,12 @@ namespace EdgeLoop.Classes
         Task<string> DownloadVideoAsync(string url, Dictionary<string, string> headers = null, CancellationToken cancellationToken = default, string cacheKey = null);
         Task<string> DownloadPartialAsync(string url, long maxBytes = 150 * 1024 * 1024, Dictionary<string, string> headers = null, CancellationToken cancellationToken = default, string cacheKey = null);
         void CleanupOldFiles(int daysOld = 10);
+        /// <summary>Space EdgeLoop's own downloads take up, in bytes.</summary>
         long GetCacheSize();
+        /// <summary>Deletes the least recently used downloads until they fit the size limit. Returns the bytes freed.</summary>
+        long TrimToLimit();
+        /// <summary>Deletes every download that isn't in use.</summary>
+        (long FreedBytes, int KeptFiles) ClearAll();
     }
 }
 

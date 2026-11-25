@@ -9,7 +9,8 @@ namespace EdgeLoop.Classes
 
     public class UserSettings
     {
-        public int SettingsVersion { get; set; } = 1;
+        public int SettingsVersion { get; set; } = CurrentVersion;
+        private const int CurrentVersion = 2;
         public virtual double Opacity { get; set; } = 0.2;
         public virtual double Volume { get; set; } = 0.5;
 
@@ -30,8 +31,9 @@ namespace EdgeLoop.Classes
         [JsonPropertyName("Rule34VideoCookies")]
         public virtual string Rule34VideoCookiesEncrypted { get; set; } = null;
 
-        [JsonPropertyName("Cookies")]
-        public virtual string CookiesEncrypted { get; set; } = null;
+        // The old "Cookies" setting (one cookie string for every site) is gone: it had no place in
+        // Settings any more, yet was sent to every media host. Settings files that still have it
+        // load as usual, and the next save leaves it out.
 
         /// <summary>The Iwara account's email. Iwara shows explicit videos only to signed-in accounts.</summary>
         public virtual string IwaraEmail { get; set; } = null;
@@ -129,16 +131,6 @@ namespace EdgeLoop.Classes
         {
             get => CookieProtector.Unprotect(Rule34VideoCookiesEncrypted);
             set => Rule34VideoCookiesEncrypted = CookieProtector.Protect(value);
-        }
-
-        /// <summary>
-        /// Gets the decrypted global cookies for runtime use.
-        /// </summary>
-        [JsonIgnore]
-        public string Cookies
-        {
-            get => CookieProtector.Unprotect(CookiesEncrypted);
-            set => CookiesEncrypted = CookieProtector.Protect(value);
         }
 
 
@@ -257,7 +249,14 @@ namespace EdgeLoop.Classes
 
         // Caching Settings
         public virtual bool EnableLocalCaching { get; set; } = true;
-        public virtual string LocalCacheDirectory { get; set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "EdgeLoop", "VideoCache");
+        /// <summary>Most the downloaded videos may take up, in GB; 0 means no limit. The least recently used go first.</summary>
+        public virtual int MaxCacheSizeGb { get; set; } = 20;
+
+        /// <summary>
+        /// The folder the user picked for downloaded videos; null means EdgeLoop's own, wherever EdgeLoop
+        /// is now. Read it through <see cref="AppPaths.ResolveVideoCacheDirectory"/>.
+        /// </summary>
+        public virtual string LocalCacheDirectory { get; set; } = null;
 
         public static string SettingsFilePath
         {
@@ -317,11 +316,10 @@ namespace EdgeLoop.Classes
                         var settings = JsonSerializer.Deserialize<UserSettings>(json, _jsonOptions) ?? new UserSettings();
 
                         // Migration logic
-                        if (settings.SettingsVersion < 1)
+                        if (settings.Migrate())
                         {
-                            settings.SettingsVersion = 1;
                             settings.Save();
-                            Logger.Debug("Settings migrated to version 1");
+                            Logger.Debug($"Settings migrated to version {settings.SettingsVersion}");
                         }
 
                         // Validate and clamp loaded values
@@ -359,6 +357,20 @@ namespace EdgeLoop.Classes
                 Logger.Warning("Failed to load settings, using defaults", ex);
             }
             return new UserSettings();
+        }
+
+        /// <summary>Brings settings saved by an earlier version up to date. True if anything changed.</summary>
+        internal bool Migrate()
+        {
+            if (SettingsVersion >= CurrentVersion) return false;
+
+            // Version 2: downloads moved into EdgeLoop's own folder. The old default was saved as a
+            // path, so it looks like a choice; a folder the user really picked stays.
+            if (SettingsVersion < 2 && AppPaths.IsSameDirectory(LocalCacheDirectory, AppPaths.ProfileVideoCacheDirectory))
+                LocalCacheDirectory = null;
+
+            SettingsVersion = CurrentVersion;
+            return true;
         }
 
         /// <summary>
@@ -489,91 +501,10 @@ namespace EdgeLoop.Classes
         }
 
         // --- Session Persistence ---
-
-        // --- Session Persistence ---
-
-        // Heavy data (Playlist) - Saved to session.json only on change
-        [System.Text.Json.Serialization.JsonIgnore]
-        public Playlist CurrentSessionPlaylist { get; set; } = new Playlist();
+        // The playlist itself is saved to session.json by the launcher (LauncherViewModel.SaveSession).
 
         // Light data (Position/Index) - Saved to settings.json continuously
         public PlaybackState LastPlaybackState { get; set; } = new PlaybackState();
-
-        public static string SessionFilePath => AppPaths.SessionFile;
-
-        private readonly System.Threading.SemaphoreSlim _sessionLock = new System.Threading.SemaphoreSlim(1, 1);
-
-        public async System.Threading.Tasks.Task SaveSessionAsync()
-        {
-            try
-            {
-                if (CurrentSessionPlaylist == null) return;
-                await _sessionLock.WaitAsync();
-                try
-                {
-                    string json = JsonSerializer.Serialize(CurrentSessionPlaylist, _jsonOptions);
-                    await AtomicFile.WriteAllTextAsync(SessionFilePath, json);
-                }
-                finally
-                {
-                    _sessionLock.Release();
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Warning("Failed to save session playlist (Async)", ex);
-            }
-        }
-
-        public void SaveSession()
-        {
-            try
-            {
-                if (CurrentSessionPlaylist == null) return;
-                _sessionLock.Wait();
-                try
-                {
-                    string json = JsonSerializer.Serialize(CurrentSessionPlaylist, _jsonOptions);
-                    AtomicFile.WriteAllText(SessionFilePath, json);
-                }
-                finally
-                {
-                    _sessionLock.Release();
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Warning("Failed to save session playlist (Sync)", ex);
-            }
-        }
-
-        public void LoadSession()
-        {
-            try
-            {
-                if (File.Exists(SessionFilePath))
-                {
-                    string json = SafeFileReader.ReadAllTextSafe(SessionFilePath);
-                    if (string.IsNullOrEmpty(json)) return;
-                    CurrentSessionPlaylist = JsonSerializer.Deserialize<Playlist>(json) ?? new Playlist();
-
-                    // Migration logic
-                    if (CurrentSessionPlaylist.Version < 1)
-                    {
-                        CurrentSessionPlaylist.Version = 1;
-                        SaveSession();
-                        Logger.Debug("Session playlist migrated to version 1");
-                    }
-
-                    Logger.Debug("Loaded previous session playlist");
-                }
-            }
-            catch (Exception ex)
-            {
-                Logger.Warning("Failed to load session playlist", ex);
-                CurrentSessionPlaylist = new Playlist();
-            }
-        }
     }
 
     public class PlaybackState

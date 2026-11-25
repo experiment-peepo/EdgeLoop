@@ -173,6 +173,21 @@
                                     Content="Browse…" Margin="8,0,0,0" Height="32" Padding="14,0"/>
                         </Grid>
                     </controls:SettingRow>
+                    <controls:SettingRow Header="Size limit" Description="Past this, the videos played longest ago are deleted first. Only files EdgeLoop downloaded are ever deleted.">
+                        <ComboBox Width="120" ItemsSource="{Binding CacheSizeLimits}" DisplayMemberPath="Value" SelectedValuePath="Key"
+                                  SelectedValue="{Binding MaxCacheSizeGb}" AutomationProperties.Name="Download size limit"/>
+                    </controls:SettingRow>
+                    <controls:SettingRow Header="Downloaded videos" Description="Delete them all. Happens right away, not when you save.">
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="{Binding CacheSizeText}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                            <Button Command="{Binding ClearDownloadsCommand}" Style="{StaticResource SecondaryDangerButtonStyle}" Height="32" Padding="14,0">
+                                <StackPanel Orientation="Horizontal">
+                                    <Path Data="{StaticResource Icon_Trash}" Stretch="Uniform" Width="12" Height="12" Margin="0,0,8,0"/>
+                                    <TextBlock Text="Clear downloads" FontWeight="SemiBold"/>
+                                </StackPanel>
+                            </Button>
+                        </StackPanel>
+                    </controls:SettingRow>
                 </StackPanel>
 
                 <!-- Privacy & Cookies -->

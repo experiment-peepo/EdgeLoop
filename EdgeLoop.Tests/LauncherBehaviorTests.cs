@@ -1,6 +1,6 @@
 using EdgeLoop.Classes;
 using EdgeLoop.ViewModels;
-using FluentAssertions;
+using AwesomeAssertions;
 using Microsoft.Extensions.Time.Testing;
 
 namespace EdgeLoop.Tests

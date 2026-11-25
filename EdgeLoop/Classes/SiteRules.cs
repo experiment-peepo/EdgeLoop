@@ -50,6 +50,13 @@ namespace EdgeLoop.Classes
         /// </summary>
         public bool PersistentMediaConnections { get; init; } = true;
 
+        /// <summary>
+        /// Lets the player open this site's media without checking the server's certificate. Off for
+        /// every site; only for one whose CDN is known to serve a certificate Windows doesn't trust,
+        /// since without the check a network attacker can swap in other content or read cookies.
+        /// </summary>
+        public bool SkipCertificateCheck { get; init; }
+
         /// <summary>Headers passed to yt-dlp with --add-header ("Name: value").</summary>
         public IReadOnlyList<string> YtDlpHeaders { get; init; } = Array.Empty<string>();
 

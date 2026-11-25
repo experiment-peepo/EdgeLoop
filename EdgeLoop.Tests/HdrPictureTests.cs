@@ -1,5 +1,5 @@
 using FlyleafLib.MediaFramework.MediaRenderer.Effects;
-using FluentAssertions;
+using AwesomeAssertions;
 using Vortice.Direct3D;
 using Vortice.Direct3D11;
 using Vortice.DXGI;

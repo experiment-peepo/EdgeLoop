@@ -1,6 +1,7 @@
 ## [Unreleased]
 
 ### Added
+- **Download size limit**: Settings → Library & Cache has a size limit for downloaded videos (20 GB by default), shows how much they take up, and can clear them.
 - **HDR**: With "HDR on HDR monitors" (Settings → Playback, off by default), HDR videos play in true HDR on monitors that support it, upscaled like any other video. EdgeLoop switches Windows HDR on for those monitors while it plays there and back off when playback stops or EdgeLoop closes, or at the next start if it crashed; HDR you turned on yourself is left alone. SDR videos on those monitors keep Windows' SDR brightness.
 
 ### Changed
@@ -9,6 +10,7 @@
 - **One look across the app**: Every window shares the same title bar, with the Windows shadow, snapping and (on Windows 11) rounded corners. Colours, fonts and controls come from one theme; buttons, check boxes and sliders can be reached with Tab and show a focus ring.
 - **Launcher**: The playlist only builds the cards on screen, so large playlists stay fast. Cards show each video's length and PLAYING / FAILED / MISSING / CACHED badges. Removing videos, Clear and the new "Remove failed" offer Undo. Delete removes the selected card and Alt+Up/Down moves it. Start explains why it's disabled, and Now Playing has a Previous button.
 - **Settings**: Sections in a sidebar, a "click and press keys" hotkey recorder that flags duplicates, skip keys for each screen with an "Identify screens" button, hidden cookie fields, Reset to defaults per section, and a prompt before discarding unsaved changes.
+- **Download folder**: Downloaded videos are kept in EdgeLoop's own folder (`Data\VideoCache`) with the rest of its data, instead of your Windows profile. Existing downloads are moved there at the next start; a folder you picked yourself stays. If EdgeLoop's folder can't be written to, they stay in the profile.
 - **Dialogs**: One confirmation dialog, consistent button order, and an input dialog with a hint that keeps OK disabled until something is typed.
 - **Display scaling**: EdgeLoop is now per-monitor DPI aware, so windows, overlays and notices line up on setups that mix scaling levels.
 
@@ -26,6 +28,13 @@
 - The saved playlist appears straight away at start-up; the daily yt-dlp update no longer holds it up, and an update that hangs is stopped after 3 minutes.
 - The playlist, positions, history and link cache are saved so a crash can't leave them half-written or missing, and the last change before Exit is always saved.
 - PMVHaven streams no longer keep connections open between segments, as intended for their stability.
+- The 10-day clean-up of downloaded videos no longer deletes other videos in the download folder: only files EdgeLoop downloaded are deleted.
+- Playing a downloaded video counts as using it, so a video you watch often isn't cleaned up 10 days after it was downloaded.
+- In group playback, skipping past videos that failed no longer makes every other screen start loading each of them.
+
+### Security
+- The player and yt-dlp check the server's certificate. Before, both accepted any certificate, so someone on your network could swap in other content or read session cookies.
+- The old setting with one cookie for every site is gone. It had no place in Settings any more but was still sent to every media host, and to yt-dlp for most sites.
 
 ## [1.0.0-prerelease] - 2026-04-26
 

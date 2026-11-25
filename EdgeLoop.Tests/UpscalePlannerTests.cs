@@ -1,5 +1,5 @@
 using FlyleafLib.MediaFramework.MediaRenderer.Effects;
-using FluentAssertions;
+using AwesomeAssertions;
 
 namespace EdgeLoop.Tests
 {
